@@ -58,8 +58,13 @@ docker run -d --name mygramdb \
   -e MYSQL_PASSWORD=your_password \
   -e MYSQL_DATABASE=mydb \
   -e TABLE_NAME=articles \
+  -e NETWORK_ALLOW_CIDRS=0.0.0.0/0 \
   ghcr.io/libraz/mygram-db:latest
 ```
+
+::: warning
+`NETWORK_ALLOW_CIDRS=0.0.0.0/0` allows connections from any IP. For production, restrict to specific ranges (e.g., `10.0.0.0/8,172.16.0.0/12`).
+:::
 
 ```bash
 echo "SEARCH articles hello world" | nc localhost 11016
