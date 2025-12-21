@@ -86,8 +86,12 @@ export default defineConfig({
     theme: {
       light: 'github-light',
       dark: 'github-dark'
-    }
+    },
+    // Allow HTML in markdown to prevent Vue from parsing angle brackets
+    html: true
   },
+
+
 
   // Sitemap
   sitemap: {
@@ -137,10 +141,31 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'MygramDBとは', link: '/ja/why' },
+          { text: 'ドキュメント', link: '/ja/docs/getting-started' },
           { text: 'ベンチマーク', link: '/ja/benchmarks' },
           { text: '比較', link: '/ja/comparison' },
-          { text: 'FAQ', link: '/ja/faq' }
-        ]
+          { text: 'FAQ', link: '/ja/faq' },
+          {
+            text: 'v1.3.8',
+            items: [
+              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/releases/tag/v1.3.8' },
+              { text: '変更履歴', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
+            ]
+          }
+        ],
+        sidebar: {
+          '/ja/docs/': [
+            {
+              text: 'ドキュメント',
+              items: [
+                { text: 'クイックスタート', link: '/ja/docs/getting-started' },
+                { text: 'インストール', link: '/ja/docs/installation' },
+                { text: '設定', link: '/ja/docs/configuration' },
+                { text: 'クエリガイド', link: '/ja/docs/queries' }
+              ]
+            }
+          ]
+        }
       }
     }
   },
@@ -148,10 +173,32 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Why', link: '/why' },
+      { text: 'Docs', link: '/docs/getting-started' },
       { text: 'Benchmarks', link: '/benchmarks' },
       { text: 'Comparison', link: '/comparison' },
-      { text: 'FAQ', link: '/faq' }
+      { text: 'FAQ', link: '/faq' },
+      {
+        text: 'v1.3.8',
+        items: [
+          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/releases/tag/v1.3.8' },
+          { text: 'Changelog', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
+        ]
+      }
     ],
+
+    sidebar: {
+      '/docs/': [
+        {
+          text: 'Documentation',
+          items: [
+            { text: 'Getting Started', link: '/docs/getting-started' },
+            { text: 'Installation', link: '/docs/installation' },
+            { text: 'Configuration', link: '/docs/configuration' },
+            { text: 'Query Guide', link: '/docs/queries' }
+          ]
+        }
+      ]
+    },
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/libraz/mygram-db' }

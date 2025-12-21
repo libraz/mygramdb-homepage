@@ -28,5 +28,9 @@
     "@resvg/resvg-js": "^2.6.2",
     "sharp": "^0.34.5",
     "vitepress": "^1.6.4"
+  },
+  "dependencies": {
+    "mermaid": "^11.12.2",
+    "vitepress-plugin-mermaid": "^2.0.17"
   }
 }
