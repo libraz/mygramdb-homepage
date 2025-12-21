@@ -1,0 +1,42 @@
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Space+Grotesk:wght@400;500;600&display=swap');
+
+/* Site-wide font */
+:root {
+  --vp-font-family-base: 'Space Grotesk', sans-serif;
+}
+
+/* Hero title: Orbitron */
+.VPHero .name {
+  font-family: 'Orbitron', sans-serif !important;
+  font-size: 4rem !important;
+  letter-spacing: 4px;
+}
+
+/* Hero text: "27-3700x faster than MySQL FULLTEXT" */
+.VPHero .text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem !important;
+  line-height: 1.4;
+  margin-top: 10px !important;
+}
+
+/* Hero tagline: description */
+.VPHero .tagline {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem !important;
+}
+
+/* Feature cards: center icon */
+.VPFeature .icon {
+  display: flex;
+  justify-content: center;
+}
+
+.VPFeature .VPImage {
+  margin: 0 auto;
+}
+
+.vpi-languages {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='currentColor' d='M17.9 17.39c-.26-.8-1.01-1.39-1.9-1.39h-1v-3a1 1 0 0 0-1-1H8v-2h2a1 1 0 0 0 1-1V7h2a2 2 0 0 0 2-2v-.41a7.984 7.984 0 0 1 2.9 12.8M11 19.93c-3.95-.49-7-3.85-7-7.93c0-.62.08-1.22.21-1.79L9 15v1a2 2 0 0 0 2 2m1-16A10 10 0 0 0 2 12a10 10 0 0 0 10 10a10 10 0 0 0 10-10A10 10 0 0 0 12 2'/%3E%3C/svg%3E");
+}
