@@ -2,14 +2,21 @@
 
 MygramDBで効果的に検索する方法を学びましょう。
 
+> [!WARNING]
+> クエリを実行する前に、設定ファイルの `allow_cidrs` にIPアドレスが登録されていることを確認してください。CIDR登録がない場合、すべての接続が拒否されます。[ネットワークセキュリティ](/ja/docs/configuration#ネットワークセキュリティ)を参照してください。
+
+## mygram-cliで接続
+
+```bash
+mygram-cli -h localhost -p 11016
+```
+
+接続後、対話的にクエリを実行できます。
+
 ## 基本検索
 
 ```
-SEARCH articles hello world
-```
-
-レスポンス：
-```
+mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
@@ -18,25 +25,25 @@ OK RESULTS 3 101 205 387
 ### AND - すべての語句を含む
 
 ```
-SEARCH articles golang AND tutorial
+mygram> SEARCH articles golang AND tutorial
 ```
 
 ### OR - いずれかの語句を含む
 
 ```
-SEARCH articles golang OR python OR rust
+mygram> SEARCH articles golang OR python OR rust
 ```
 
 ### NOT - 語句を除外
 
 ```
-SEARCH articles tutorial NOT beginner
+mygram> SEARCH articles tutorial NOT beginner
 ```
 
 ### 組み合わせ
 
 ```
-SEARCH articles (golang OR python) AND tutorial NOT beginner
+mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
 ```
 
 ## フレーズ検索
@@ -44,14 +51,14 @@ SEARCH articles (golang OR python) AND tutorial NOT beginner
 引用符で完全一致：
 
 ```
-SEARCH articles "machine learning"
-SEARCH articles '機械学習'
+mygram> SEARCH articles "machine learning"
+mygram> SEARCH articles '機械学習'
 ```
 
 演算子と組み合わせ：
 
 ```
-SEARCH articles "web framework" AND (golang OR python)
+mygram> SEARCH articles "web framework" AND (golang OR python)
 ```
 
 ## フィルタリング
@@ -59,15 +66,15 @@ SEARCH articles "web framework" AND (golang OR python)
 カラム値でフィルタ：
 
 ```
-SEARCH articles tech FILTER status = 1
-SEARCH articles tech FILTER views > 1000
-SEARCH articles tech FILTER created_at >= 2024-01-01
+mygram> SEARCH articles tech FILTER status = 1
+mygram> SEARCH articles tech FILTER views > 1000
+mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
 ```
 
 複数フィルタ（AND条件）：
 
 ```
-SEARCH articles tech FILTER status = 1 FILTER category_id = 5
+mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 ```
 
 ### フィルタ演算子
@@ -86,22 +93,22 @@ SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 プライマリキーでソート：
 
 ```
-SEARCH articles golang SORT ASC
-SEARCH articles golang SORT DESC
+mygram> SEARCH articles golang SORT ASC
+mygram> SEARCH articles golang SORT DESC
 ```
 
 カラムでソート：
 
 ```
-SEARCH articles golang SORT created_at DESC
-SEARCH articles golang SORT score ASC
+mygram> SEARCH articles golang SORT created_at DESC
+mygram> SEARCH articles golang SORT score ASC
 ```
 
 ## ページネーション
 
 ```
-SEARCH articles golang LIMIT 10
-SEARCH articles golang LIMIT 10 OFFSET 20
+mygram> SEARCH articles golang LIMIT 10
+mygram> SEARCH articles golang LIMIT 10 OFFSET 20
 ```
 
 ## カウントクエリ
@@ -109,11 +116,7 @@ SEARCH articles golang LIMIT 10 OFFSET 20
 IDなしでカウントのみ取得：
 
 ```
-COUNT articles golang AND tutorial
-```
-
-レスポンス：
-```
+mygram> COUNT articles golang AND tutorial
 OK COUNT 42
 ```
 
@@ -122,19 +125,19 @@ OK COUNT 42
 ### 最新のGoチュートリアルを検索
 
 ```
-SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
+mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
 ```
 
 ### データベースに関する人気記事
 
 ```
-SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
+mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
 ```
 
 ### カテゴリ内のアクティブユーザー数
 
 ```
-COUNT users tech FILTER status = 1 FILTER category_id = 5
+mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 ```
 
 ## HTTP API
@@ -159,7 +162,8 @@ curl "http://localhost:8080/count?table=articles&q=golang"
 
 例：`a OR b AND c` は `a OR (b AND c)` と解釈されます
 
-**ベストプラクティス：** 意図を明確にするため括弧を使用してください。
+> [!TIP]
+> 意図を明確にし、予期しない結果を避けるため括弧を使用してください。
 
 ## パフォーマンスのヒント
 

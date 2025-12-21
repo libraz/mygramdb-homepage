@@ -77,7 +77,8 @@ FLUSH PRIVILEGES;
 
 ### MySQL Requirements
 
-Your MySQL server must have:
+> [!IMPORTANT]
+> These settings are required for MygramDB to work. Without them, replication will fail.
 
 ```ini
 # my.cnf
@@ -168,9 +169,12 @@ logging:
 
 ## Network Security
 
+> [!WARNING]
+> If `allow_cidrs` is empty or not configured, all connections are denied. You must add at least one CIDR to allow access.
+
 ```yaml
 network:
-  allow_cidrs:              # CIDR whitelist (empty = deny all)
+  allow_cidrs:
     - "127.0.0.1/32"
     - "192.168.1.0/24"
     - "10.0.0.0/8"
@@ -185,10 +189,11 @@ Most settings can be updated without restart:
 kill -HUP $(pidof mygramdb)
 ```
 
-Settings that require restart:
-- `mysql.database`
-- `tables` (add/remove)
-- `api.tcp.port`, `api.http.port`
+> [!NOTE]
+> The following settings require a full restart to take effect:
+> - `mysql.database`
+> - `tables` (add/remove)
+> - `api.tcp.port`, `api.http.port`
 
 ## Next Steps
 

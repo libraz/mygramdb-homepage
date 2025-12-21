@@ -2,14 +2,21 @@
 
 Learn how to search effectively with MygramDB.
 
+> [!WARNING]
+> Before executing queries, ensure your IP is registered in `allow_cidrs` in the configuration. Without CIDR registration, all connections are denied. See [Network Security](/docs/configuration#network-security).
+
+## Connecting with mygram-cli
+
+```bash
+mygram-cli -h localhost -p 11016
+```
+
+Once connected, you can execute queries interactively.
+
 ## Basic Search
 
 ```
-SEARCH articles hello world
-```
-
-Response:
-```
+mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
@@ -18,25 +25,25 @@ OK RESULTS 3 101 205 387
 ### AND - All terms must match
 
 ```
-SEARCH articles golang AND tutorial
+mygram> SEARCH articles golang AND tutorial
 ```
 
 ### OR - Any term matches
 
 ```
-SEARCH articles golang OR python OR rust
+mygram> SEARCH articles golang OR python OR rust
 ```
 
 ### NOT - Exclude terms
 
 ```
-SEARCH articles tutorial NOT beginner
+mygram> SEARCH articles tutorial NOT beginner
 ```
 
 ### Combined
 
 ```
-SEARCH articles (golang OR python) AND tutorial NOT beginner
+mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
 ```
 
 ## Phrase Search
@@ -44,14 +51,14 @@ SEARCH articles (golang OR python) AND tutorial NOT beginner
 Use quotes for exact phrases:
 
 ```
-SEARCH articles "machine learning"
-SEARCH articles 'web framework'
+mygram> SEARCH articles "machine learning"
+mygram> SEARCH articles 'web framework'
 ```
 
 Combine with operators:
 
 ```
-SEARCH articles "web framework" AND (golang OR python)
+mygram> SEARCH articles "web framework" AND (golang OR python)
 ```
 
 ## Filtering
@@ -59,15 +66,15 @@ SEARCH articles "web framework" AND (golang OR python)
 Filter by column values:
 
 ```
-SEARCH articles tech FILTER status = 1
-SEARCH articles tech FILTER views > 1000
-SEARCH articles tech FILTER created_at >= 2024-01-01
+mygram> SEARCH articles tech FILTER status = 1
+mygram> SEARCH articles tech FILTER views > 1000
+mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
 ```
 
 Multiple filters (AND logic):
 
 ```
-SEARCH articles tech FILTER status = 1 FILTER category_id = 5
+mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 ```
 
 ### Filter Operators
@@ -86,22 +93,22 @@ SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 Sort by primary key:
 
 ```
-SEARCH articles golang SORT ASC
-SEARCH articles golang SORT DESC
+mygram> SEARCH articles golang SORT ASC
+mygram> SEARCH articles golang SORT DESC
 ```
 
 Sort by column:
 
 ```
-SEARCH articles golang SORT created_at DESC
-SEARCH articles golang SORT score ASC
+mygram> SEARCH articles golang SORT created_at DESC
+mygram> SEARCH articles golang SORT score ASC
 ```
 
 ## Pagination
 
 ```
-SEARCH articles golang LIMIT 10
-SEARCH articles golang LIMIT 10 OFFSET 20
+mygram> SEARCH articles golang LIMIT 10
+mygram> SEARCH articles golang LIMIT 10 OFFSET 20
 ```
 
 ## Count Query
@@ -109,11 +116,7 @@ SEARCH articles golang LIMIT 10 OFFSET 20
 Get count without IDs:
 
 ```
-COUNT articles golang AND tutorial
-```
-
-Response:
-```
+mygram> COUNT articles golang AND tutorial
 OK COUNT 42
 ```
 
@@ -122,19 +125,19 @@ OK COUNT 42
 ### Find recent Go tutorials
 
 ```
-SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
+mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
 ```
 
 ### Find popular posts about databases
 
 ```
-SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
+mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
 ```
 
 ### Count active users in category
 
 ```
-COUNT users tech FILTER status = 1 FILTER category_id = 5
+mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 ```
 
 ## HTTP API
@@ -159,7 +162,8 @@ Without parentheses, operators are evaluated in this order:
 
 Example: `a OR b AND c` is parsed as `a OR (b AND c)`
 
-**Best practice:** Use parentheses to make intent clear.
+> [!TIP]
+> Use parentheses to make your intent clear and avoid unexpected results.
 
 ## Performance Tips
 

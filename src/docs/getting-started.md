@@ -47,7 +47,15 @@ api:
   http:
     enable: true
     port: 8080
+
+# Allow connections from localhost
+network:
+  allow_cidrs:
+    - "127.0.0.1/32"
 ```
+
+> [!IMPORTANT]
+> The `allow_cidrs` setting is required. Without it, all connections are denied. Add your client IPs to this list.
 
 ## Start the Service
 
@@ -60,9 +68,13 @@ sudo systemctl enable --now mygramdb
 ```bash
 # Connect via CLI
 mygram-cli -h localhost -p 11016
+```
 
-# Search
-SEARCH articles hello world
+Once connected, run a search query:
+
+```
+mygram> SEARCH articles hello world
+OK RESULTS 3 101 205 387
 ```
 
 ## Next Steps

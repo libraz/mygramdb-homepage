@@ -77,7 +77,8 @@ FLUSH PRIVILEGES;
 
 ### MySQL要件
 
-MySQLサーバーで以下の設定が必要です：
+> [!IMPORTANT]
+> これらの設定はMygramDBの動作に必須です。設定がない場合、レプリケーションが失敗します。
 
 ```ini
 # my.cnf
@@ -168,9 +169,12 @@ logging:
 
 ## ネットワークセキュリティ
 
+> [!WARNING]
+> `allow_cidrs`が空または未設定の場合、すべての接続が拒否されます。アクセスを許可するには、少なくとも1つのCIDRを追加する必要があります。
+
 ```yaml
 network:
-  allow_cidrs:              # CIDRホワイトリスト（空 = 全拒否）
+  allow_cidrs:
     - "127.0.0.1/32"
     - "192.168.1.0/24"
     - "10.0.0.0/8"
@@ -185,10 +189,11 @@ network:
 kill -HUP $(pidof mygramdb)
 ```
 
-再起動が必要な設定：
-- `mysql.database`
-- `tables`（追加/削除）
-- `api.tcp.port`, `api.http.port`
+> [!NOTE]
+> 以下の設定は反映に再起動が必要です：
+> - `mysql.database`
+> - `tables`（追加/削除）
+> - `api.tcp.port`, `api.http.port`
 
 ## 次のステップ
 

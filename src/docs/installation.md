@@ -117,7 +117,8 @@ mygram-cli --help
 
 ## Security Note
 
-MygramDB **refuses to run as root** for security. Always run it as a dedicated non-privileged user.
+> [!CAUTION]
+> MygramDB **refuses to run as root** for security. Always run it as a dedicated non-privileged user.
 
 ## Next Steps
 

@@ -47,7 +47,15 @@ api:
   http:
     enable: true
     port: 8080
+
+# localhostからの接続を許可
+network:
+  allow_cidrs:
+    - "127.0.0.1/32"
 ```
+
+> [!IMPORTANT]
+> `allow_cidrs`の設定は必須です。設定がない場合、すべての接続が拒否されます。接続元のIPアドレスをリストに追加してください。
 
 ## サービスを開始
 
@@ -60,9 +68,13 @@ sudo systemctl enable --now mygramdb
 ```bash
 # CLIで接続
 mygram-cli -h localhost -p 11016
+```
 
-# 検索
-SEARCH articles hello world
+接続後、検索クエリを実行：
+
+```
+mygram> SEARCH articles hello world
+OK RESULTS 3 101 205 387
 ```
 
 ## 次のステップ
