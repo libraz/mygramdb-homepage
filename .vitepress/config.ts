@@ -81,12 +81,25 @@ export default defineConfig({
   title: 'MygramDB',
   description: 'MySQL FULLTEXT too slow? MygramDB makes it 27-3700x faster. In-memory full-text search engine with MySQL replication.',
 
+  // Markdown / Shiki syntax highlighting
+  markdown: {
+    theme: {
+      light: 'github-light',
+      dark: 'github-dark'
+    }
+  },
+
   // Sitemap
   sitemap: {
     hostname: siteUrl
   },
 
   head: [
+    // Google Fonts
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Space+Grotesk:wght@400;500;600&display=swap' }],
+
     // JSON-LD structured data
     ['script', { type: 'application/ld+json' }, JSON.stringify(softwareApplicationJsonLd)],
     ['script', { type: 'application/ld+json' }, JSON.stringify(faqJsonLd)],
