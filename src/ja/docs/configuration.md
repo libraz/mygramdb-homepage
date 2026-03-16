@@ -180,17 +180,41 @@ network:
     - "10.0.0.0/8"
 ```
 
-## ホットリロード
+## Unixドメインソケット
 
-ほとんどの設定は再起動なしで更新可能：
+ローカル接続でより低レイテンシを実現するには、Unixドメインソケットを設定します：
+
+```yaml
+api:
+  unix_socket:
+    path: "/var/run/mygramdb/mygramdb.sock"
+```
+
+CLIから接続：
 
 ```bash
-# 設定リロード
-kill -HUP $(pidof mygramdb)
+mygram-cli -s /var/run/mygramdb/mygramdb.sock SEARCH articles "hello"
+```
+
+## ランタイム変数
+
+MySQL互換のSET/SHOW VARIABLESコマンドで、再起動なしに設定を変更できます：
+
+```sql
+-- すべての変数を表示
+SHOW VARIABLES;
+
+-- 特定の変数を表示
+SHOW VARIABLES LIKE 'cache%';
+
+-- 設定をランタイムで変更
+SET logging.level = 'debug';
+SET cache.enabled = false;
+SET api.default_limit = 200;
 ```
 
 > [!NOTE]
-> 以下の設定は反映に再起動が必要です：
+> 以下の設定は変更不可で、再起動が必要です：
 > - `mysql.database`
 > - `tables`（追加/削除）
 > - `api.tcp.port`, `api.http.port`

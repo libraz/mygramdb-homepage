@@ -37,7 +37,7 @@ docker run -d \
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygramdb:1.3.8`
+- `ghcr.io/libraz/mygramdb:1.4.0`
 - `ghcr.io/libraz/mygramdb:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。

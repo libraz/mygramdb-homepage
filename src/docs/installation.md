@@ -37,7 +37,7 @@ docker run -d \
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygramdb:1.3.8`
+- `ghcr.io/libraz/mygramdb:1.4.0`
 - `ghcr.io/libraz/mygramdb:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.

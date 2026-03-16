@@ -4,7 +4,7 @@ Get MygramDB up and running in 5 minutes.
 
 ## Prerequisites
 
-- MySQL 8.0+ with GTID enabled
+- MySQL 8.4 with GTID enabled
 - RHEL/AlmaLinux/Rocky Linux 9, or Docker
 
 ## Quick Install

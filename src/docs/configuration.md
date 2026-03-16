@@ -180,17 +180,41 @@ network:
     - "10.0.0.0/8"
 ```
 
-## Hot Reload
+## Unix Domain Socket
 
-Most settings can be updated without restart:
+For local connections with lower latency, configure a Unix domain socket:
+
+```yaml
+api:
+  unix_socket:
+    path: "/var/run/mygramdb/mygramdb.sock"
+```
+
+Connect via CLI:
 
 ```bash
-# Reload configuration
-kill -HUP $(pidof mygramdb)
+mygram-cli -s /var/run/mygramdb/mygramdb.sock SEARCH articles "hello"
+```
+
+## Runtime Variables
+
+Most settings can be updated at runtime without restart using MySQL-style SET/SHOW VARIABLES commands:
+
+```sql
+-- Show all variables
+SHOW VARIABLES;
+
+-- Show specific variables
+SHOW VARIABLES LIKE 'cache%';
+
+-- Change settings at runtime
+SET logging.level = 'debug';
+SET cache.enabled = false;
+SET api.default_limit = 200;
 ```
 
 > [!NOTE]
-> The following settings require a full restart to take effect:
+> The following settings are immutable and require a full restart:
 > - `mysql.database`
 > - `tables` (add/remove)
 > - `api.tcp.port`, `api.http.port`

@@ -1,6 +1,6 @@
 ---
 title: Benchmarks - MygramDB vs MySQL FULLTEXT
-description: MygramDB achieves 27-3700x speedup over MySQL FULLTEXT. See real benchmark results on 1.7M rows with concurrent query performance.
+description: MygramDB achieves tens to hundreds of times speedup over MySQL FULLTEXT. See real benchmark results on 1.7M rows with concurrent query performance.
 head:
   - - meta
     - name: keywords

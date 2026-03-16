@@ -4,7 +4,7 @@
 
 ## 前提条件
 
-- GTIDが有効なMySQL 8.0以上
+- GTIDが有効なMySQL 8.4
 - RHEL/AlmaLinux/Rocky Linux 9、またはDocker
 
 ## インストール

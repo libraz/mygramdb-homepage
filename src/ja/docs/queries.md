@@ -142,14 +142,18 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-すべてのクエリはHTTPでも利用可能：
+すべてのクエリはHTTPでも利用可能（POST + JSONボディ）：
 
 ```bash
-curl "http://localhost:8080/search?table=articles&q=golang+tutorial&limit=10"
+curl -X POST http://localhost:8080/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang tutorial", "limit": 10}'
 ```
 
 ```bash
-curl "http://localhost:8080/count?table=articles&q=golang"
+curl -X POST http://localhost:8080/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang", "limit": 0}'
 ```
 
 ## 演算子の優先順位

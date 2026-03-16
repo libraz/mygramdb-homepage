@@ -142,14 +142,18 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-All queries are also available via HTTP:
+All queries are also available via HTTP (POST with JSON body):
 
 ```bash
-curl "http://localhost:8080/search?table=articles&q=golang+tutorial&limit=10"
+curl -X POST http://localhost:8080/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang tutorial", "limit": 10}'
 ```
 
 ```bash
-curl "http://localhost:8080/count?table=articles&q=golang"
+curl -X POST http://localhost:8080/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang", "limit": 0}'
 ```
 
 ## Operator Precedence

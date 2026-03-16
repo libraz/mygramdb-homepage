@@ -15,10 +15,10 @@ const softwareApplicationJsonLd = {
     price: '0',
     priceCurrency: 'USD'
   },
-  description: 'In-memory full-text search engine that replaces slow MySQL FULLTEXT. 27-3700x faster with real-time MySQL binlog replication.',
+  description: 'In-memory full-text search engine that replaces slow MySQL FULLTEXT. Tens to hundreds of times faster with real-time MySQL binlog replication.',
   url: siteUrl,
   downloadUrl: githubUrl,
-  softwareVersion: '1.0',
+  softwareVersion: '1.4.0',
   author: {
     '@type': 'Person',
     name: 'libraz'
@@ -53,7 +53,7 @@ const faqJsonLd = {
       name: 'How much faster is MygramDB than MySQL FULLTEXT?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'MygramDB is 27-3700x faster than MySQL FULLTEXT. For typical ORDER BY id LIMIT 100 queries, it achieves 19-32x speedup. COUNT queries are 413-431x faster. Under 10 concurrent queries, MySQL fails 90% while MygramDB achieves 288 QPS with 100% success rate.'
+        text: 'MygramDB is tens to hundreds of times faster than MySQL FULLTEXT. For typical ORDER BY id LIMIT 100 queries, it achieves 19-32x speedup. COUNT queries are 400x+ faster. Under 10 concurrent queries, MySQL fails 90% while MygramDB achieves 288 QPS with 100% success rate.'
       }
     },
     {
@@ -79,7 +79,7 @@ export default defineConfig({
   srcDir: 'src',
   appearance: true,
   title: 'MygramDB',
-  description: 'MySQL FULLTEXT too slow? MygramDB makes it 27-3700x faster. In-memory full-text search engine with MySQL replication.',
+  description: 'MySQL FULLTEXT too slow? MygramDB makes it tens to hundreds of times faster. In-memory full-text search engine with MySQL replication.',
 
   // Markdown / Shiki syntax highlighting
   markdown: {
@@ -114,7 +114,7 @@ export default defineConfig({
 
     // OGP
     ['meta', { property: 'og:site_name', content: 'MygramDB' }],
-    ['meta', { property: 'og:title', content: 'MygramDB - 27-3700x faster than MySQL FULLTEXT' }],
+    ['meta', { property: 'og:title', content: 'MygramDB - Hundreds of times faster than MySQL FULLTEXT' }],
     ['meta', { property: 'og:description', content: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-80ms queries, 100% success rate under load.' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:url', content: siteUrl }],
@@ -124,7 +124,7 @@ export default defineConfig({
 
     // Twitter
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'MygramDB - 27-3700x faster than MySQL FULLTEXT' }],
+    ['meta', { name: 'twitter:title', content: 'MygramDB - Hundreds of times faster than MySQL FULLTEXT' }],
     ['meta', { name: 'twitter:description', content: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-80ms queries, 100% success rate under load.' }],
     ['meta', { name: 'twitter:image', content: `${siteUrl}/og-image.png` }],
   ],
@@ -137,7 +137,7 @@ export default defineConfig({
     ja: {
       label: '日本語',
       lang: 'ja',
-      description: 'MySQL FULLTEXTが遅い？MygramDBで27〜3700倍高速化。インメモリ全文検索エンジン。',
+      description: 'MySQL FULLTEXTが遅い？MygramDBで桁違いに高速化。インメモリ全文検索エンジン。',
       themeConfig: {
         nav: [
           { text: 'MygramDBとは', link: '/ja/why' },
@@ -146,9 +146,9 @@ export default defineConfig({
           { text: '比較', link: '/ja/comparison' },
           { text: 'FAQ', link: '/ja/faq' },
           {
-            text: 'v1.3.8',
+            text: 'v1.4.0',
             items: [
-              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/releases/tag/v1.3.8' },
+              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.4.0.md' },
               { text: '変更履歴', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
             ]
           }
@@ -178,9 +178,9 @@ export default defineConfig({
       { text: 'Comparison', link: '/comparison' },
       { text: 'FAQ', link: '/faq' },
       {
-        text: 'v1.3.8',
+        text: 'v1.4.0',
         items: [
-          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/releases/tag/v1.3.8' },
+          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.4.0.md' },
           { text: 'Changelog', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
         ]
       }
@@ -205,7 +205,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Released under the MIT License.'
+      message: 'a personal project by <a href="https://libraz.net" target="_blank" rel="noopener">libraz</a>'
     }
   }
 })

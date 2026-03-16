@@ -103,7 +103,8 @@ docker run -d -p 11016:11016 \
   ghcr.io/libraz/mygram-db:latest
 
 # 2. MygramDBで検索
-curl "http://localhost:8080/articles/search" \
+curl -X POST http://localhost:8080/articles/search \
+  -H "Content-Type: application/json" \
   -d '{"q": "検索ワード"}'
 ```
 

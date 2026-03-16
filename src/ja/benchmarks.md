@@ -1,6 +1,6 @@
 ---
 title: ベンチマーク - MygramDB vs MySQL FULLTEXT
-description: MygramDBはMySQL FULLTEXTより27〜3700倍高速。170万件の本番データでの実測値と並列性能を公開。
+description: MygramDBはMySQL FULLTEXTより桁違いに高速。170万件の本番データでの実測値と並列性能を公開。
 head:
   - - meta
     - name: keywords
