@@ -77,15 +77,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 
 ## Performance Comparison
 
-Tested on 1.7M rows, 10 concurrent queries:
-
-| Metric | MygramDB | Elasticsearch* | MySQL FULLTEXT |
-|--------|----------|----------------|----------------|
-| Success rate | 100% | ~100% | 10% |
-| Avg latency | 35ms | 100-200ms | 4,641ms |
-| QPS | 288 | 50-100 | 0.4 |
-
-*Elasticsearch performance varies significantly based on cluster configuration.
+See [Benchmarks](/benchmarks) for detailed results on 1.7M rows. Key takeaway: MygramDB achieves 100% success rate at 100 concurrent queries (QPS 372), while MySQL FULLTEXT fails at 10 concurrent (90% failure, QPS 0.4).
 
 ## Migration Path
 

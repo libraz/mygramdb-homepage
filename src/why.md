@@ -70,13 +70,7 @@ Bitmap intersections use CPU SIMD instructions for maximum throughput.
 
 ### Consistent Performance
 
-No cache warmup needed. Same sub-80ms response time, always.
-
-| Concurrent Queries | Success Rate | Avg Response |
-|-------------------|--------------|--------------|
-| 1 | 100% | 32ms |
-| 10 | 100% | 35ms |
-| 100 | 100% | 190ms |
+No cache warmup needed. Same sub-80ms response time, always. See [Benchmarks](/benchmarks) for full results.
 
 ### Real-time MySQL Sync
 
@@ -90,22 +84,4 @@ MygramDB is ideal for:
 - **FULLTEXT queries >100ms** — Slow searches hurting user experience
 - **Search fails under load** — Timeouts during traffic spikes
 
-## Get Started
-
-```bash
-docker run -d --name mygramdb \
-  -p 11016:11016 \
-  -e MYSQL_HOST=your-mysql-host \
-  -e MYSQL_USER=repl_user \
-  -e MYSQL_PASSWORD=your_password \
-  -e MYSQL_DATABASE=mydb \
-  -e TABLE_NAME=articles \
-  -e NETWORK_ALLOW_CIDRS=0.0.0.0/0 \
-  ghcr.io/libraz/mygram-db:latest
-```
-
-::: warning
-`NETWORK_ALLOW_CIDRS=0.0.0.0/0` allows connections from any IP. For production, restrict to specific ranges (e.g., `10.0.0.0/8,172.16.0.0/12`).
-:::
-
-See [GitHub](https://github.com/libraz/mygram-db) for full documentation.
+Ready to try it? See [Quick Start](/) or [GitHub](https://github.com/libraz/mygram-db) for full documentation.

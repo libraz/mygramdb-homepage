@@ -33,28 +33,8 @@ Tested on 1.7M rows of production data with MySQL 8.4.
 | 10 concurrent | **90% failed**, QPS 0.4 | 100% success, QPS 288 |
 | 100 concurrent | Cannot execute | 100% success, **QPS 372** |
 
-## Why MySQL FULLTEXT is Slow
+## Why These Numbers?
 
-- **Disk I/O**: Scans B-tree pages from disk
-- **No compression**: Large posting lists
-- **Cache dependency**: 2-3x variance between cold/warm
-- **Concurrency bottleneck**: I/O contention under load
+See [Why MySQL FULLTEXT is Slow](/why) for a detailed breakdown of the architectural differences, and [Comparison](/comparison) for how MygramDB stacks up against Elasticsearch.
 
-## Why MygramDB is Fast
-
-- **In-memory**: Zero disk I/O
-- **Compressed**: Delta encoding + Roaring bitmaps
-- **SIMD-accelerated**: Fast bitmap operations
-- **No warmup**: Always ready
-
-## vs Elasticsearch
-
-| | MygramDB | Elasticsearch |
-|---|----------|---------------|
-| Deployment | Single binary | Cluster setup |
-| Data sync | Direct MySQL binlog | ETL required |
-| Latency | Sub-80ms | Higher |
-| Complexity | Low | High |
-| Distributed | No | Yes |
-
-See [GitHub](https://github.com/libraz/mygram-db) for details.
+For benchmark methodology and environment details, see [FAQ — Benchmarks](/faq#benchmarks).
