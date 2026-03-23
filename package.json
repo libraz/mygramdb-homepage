@@ -30,6 +30,7 @@
     "vitepress": "^1.6.4"
   },
   "dependencies": {
+    "chart.js": "^4.5.1",
     "mermaid": "^11.13.0",
     "vitepress-plugin-mermaid": "^2.0.17"
   }

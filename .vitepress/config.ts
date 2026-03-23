@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
 const siteUrl = 'https://mygramdb.libraz.net'
 const githubUrl = 'https://github.com/libraz/mygram-db'
@@ -18,7 +19,7 @@ const softwareApplicationJsonLd = {
   description: 'In-memory full-text search engine that replaces slow MySQL FULLTEXT. Tens to hundreds of times faster with real-time MySQL binlog replication.',
   url: siteUrl,
   downloadUrl: githubUrl,
-  softwareVersion: '1.4.0',
+  softwareVersion: '1.5.0',
   author: {
     '@type': 'Person',
     name: 'libraz'
@@ -37,7 +38,7 @@ const faqJsonLd = {
       name: 'Why is MySQL FULLTEXT so slow?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'MySQL FULLTEXT is slow because it stores indexes on disk using B-tree pages, requires disk I/O for every query, uses uncompressed posting lists, and suffers from cache dependency. Under concurrent load, 90% of queries fail at just 10 connections. MygramDB solves this with in-memory indexing delivering consistent sub-80ms latency.'
+        text: 'MySQL FULLTEXT is slow because it stores indexes on disk using B-tree pages, requires disk I/O for every query, and uses uncompressed posting lists. MygramDB solves this with in-memory N-gram indexing delivering consistent sub-millisecond latency.'
       }
     },
     {
@@ -53,7 +54,7 @@ const faqJsonLd = {
       name: 'How much faster is MygramDB than MySQL FULLTEXT?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'MygramDB is tens to hundreds of times faster than MySQL FULLTEXT. For typical ORDER BY id LIMIT 100 queries, it achieves 19-32x speedup. COUNT queries are 400x+ faster. Under 10 concurrent queries, MySQL fails 90% while MygramDB achieves 288 QPS with 100% success rate.'
+        text: 'On a 1.1M Wikipedia article dataset, MygramDB delivers sub-millisecond search latency compared to MySQL FULLTEXT at 500ms-2.5s. COUNT queries are thousands of times faster. With verify_text enabled (v1.5.0), results are exact match with MySQL. Benchmarks are reproducible via make bench-up.'
       }
     },
     {
@@ -69,13 +70,13 @@ const faqJsonLd = {
       name: 'What is the difference between MygramDB and Elasticsearch?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'MygramDB is a single-binary deployment with direct MySQL binlog sync, sub-80ms latency, and low operational complexity. Elasticsearch offers distributed search and advanced features but requires cluster management, ETL pipelines, and JVM tuning. Choose MygramDB for simpler MySQL-based applications; Elasticsearch for large-scale distributed search.'
+        text: 'MygramDB is a single-binary deployment with direct MySQL binlog sync, sub-millisecond latency, and low operational complexity. Elasticsearch offers distributed search and advanced features but requires cluster management, ETL pipelines, and JVM tuning. Choose MygramDB for simpler MySQL-based applications; Elasticsearch for large-scale distributed search.'
       }
     }
   ]
 }
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   srcDir: 'src',
   appearance: true,
   title: 'MygramDB',
@@ -114,8 +115,8 @@ export default defineConfig({
 
     // OGP
     ['meta', { property: 'og:site_name', content: 'MygramDB' }],
-    ['meta', { property: 'og:title', content: 'MygramDB - Hundreds of times faster than MySQL FULLTEXT' }],
-    ['meta', { property: 'og:description', content: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-80ms queries, 100% success rate under load.' }],
+    ['meta', { property: 'og:title', content: 'MygramDB - In-memory full-text search with MySQL replication' }],
+    ['meta', { property: 'og:description', content: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-millisecond queries on million-row datasets.' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:url', content: siteUrl }],
     ['meta', { property: 'og:image', content: `${siteUrl}/og-image.png` }],
@@ -124,8 +125,8 @@ export default defineConfig({
 
     // Twitter
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'MygramDB - Hundreds of times faster than MySQL FULLTEXT' }],
-    ['meta', { name: 'twitter:description', content: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-80ms queries, 100% success rate under load.' }],
+    ['meta', { name: 'twitter:title', content: 'MygramDB - In-memory full-text search with MySQL replication' }],
+    ['meta', { name: 'twitter:description', content: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-millisecond queries on million-row datasets.' }],
     ['meta', { name: 'twitter:image', content: `${siteUrl}/og-image.png` }],
   ],
 
@@ -146,9 +147,9 @@ export default defineConfig({
           { text: '比較', link: '/ja/comparison' },
           { text: 'FAQ', link: '/ja/faq' },
           {
-            text: 'v1.4.0',
+            text: 'v1.5.0',
             items: [
-              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.4.0.md' },
+              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.5.0.md' },
               { text: '変更履歴', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
             ]
           }
@@ -156,7 +157,14 @@ export default defineConfig({
         sidebar: {
           '/ja/docs/': [
             {
-              text: 'ドキュメント',
+              text: '概要',
+              items: [
+                { text: '仕組み', link: '/ja/docs/how-it-works' },
+                { text: 'アーキテクチャ', link: '/ja/docs/architecture' }
+              ]
+            },
+            {
+              text: 'はじめに',
               items: [
                 { text: 'クイックスタート', link: '/ja/docs/getting-started' },
                 { text: 'インストール', link: '/ja/docs/installation' },
@@ -178,9 +186,9 @@ export default defineConfig({
       { text: 'Comparison', link: '/comparison' },
       { text: 'FAQ', link: '/faq' },
       {
-        text: 'v1.4.0',
+        text: 'v1.5.0',
         items: [
-          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.4.0.md' },
+          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.5.0.md' },
           { text: 'Changelog', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
         ]
       }
@@ -189,9 +197,16 @@ export default defineConfig({
     sidebar: {
       '/docs/': [
         {
-          text: 'Documentation',
+          text: 'Overview',
           items: [
-            { text: 'Getting Started', link: '/docs/getting-started' },
+            { text: 'How it Works', link: '/docs/how-it-works' },
+            { text: 'Architecture', link: '/docs/architecture' }
+          ]
+        },
+        {
+          text: 'Getting Started',
+          items: [
+            { text: 'Quick Start', link: '/docs/getting-started' },
             { text: 'Installation', link: '/docs/installation' },
             { text: 'Configuration', link: '/docs/configuration' },
             { text: 'Query Guide', link: '/docs/queries' }
@@ -208,4 +223,4 @@ export default defineConfig({
       message: 'a personal project by <a href="https://libraz.net" target="_blank" rel="noopener">libraz</a>'
     }
   }
-})
+}))

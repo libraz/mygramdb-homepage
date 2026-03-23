@@ -31,26 +31,20 @@ MySQL stores posting lists without compression. For common terms matching millio
 
 ### Cache Dependency
 
-Performance varies 2-3x between cold and warm cache:
-
-| State | Query Time |
-|-------|------------|
-| Cold cache | 2,980ms |
-| Warm cache | 908ms |
+Performance varies significantly between cold and warm cache. In benchmarks on 1.1M Wikipedia articles, MySQL FULLTEXT latency ranged from 300ms to 2,566ms depending on query and cache state.
 
 In production, cache is often cold after restarts, deployments, or buffer pool contention.
 
 ### Concurrency Collapse
 
-Under heavy concurrent load, MySQL FULLTEXT fails catastrophically:
+Under concurrent load, MySQL FULLTEXT throughput drops dramatically:
 
-| Concurrent Queries | Success Rate | Avg Response |
-|-------------------|--------------|--------------|
-| 1 | 100% | 908ms |
-| 10 | **10%** | 4,641ms |
-| 100 | 0% | timeout |
+| Solution | Concurrent Connections | QPS |
+|----------|----------------------|-----|
+| MySQL FULLTEXT | 1-4 | 2-8 |
+| MygramDB | 1-4 | 2,634-11,766 |
 
-90% of queries fail at just 10 concurrent connections.
+MySQL FULLTEXT delivers only single-digit QPS even at low concurrency, while MygramDB sustains thousands of queries per second.
 
 ## The Solution: MygramDB
 
@@ -70,7 +64,7 @@ Bitmap intersections use CPU SIMD instructions for maximum throughput.
 
 ### Consistent Performance
 
-No cache warmup needed. Same sub-80ms response time, always. See [Benchmarks](/benchmarks) for full results.
+No cache warmup needed. Sub-millisecond response time (0.08-0.42ms), always. See [Benchmarks](/benchmarks) for full results.
 
 ### Real-time MySQL Sync
 

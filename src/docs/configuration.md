@@ -44,6 +44,7 @@ api:
 memory:
   hard_limit_mb: 8192
   soft_target_mb: 4096
+  verify_text: "off"              # "off", "ascii", "all"
 
 # Persistence
 dump:
@@ -138,7 +139,18 @@ api:
 memory:
   hard_limit_mb: 8192         # Hard memory limit (MB)
   soft_target_mb: 4096        # Soft memory target (MB)
+  verify_text: "off"          # N-gram post-filter verification
 ```
+
+**`verify_text`** — Eliminates n-gram false positives by verifying results against stored text:
+
+| Value | Behavior | Memory |
+|-------|----------|--------|
+| `off` | No verification (default) | ~740MB / million docs |
+| `ascii` | Verify ASCII-only queries | Moderate |
+| `all` | Verify all queries | ~2.3GB / million docs |
+
+See [Configuration Guide](https://github.com/libraz/mygram-db/blob/main/docs/en/configuration.md#n-gram-verification-verify_text) for details.
 
 ## Persistence (Snapshots)
 

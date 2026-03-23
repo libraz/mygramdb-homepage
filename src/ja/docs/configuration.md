@@ -44,6 +44,7 @@ api:
 memory:
   hard_limit_mb: 8192
   soft_target_mb: 4096
+  verify_text: "off"              # "off"、"ascii"、"all"
 
 # 永続化
 dump:
@@ -138,7 +139,18 @@ api:
 memory:
   hard_limit_mb: 8192         # ハードメモリ上限（MB）
   soft_target_mb: 4096        # ソフトメモリ目標（MB）
+  verify_text: "off"          # N-gramポストフィルタ検証
 ```
+
+**`verify_text`** — N-gram偽陽性を排除するため、保存テキストと照合して結果を検証:
+
+| 値 | 動作 | メモリ |
+|------|------|--------|
+| `off` | 検証なし（デフォルト） | 約740MB / 100万件 |
+| `ascii` | ASCIIクエリのみ検証 | 中程度 |
+| `all` | 全クエリを検証 | 約2.3GB / 100万件 |
+
+詳細は[設定ガイド](https://github.com/libraz/mygram-db/blob/main/docs/ja/configuration.md#n-gram検証verify_text)を参照。
 
 ## 永続化（スナップショット）
 

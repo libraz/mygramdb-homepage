@@ -15,12 +15,12 @@ Choosing the right full-text search solution depends on your requirements. Here'
 
 | Feature | MygramDB | Elasticsearch | MySQL FULLTEXT |
 |---------|----------|---------------|----------------|
-| **Latency** | <80ms | 50-500ms | 100-3000ms |
+| **Latency** | <1ms | 50-500ms | 100-3000ms |
 | **Deployment** | Single binary | Cluster | Built-in |
 | **Data sync** | MySQL binlog | ETL required | Native |
 | **Scalability** | Single node | Distributed | Single node |
-| **Memory** | ~1-2GB/1M docs | ~2-4GB/1M docs | Buffer pool |
-| **Concurrency** | QPS 372 | High | QPS 0.4 |
+| **Memory** | ~2.3GB/1M docs (with verify_text) | ~2-4GB/1M docs | Buffer pool |
+| **Concurrency** | QPS 11,766 | High | QPS 2-8 |
 | **CJK support** | N-gram | Plugins | N-gram parser |
 | **Analytics** | Basic | Advanced | None |
 | **Learning curve** | Low | High | Low |
@@ -32,7 +32,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 **Best for:** MySQL-based applications needing fast search without infrastructure complexity.
 
 **Pros:**
-- Sub-80ms consistent latency
+- Sub-millisecond consistent latency
 - Zero configuration data sync via binlog
 - Single binary deployment
 - No cluster management
@@ -71,13 +71,13 @@ Choosing the right full-text search solution depends on your requirements. Here'
 
 **Cons:**
 - Slow (100-3000ms per query)
-- Fails under concurrent load (90% failure at 10 concurrent)
+- Low throughput under concurrent load (2-8 QPS)
 - Cache-dependent performance
 - Limited scalability
 
 ## Performance Comparison
 
-See [Benchmarks](/benchmarks) for detailed results on 1.7M rows. Key takeaway: MygramDB achieves 100% success rate at 100 concurrent queries (QPS 372), while MySQL FULLTEXT fails at 10 concurrent (90% failure, QPS 0.4).
+See [Benchmarks](/benchmarks) for detailed results on 1.1M Wikipedia articles. Key takeaway: MygramDB delivers 2,634-11,766 QPS with sub-millisecond latency, while MySQL FULLTEXT manages only 2-8 QPS with 300-2,566ms latency.
 
 ## Migration Path
 

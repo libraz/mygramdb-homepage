@@ -1,8 +1,8 @@
 ---
 layout: home
-title: MygramDB - Hundreds of times faster than MySQL FULLTEXT
+title: MygramDB - In-memory full-text search with MySQL replication
 titleTemplate: false
-description: MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-80ms queries, 100% success under load.
+description: MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-millisecond queries on million-row datasets.
 head:
   - - meta
     - name: keywords
@@ -10,8 +10,8 @@ head:
 
 hero:
   name: "MygramDB"
-  text: "Hundreds of times faster than MySQL FULLTEXT"
-  tagline: In-memory full-text search engine with MySQL replication
+  text: "Sub-millisecond full-text search"
+  tagline: In-memory search engine with MySQL binlog replication
   actions:
     - theme: brand
       text: View on GitHub
@@ -24,7 +24,7 @@ features:
   - icon:
       src: /icons/zap.svg
     title: MySQL FULLTEXT too slow?
-    details: MygramDB delivers sub-80ms queries with in-memory indexing. No more timeout errors.
+    details: MygramDB delivers sub-millisecond queries with in-memory indexing. No more timeout errors.
   - icon:
       src: /icons/refresh-cw.svg
     title: Real-time MySQL sync

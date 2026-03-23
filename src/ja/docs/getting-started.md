@@ -20,7 +20,7 @@ sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ### Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygramdb:latest
+docker pull ghcr.io/libraz/mygram-db:latest
 ```
 
 ## 最小構成

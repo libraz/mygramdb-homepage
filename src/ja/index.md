@@ -1,8 +1,8 @@
 ---
 layout: home
-title: MygramDB - MySQL FULLTEXTより桁違いに高速
+title: MygramDB - MySQLレプリケーション対応インメモリ全文検索
 titleTemplate: false
-description: MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジン。80ms以下のクエリ、負荷時も100%成功。
+description: MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジン。100万行規模でサブミリ秒のクエリ応答。
 head:
   - - meta
     - name: keywords
@@ -10,8 +10,8 @@ head:
 
 hero:
   name: "MygramDB"
-  text: "MySQL FULLTEXTより桁違いに高速"
-  tagline: MySQLレプリケーションで同期するインメモリ全文検索エンジン
+  text: "サブミリ秒の全文検索"
+  tagline: MySQL binlogレプリケーションで同期するインメモリ検索エンジン
   actions:
     - theme: brand
       text: GitHubで見る
@@ -24,7 +24,7 @@ features:
   - icon:
       src: /icons/zap.svg
     title: MySQL FULLTEXTが遅い？
-    details: MygramDBはインメモリで80ms以下のクエリを実現。タイムアウトエラーを解消。
+    details: MygramDBはインメモリでサブミリ秒のクエリを実現。タイムアウトエラーを解消。
   - icon:
       src: /icons/refresh-cw.svg
     title: MySQLとリアルタイム同期

@@ -3,6 +3,44 @@
   --vp-font-family-base: 'Space Grotesk', sans-serif;
 }
 
+/* Refined list bullets — smaller, subtler */
+.vp-doc ul {
+  list-style: none;
+  padding-left: 1.25em;
+}
+
+.vp-doc ul > li {
+  position: relative;
+}
+
+.vp-doc ul > li::before {
+  content: '';
+  position: absolute;
+  left: -1.1em;
+  top: 0.65em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--vp-c-text-3);
+}
+
+/* Nested list: even smaller dash-style */
+.vp-doc ul ul > li::before {
+  width: 6px;
+  height: 1.5px;
+  border-radius: 1px;
+  top: 0.75em;
+}
+
+/* Ordered list: tighter spacing */
+.vp-doc ol {
+  padding-left: 1.5em;
+}
+
+.vp-doc li + li {
+  margin-top: 4px;
+}
+
 /* Hero title: Orbitron */
 .VPHero .name {
   font-family: 'Orbitron', sans-serif !important;

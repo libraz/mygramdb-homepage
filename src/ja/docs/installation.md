@@ -27,18 +27,18 @@ sudo systemctl enable --now mygramdb
 ## Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygramdb:latest
+docker pull ghcr.io/libraz/mygram-db:latest
 
 docker run -d \
   -p 11016:11016 \
   -p 8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml \
-  ghcr.io/libraz/mygramdb:latest
+  ghcr.io/libraz/mygram-db:latest
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygramdb:1.4.0`
-- `ghcr.io/libraz/mygramdb:latest`
+- `ghcr.io/libraz/mygram-db:1.5.0`
+- `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
 

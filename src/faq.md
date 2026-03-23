@@ -11,11 +11,11 @@ description: Frequently asked questions about MygramDB. Architecture, benchmarks
 
 Disk I/O, uncompressed posting lists, cache dependency, and concurrency collapse. See [Why MySQL FULLTEXT is Slow](/why) for a detailed breakdown.
 
-**Solution**: MygramDB keeps everything in memory, delivering consistent sub-80ms latency. See [Benchmarks](/benchmarks) for numbers.
+**Solution**: MygramDB keeps everything in memory, delivering consistent sub-millisecond latency. See [Benchmarks](/benchmarks) for numbers.
 
 ### My MySQL FULLTEXT queries keep timing out under load. How do I fix it?
 
-Add MygramDB as a search replica. It handles 100 concurrent queries with 100% success rate and QPS 372, while MySQL FULLTEXT fails at 10 concurrent.
+Add MygramDB as a search replica. In benchmarks on 1.1M Wikipedia articles, MygramDB delivers 2,634-11,766 QPS under concurrent load, while MySQL FULLTEXT drops to 2-8 QPS.
 
 ### Is there a way to speed up MySQL FULLTEXT without changing my application?
 
@@ -49,7 +49,7 @@ The key difference is data flow. RediSearch requires you to push documents into 
 
 ### How much memory does MygramDB need?
 
-Approximately 1-2GB per million documents. For 10M documents, plan for 10-20GB RAM.
+Depends on `verify_text` mode. With `verify_text: off` (default): **~813MB per million documents** (index only). With `verify_text: all` (text verification enabled): **~2.3GB per million documents** (includes stored normalized text for post-filtering). For 10M documents, plan for ~8GB (`off`) or ~23GB (`all`).
 
 ### Does MygramDB support Japanese/Chinese/Korean text?
 
@@ -166,7 +166,7 @@ Dump configuration:
 
 ### What happens when memory reaches the hard limit?
 
-MygramDB monitors memory usage via health check endpoints but does not enforce the hard limit by rejecting queries or stopping replication. If the index grows beyond available RAM, the OS-level OOM killer will terminate the process. In practice, size your server to hold the full dataset plus headroom. The rule of thumb is 1-2GB per million documents — plan accordingly and monitor `/health/detail` or Prometheus metrics for memory usage trends.
+MygramDB monitors memory usage via health check endpoints but does not enforce the hard limit by rejecting queries or stopping replication. If the index grows beyond available RAM, the OS-level OOM killer will terminate the process. In practice, size your server to hold the full dataset plus headroom. The rule of thumb is ~2.3GB per million documents (with `verify_text: all`) — plan accordingly and monitor `/health/detail` or Prometheus metrics for memory usage trends.
 
 ## Protocol and Security
 
@@ -223,7 +223,7 @@ MygramDB is simple *to add*. It assumes MySQL already exists — which it does i
 
 ### What hardware were the benchmarks run on?
 
-Benchmarks were run on 1,696,904 rows of real production data. MySQL 8.4.6 ran in Docker with default settings. MygramDB ran with query cache disabled to measure raw index performance. Both ran on the same machine.
+Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4 in Docker. MygramDB ran with `verify_text: all` (post-filter enabled for accurate match counts) and query cache disabled. Both ran on the same Apple M4 Max (128GB unified memory). Note: M4 Max's unified memory bandwidth is significantly higher than DDR4, which benefits in-memory MygramDB disproportionately. On a typical DDR4 server, expect MygramDB latencies to be somewhat higher.
 
 ### Were MySQL settings tuned for the benchmark?
 
@@ -245,7 +245,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.4.0 (March 2026). The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on stability (thread safety fixes, replication edge cases) and operational features (Prometheus metrics, health checks, Kubernetes readiness).
+Development started in November 2025. The current version is 1.5.0 (March 2026). The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on stability (thread safety fixes, replication edge cases) and operational features (Prometheus metrics, health checks, Kubernetes readiness).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 
