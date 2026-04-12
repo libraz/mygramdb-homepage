@@ -2,14 +2,14 @@
 
 ## RPM Package (Recommended)
 
-For RHEL, AlmaLinux, Rocky Linux 9, download from [GitHub Releases](https://github.com/libraz/mygram-db/releases/latest):
+For RHEL, AlmaLinux, Rocky Linux 9/10, download from [GitHub Releases](https://github.com/libraz/mygram-db/releases/latest):
 
 ```bash
-# x86_64
+# EL9 (RHEL/AlmaLinux/Rocky Linux 9)
 sudo rpm -i mygramdb-*.el9.x86_64.rpm
 
-# ARM64
-sudo rpm -i mygramdb-*.el9.aarch64.rpm
+# EL10 (RHEL/AlmaLinux/Rocky Linux 10)
+sudo rpm -i mygramdb-*.el10.x86_64.rpm
 ```
 
 This installs:
@@ -37,10 +37,28 @@ docker run -d \
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.5.0`
+- `ghcr.io/libraz/mygram-db:1.5.3`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
+
+## DEB Package
+
+For Ubuntu 22.04 (Jammy) and 24.04 (Noble):
+
+```bash
+# x86_64
+sudo dpkg -i mygramdb_*_amd64.deb
+
+# ARM64
+sudo dpkg -i mygramdb_*_arm64.deb
+```
+
+Start the service:
+
+```bash
+sudo systemctl enable --now mygramdb
+```
 
 ## Build from Source
 

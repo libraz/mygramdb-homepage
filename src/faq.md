@@ -245,7 +245,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.5.0 (March 2026). The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on stability (thread safety fixes, replication edge cases) and operational features (Prometheus metrics, health checks, Kubernetes readiness).
+Development started in November 2025. The current version is 1.5.3 (April 2026). The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on scalability (event-driven reactor I/O model), stability (thread safety fixes, replication edge cases), and operational features (Prometheus metrics, health checks, Kubernetes readiness).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 

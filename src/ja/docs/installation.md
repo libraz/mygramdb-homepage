@@ -2,14 +2,14 @@
 
 ## RPMパッケージ（推奨）
 
-RHEL、AlmaLinux、Rocky Linux 9向け。[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest)からダウンロード：
+RHEL、AlmaLinux、Rocky Linux 9/10向け。[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest)からダウンロード：
 
 ```bash
-# x86_64
+# EL9 (RHEL/AlmaLinux/Rocky Linux 9)
 sudo rpm -i mygramdb-*.el9.x86_64.rpm
 
-# ARM64
-sudo rpm -i mygramdb-*.el9.aarch64.rpm
+# EL10 (RHEL/AlmaLinux/Rocky Linux 10)
+sudo rpm -i mygramdb-*.el10.x86_64.rpm
 ```
 
 インストールされるファイル：
@@ -37,10 +37,28 @@ docker run -d \
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.5.0`
+- `ghcr.io/libraz/mygram-db:1.5.3`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
+
+## DEBパッケージ
+
+Ubuntu 22.04 (Jammy) および 24.04 (Noble) 向け：
+
+```bash
+# x86_64
+sudo dpkg -i mygramdb_*_amd64.deb
+
+# ARM64
+sudo dpkg -i mygramdb_*_arm64.deb
+```
+
+サービスを開始：
+
+```bash
+sudo systemctl enable --now mygramdb
+```
 
 ## ソースからビルド
 

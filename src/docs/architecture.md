@@ -81,11 +81,16 @@ Search queries arrive via TCP (port 11016, default) or HTTP (port 8080, disabled
 
 ## Thread Model
 
+Since v1.5.3, MygramDB uses an **event-driven Reactor I/O model** for TCP connections. The reactor uses epoll (Linux) or kqueue (macOS) to multiplex thousands of connections onto a single event-loop thread, dispatching work to a bounded worker pool.
+
 ```mermaid
 flowchart TD
     subgraph "Main Thread"
         INIT["Initialization\nConfig, Snapshot Load"]
         ORCH["Server Orchestrator\nLifecycle Management"]
+    end
+    subgraph "Reactor Thread"
+        EV["epoll/kqueue event loop\nConnection multiplexing"]
     end
     subgraph "BinlogReader Thread"
         BL["MySQL binlog stream\n→ Event Queue"]
@@ -99,6 +104,8 @@ flowchart TD
         SS["Snapshot Scheduler\n(periodic dump)"]
     end
     INIT --> ORCH
+    EV -->|"dispatch"| W2
+    EV -->|"dispatch"| W3
     BL -->|"event queue"| W1
     W2 -->|"shared_mutex\n(read lock)"| IDX["Index\n+ DocStore"]
     W3 -->|"shared_mutex\n(read lock)"| IDX
@@ -107,9 +114,12 @@ flowchart TD
 
 **Concurrency model:**
 
+- The **Reactor** thread handles all TCP I/O (accept, read, write) via epoll/kqueue. No thread-per-connection overhead — thousands of idle connections consume no threads.
+- Parsed requests are dispatched to the **Worker Thread Pool** for query execution.
 - The Index and DocumentStore are protected by `std::shared_mutex`, allowing multiple concurrent readers with a single writer.
 - Search queries acquire a read lock. Binlog event processing acquires a write lock.
 - This is optimal for the read-heavy workload: searches never block each other, and writes only block briefly during index updates.
+- Per-connection **backpressure** (`api.tcp.max_write_queue_bytes`, default 16 MiB) force-closes slow clients whose write queue exceeds the cap, preventing memory exhaustion.
 - Atomic counters are used for statistics (query count, cache hits) to avoid lock contention on the hot path.
 
 All threads are joined on shutdown. No threads are detached.
