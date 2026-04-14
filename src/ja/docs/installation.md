@@ -37,7 +37,7 @@ docker run -d \
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.5.3`
+- `ghcr.io/libraz/mygram-db:1.5.4`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
