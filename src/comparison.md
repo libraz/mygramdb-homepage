@@ -21,7 +21,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 | **Scalability** | Single node | Distributed | Single node |
 | **Memory** | ~2.3GB/1M docs (with verify_text) | ~2-4GB/1M docs | Buffer pool |
 | **Concurrency** | QPS 11,766 | High | QPS 2-8 |
-| **CJK support** | N-gram | Plugins | N-gram parser |
+| **Multibyte / Unicode** | N-gram (ICU NFKC) | Language plugins | N-gram parser |
 | **Analytics** | Basic | Advanced | None |
 | **Learning curve** | Low | High | Low |
 
@@ -36,7 +36,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 - Zero configuration data sync via binlog (MySQL 8.4/9.x and MariaDB 10.6+/11.x)
 - Single binary deployment
 - No cluster management
-- Perfect for CJK text with N-gram
+- Language-agnostic N-gram tokenization with first-class multibyte UTF-8 support
 - BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, and synonym expansion (v1.6.0+)
 
 **Cons:**

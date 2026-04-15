@@ -13,7 +13,7 @@ MygramDB is an in-memory full-text search engine built around n-gram indexing. T
 
 ## N-gram Indexing
 
-MygramDB tokenizes text into overlapping character sequences called n-grams. The default strategy is hybrid: **bi-grams (2 characters)** for ASCII text and **unigrams (1 character)** for CJK (Chinese, Japanese, Korean) characters.
+MygramDB tokenizes text into overlapping character sequences called n-grams. The default strategy is hybrid: **bi-grams (2 characters)** for ASCII text and **unigrams (1 character)** for multibyte ideographic characters (CJK and related scripts that use 3-byte UTF-8 sequences).
 
 For example, the word `search` produces these bi-grams:
 
@@ -21,7 +21,7 @@ For example, the word `search` produces these bi-grams:
 "search" → ["se", "ea", "ar", "rc", "ch"]
 ```
 
-A Japanese string like `東京都` produces unigrams:
+A multibyte string like `東京都` (3-byte UTF-8 characters) produces unigrams:
 
 ```
 "東京都" → ["東", "京", "都"]

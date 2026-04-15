@@ -51,9 +51,9 @@ The key difference is data flow. RediSearch requires you to push documents into 
 
 Depends on `verify_text` mode. With `verify_text: off` (default): **~813MB per million documents** (index only). With `verify_text: all` (text verification enabled): **~2.3GB per million documents** (includes stored normalized text for post-filtering). For 10M documents, plan for ~8GB (`off`) or ~23GB (`all`).
 
-### Does MygramDB support Japanese/Chinese/Korean text?
+### Does MygramDB handle multibyte / non-ASCII text?
 
-Yes. MygramDB uses ICU-based Unicode normalization with N-gram tokenization. CJK text works out of the box without additional plugins.
+Yes. MygramDB is fully Unicode-aware: text goes through ICU-based NFKC normalization and is then tokenized by a language-agnostic N-gram tokenizer. 3-byte UTF-8 (most ideographic scripts, e.g. Chinese, Japanese, Korean) and 4-byte UTF-8 (emoji, supplementary planes) are handled out of the box with no language-specific plugins, dictionaries, or morphological analyzers to configure.
 
 ### Does MygramDB support fuzzy search or typo tolerance?
 
@@ -93,9 +93,9 @@ Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTI
 
 ### Why N-gram instead of morphological analysis?
 
-N-gram tokenization is language-agnostic. Morphological analyzers (MeCab, kuromoji, jieba) require dictionaries, language detection, and version management. N-gram works uniformly across English, Japanese, Chinese, Korean, and mixed-language content.
+N-gram tokenization is language-agnostic. Morphological analyzers (MeCab, kuromoji, jieba) require dictionaries, language detection, and version management. N-gram works uniformly across Latin, multibyte ideographic scripts, and mixed-script content without any per-language configuration.
 
-MygramDB uses a hybrid approach: bigrams (size 2) for ASCII/alphanumeric text and unigrams (size 1) for CJK characters. Both sizes are configurable per table via `ngram_size` and `kanji_ngram_size`.
+MygramDB uses a hybrid approach: bigrams (size 2) for ASCII/alphanumeric text and unigrams (size 1) for multibyte ideographic characters (e.g. CJK). Both sizes are configurable per table via `ngram_size` and `kanji_ngram_size`.
 
 ### How are Roaring bitmaps used?
 
