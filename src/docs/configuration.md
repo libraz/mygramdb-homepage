@@ -46,6 +46,11 @@ memory:
   soft_target_mb: 4096
   verify_text: "off"              # "off", "ascii", "all"
 
+# Synonym Dictionary (v1.6.0+)
+synonyms:
+  enable: false
+  file: "/etc/mygramdb/synonyms.tsv"
+
 # Persistence
 dump:
   dir: "/var/lib/mygramdb/dumps"
@@ -58,7 +63,9 @@ logging:
   format: "text"
 ```
 
-## MySQL Connection
+## MySQL / MariaDB Connection
+
+MygramDB works with both **MySQL 8.4/9.x** and **MariaDB 10.6+/11.x**. The same `mysql` config section is used for both — the server flavor is auto-detected from `SELECT VERSION()` and the correct GTID format (UUID-based for MySQL, `domain-server-sequence` for MariaDB) is applied transparently.
 
 ```yaml
 mysql:
@@ -69,25 +76,27 @@ mysql:
   database: "mydb"
 ```
 
-### Required MySQL Privileges
+### Required Privileges
 
 ```sql
 GRANT SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'repl_user'@'%';
 FLUSH PRIVILEGES;
 ```
 
-### MySQL Requirements
+### Server Requirements
 
 > [!IMPORTANT]
 > These settings are required for MygramDB to work. Without them, replication will fail.
 
 ```ini
-# my.cnf
-gtid_mode = ON
-enforce_gtid_consistency = ON
+# my.cnf (MySQL 8.4/9.x or MariaDB 10.6+/11.x)
+gtid_mode = ON                    # MySQL
+enforce_gtid_consistency = ON     # MySQL
 binlog_format = ROW
 binlog_row_image = FULL
 ```
+
+For MariaDB, GTID is enabled by default (`gtid_domain_id` + `server_id`); `gtid_mode`/`enforce_gtid_consistency` do not apply. Ensure `binlog_format = ROW` and `binlog_row_image = FULL`.
 
 ## Table Configuration
 
@@ -169,6 +178,28 @@ cache:
   max_memory_mb: 32           # Maximum cache memory (MB)
   ttl_seconds: 3600           # Cache TTL in seconds
 ```
+
+## Synonym Dictionary
+
+Expand search terms into OR-groups of synonyms at query time (v1.6.0+):
+
+```yaml
+synonyms:
+  enable: true
+  file: "/etc/mygramdb/synonyms.tsv"
+```
+
+Synonym file format (TSV, one group per line, tab-separated):
+
+```tsv
+car	automobile	vehicle
+fast	quick	rapid	speedy
+# lines starting with '#' are comments
+```
+
+- Bidirectional: searching for any term in a group matches all terms in that group
+- Up to 20 synonyms per group
+- All terms are normalized using the same rules as the index (NFKC, width conversion)
 
 ## Logging
 

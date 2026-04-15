@@ -46,6 +46,11 @@ memory:
   soft_target_mb: 4096
   verify_text: "off"              # "off"、"ascii"、"all"
 
+# シノニム辞書（v1.6.0以降）
+synonyms:
+  enable: false
+  file: "/etc/mygramdb/synonyms.tsv"
+
 # 永続化
 dump:
   dir: "/var/lib/mygramdb/dumps"
@@ -58,7 +63,9 @@ logging:
   format: "text"
 ```
 
-## MySQL接続
+## MySQL / MariaDB接続
+
+MygramDBは **MySQL 8.4/9.x** と **MariaDB 10.6+/11.x** の両方に対応します。設定ファイルは同じ `mysql` セクションを使用し、`SELECT VERSION()` からサーバーの種別を自動判定して、適切なGTID形式（MySQLはUUIDベース、MariaDBは `domain-server-sequence`）に切り替えます。
 
 ```yaml
 mysql:
@@ -69,25 +76,27 @@ mysql:
   database: "mydb"
 ```
 
-### 必要なMySQL権限
+### 必要な権限
 
 ```sql
 GRANT SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'repl_user'@'%';
 FLUSH PRIVILEGES;
 ```
 
-### MySQL要件
+### サーバー要件
 
 > [!IMPORTANT]
 > これらの設定はMygramDBの動作に必須です。設定がない場合、レプリケーションが失敗します。
 
 ```ini
-# my.cnf
-gtid_mode = ON
-enforce_gtid_consistency = ON
+# my.cnf (MySQL 8.4/9.x または MariaDB 10.6+/11.x)
+gtid_mode = ON                    # MySQL
+enforce_gtid_consistency = ON     # MySQL
 binlog_format = ROW
 binlog_row_image = FULL
 ```
+
+MariaDBではGTIDがデフォルトで有効（`gtid_domain_id` + `server_id`）であり、`gtid_mode`/`enforce_gtid_consistency` は不要です。`binlog_format = ROW` と `binlog_row_image = FULL` のみ確認してください。
 
 ## テーブル設定
 
@@ -169,6 +178,28 @@ cache:
   max_memory_mb: 32           # 最大キャッシュメモリ（MB）
   ttl_seconds: 3600           # キャッシュTTL（秒）
 ```
+
+## シノニム辞書
+
+検索語句をクエリ時に同義語のORグループへ展開します（v1.6.0以降）：
+
+```yaml
+synonyms:
+  enable: true
+  file: "/etc/mygramdb/synonyms.tsv"
+```
+
+シノニムファイル形式（TSV、1グループ1行、タブ区切り）：
+
+```tsv
+car	automobile	vehicle
+fast	quick	rapid	speedy
+# '#' 始まりの行はコメント
+```
+
+- 双方向：グループ内のどの語句を検索しても、同グループの全ての語句にマッチ
+- 1グループあたり最大20語
+- インデックスと同じルール（NFKC正規化、全角半角変換）で正規化
 
 ## ログ
 

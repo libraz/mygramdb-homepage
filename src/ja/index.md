@@ -11,7 +11,7 @@ head:
 hero:
   name: "MygramDB"
   text: "サブミリ秒の全文検索"
-  tagline: MySQL binlogレプリケーションで同期するインメモリ検索エンジン
+  tagline: MySQL / MariaDB binlogレプリケーションで同期するインメモリ検索エンジン
   actions:
     - theme: brand
       text: GitHubで見る
@@ -27,8 +27,8 @@ features:
     details: MygramDBはインメモリでサブミリ秒のクエリを実現。タイムアウトエラーを解消。
   - icon:
       src: /icons/refresh-cw.svg
-    title: MySQLとリアルタイム同期
-    details: GTIDベースのbinlogレプリケーション。書き込みはMySQLのまま、検索だけ高速化。
+    title: MySQL / MariaDBとリアルタイム同期
+    details: MySQL 8.4/9.xとMariaDB 10.6+/11.xに対応したGTIDベースのbinlogレプリケーション。書き込みはそのまま、検索だけ高速化。
   - icon:
       src: /icons/globe.svg
     title: 日本語対応
@@ -37,6 +37,14 @@ features:
       src: /icons/radio.svg
     title: デュアルプロトコル
     details: memcachedライクTCPとREST/JSON HTTP API。どの言語からも簡単接続。
+  - icon:
+      src: /icons/zap.svg
+    title: BM25スコア・ハイライト
+    details: BM25スコアで関連度順にソートし、ハイライト付きスニペットを返却。シノニム辞書でクエリ展開も可能。
+  - icon:
+      src: /icons/globe.svg
+    title: ファジー検索・ファセット集計
+    details: Levenshtein編集距離によるファジー検索と、フィルタカラム値の件数付きファセット集計に対応。
 ---
 
 ## クイックスタート

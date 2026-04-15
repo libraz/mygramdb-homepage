@@ -104,6 +104,68 @@ mygram> SEARCH articles golang SORT created_at DESC
 mygram> SEARCH articles golang SORT score ASC
 ```
 
+### 関連度ソート（BM25）
+
+予約カラム `_score` を指定するとBM25関連度でソートできます（v1.6.0以降）：
+
+```
+mygram> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
+```
+
+BM25は `k1=1.2`、`b=0.75` をパラメータとし、クエリ時にIDFとTFを計算します。`SORT _score` を使用するには、保存された正規化テキストからTFを計算するため `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
+
+## ハイライト
+
+マッチした語句をタグで囲んだスニペットを返却（v1.6.0以降）：
+
+```
+mygram> SEARCH articles "machine learning" HIGHLIGHT LIMIT 10
+mygram> SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
+mygram> SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
+```
+
+| オプション | デフォルト | 範囲 | 説明 |
+|--------|---------|-------|-------------|
+| `TAG <open> <close>` | `<em>` / `</em>` | — | 開始/終了タグ |
+| `SNIPPET_LEN <n>` | 100 | 1〜10,000 | 1フラグメントあたりの最大コードポイント数 |
+| `MAX_FRAGMENTS <n>` | 3 | 1〜100 | `…` で連結する最大フラグメント数 |
+
+HIGHLIGHTの使用には `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
+
+## ファジー検索
+
+Levenshtein編集距離の範囲内で語句をマッチ（v1.6.0以降）：
+
+```
+mygram> SEARCH articles "machne" FUZZY LIMIT 10
+mygram> SEARCH articles "databse" FUZZY 2 LIMIT 10
+```
+
+距離 `1`（デフォルト）は1編集操作（挿入／削除／置換）以内、`2` は2編集操作以内でマッチします。候補は長さの差で事前フィルタされるため、オーバーヘッドは抑えられます。
+
+## FACET集計
+
+フィルタカラムの値を件数付きで集計（v1.6.0以降）：
+
+```
+mygram> FACET articles status
+mygram> FACET articles category "search text" FILTER status = 1 LIMIT 10
+```
+
+HTTP：
+
+```bash
+curl -X POST http://localhost:8080/articles/facet \
+  -H "Content-Type: application/json" \
+  -d '{"column": "category", "q": "検索テキスト", "filters": {"status": 1}, "limit": 10}'
+```
+
+結果は件数の降順で返されます。検索クエリ（AND/NOT/FILTERのフルクローズ対応）にマッチするドキュメントに限定することも可能です。
+
+## シノニム展開
+
+シノニム辞書（`synonyms.enable: true`、[設定](/ja/docs/configuration#シノニム辞書)を参照）が有効な場合、検索語句はクエリ時に同義語のORグループへ自動展開されます。クエリ側の構文変更は不要で、例えば `car` を検索すると、TSV辞書で同じグループに定義された `automobile` や `vehicle` にもマッチします。
+
 ## ページネーション
 
 ```
@@ -132,6 +194,12 @@ mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DE
 
 ```
 mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
+```
+
+### 関連度順＋ハイライト付き
+
+```
+mygram> SEARCH articles "machine learning" SORT _score DESC HIGHLIGHT LIMIT 10
 ```
 
 ### カテゴリ内のアクティブユーザー数

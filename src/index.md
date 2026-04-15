@@ -11,7 +11,7 @@ head:
 hero:
   name: "MygramDB"
   text: "Sub-millisecond full-text search"
-  tagline: In-memory search engine with MySQL binlog replication
+  tagline: In-memory search engine with MySQL / MariaDB binlog replication
   actions:
     - theme: brand
       text: View on GitHub
@@ -27,8 +27,8 @@ features:
     details: MygramDB delivers sub-millisecond queries with in-memory indexing. No more timeout errors.
   - icon:
       src: /icons/refresh-cw.svg
-    title: Real-time MySQL sync
-    details: GTID-based binlog replication. Keep writes in MySQL, just speed up search.
+    title: Real-time MySQL / MariaDB sync
+    details: GTID-based binlog replication for MySQL 8.4/9.x and MariaDB 10.6+/11.x. Keep writes where they are, just speed up search.
   - icon:
       src: /icons/globe.svg
     title: CJK Ready
@@ -37,6 +37,14 @@ features:
       src: /icons/radio.svg
     title: Dual Protocol
     details: Memcached-like TCP and REST/JSON HTTP API. Easy integration.
+  - icon:
+      src: /icons/zap.svg
+    title: BM25 scoring & highlighting
+    details: Rank results by BM25 relevance score, return highlighted snippets, and expand queries via synonym dictionaries.
+  - icon:
+      src: /icons/globe.svg
+    title: Fuzzy search & faceted aggregation
+    details: Levenshtein fuzzy matching and filter-column aggregation with document counts.
 ---
 
 ## Quick Start

@@ -17,7 +17,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 |---------|----------|---------------|----------------|
 | **Latency** | <1ms | 50-500ms | 100-3000ms |
 | **Deployment** | Single binary | Cluster | Built-in |
-| **Data sync** | MySQL binlog | ETL required | Native |
+| **Data sync** | MySQL / MariaDB binlog | ETL required | Native |
 | **Scalability** | Single node | Distributed | Single node |
 | **Memory** | ~2.3GB/1M docs (with verify_text) | ~2-4GB/1M docs | Buffer pool |
 | **Concurrency** | QPS 11,766 | High | QPS 2-8 |
@@ -33,15 +33,15 @@ Choosing the right full-text search solution depends on your requirements. Here'
 
 **Pros:**
 - Sub-millisecond consistent latency
-- Zero configuration data sync via binlog
+- Zero configuration data sync via binlog (MySQL 8.4/9.x and MariaDB 10.6+/11.x)
 - Single binary deployment
 - No cluster management
 - Perfect for CJK text with N-gram
+- BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, and synonym expansion (v1.6.0+)
 
 **Cons:**
 - Single node only (no distributed search)
 - Data must fit in RAM
-- Basic query features (no fuzzy, highlighting)
 
 ### Elasticsearch
 
@@ -49,7 +49,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 
 **Pros:**
 - Horizontal scalability
-- Advanced features (fuzzy, highlighting, aggregations)
+- Advanced features (fuzzy search, highlighting, aggregations)
 - Rich ecosystem and tooling
 - Handles petabytes of data
 

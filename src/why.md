@@ -66,9 +66,9 @@ Bitmap intersections use CPU SIMD instructions for maximum throughput.
 
 No cache warmup needed. Sub-millisecond response time (0.08-0.42ms), always. See [Benchmarks](/benchmarks) for full results.
 
-### Real-time MySQL Sync
+### Real-time MySQL / MariaDB Sync
 
-GTID-based binlog replication keeps MygramDB in sync with MySQL. No ETL pipelines, no data staleness.
+GTID-based binlog replication keeps MygramDB in sync with MySQL 8.4/9.x or MariaDB 10.6+/11.x. No ETL pipelines, no data staleness.
 
 ## When to Use
 

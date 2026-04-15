@@ -25,7 +25,7 @@ Yes. MygramDB syncs with MySQL via binlog replication. Your application continue
 
 ### Should I use Elasticsearch instead of MygramDB?
 
-See [Comparison](/comparison) for a detailed breakdown. In short: choose MygramDB if your data fits in RAM and you want simple MySQL integration. Choose Elasticsearch if you need distributed search, fuzzy matching, or petabyte-scale data.
+See [Comparison](/comparison) for a detailed breakdown. In short: choose MygramDB if your data fits in RAM and you want simple MySQL/MariaDB integration. Choose Elasticsearch if you need distributed search across multiple nodes, petabyte-scale data, or advanced analytics and aggregation features.
 
 ### How does MygramDB compare to Meilisearch or Typesense?
 
@@ -37,13 +37,13 @@ Both are in-memory full-text search engines, but the architecture is fundamental
 
 | | MygramDB | RediSearch |
 |---|---|---|
-| **Data sync** | Automatic via MySQL binlog | Push-based (FT.ADD) — you build the ETL |
-| **Dependency** | MySQL | Redis (Redis Stack) |
+| **Data sync** | Automatic via MySQL/MariaDB binlog | Push-based (FT.ADD) — you build the ETL |
+| **Dependency** | MySQL or MariaDB | Redis (Redis Stack) |
 | **Deployment** | Single binary | Redis module |
-| **Features** | Exact N-gram search | Fuzzy, highlighting, aggregations, geo |
+| **Features** | N-gram search with BM25 scoring, highlighting, fuzzy search, faceted aggregation, synonyms | Fuzzy search, highlighting, aggregations, geo |
 | **License** | MIT | RSALv2 / SSPL (commercial restrictions) |
 
-The key difference is data flow. RediSearch requires you to push documents into Redis, meaning you need an ETL pipeline between MySQL and Redis. MygramDB eliminates that — it reads the MySQL binlog directly and keeps itself in sync. If your data is in MySQL and you want search without building a sync pipeline, MygramDB is simpler. If you already run Redis and need richer query features, RediSearch may be worth the integration cost.
+The key difference is data flow. RediSearch requires you to push documents into Redis, meaning you need an ETL pipeline between MySQL and Redis. MygramDB eliminates that — it reads the MySQL/MariaDB binlog directly and keeps itself in sync. If your data is in MySQL or MariaDB and you want search without building a sync pipeline, MygramDB is simpler. If you already run Redis and need geo-search or its richer aggregation model, RediSearch may be worth the integration cost.
 
 ## Features and Limitations
 
@@ -57,11 +57,15 @@ Yes. MygramDB uses ICU-based Unicode normalization with N-gram tokenization. CJK
 
 ### Does MygramDB support fuzzy search or typo tolerance?
 
-No. MygramDB uses exact N-gram matching. Fuzzy search requires edit distance computation at query time, which adds latency. For the use case MygramDB targets — fast exact search over structured MySQL data — typo tolerance is typically handled at the application layer (e.g., suggesting corrections before querying).
+Yes (v1.6.0+). Add `FUZZY` (or `FUZZY 2`) to a query to match terms within a Levenshtein edit distance of 1 or 2. Candidates are pre-filtered by length difference so the extra work stays cheap. See [Query Guide — Fuzzy Search](/docs/queries#fuzzy-search).
 
 ### Does MygramDB support search result highlighting?
 
-No. MygramDB returns document IDs (and optionally stored columns), not highlighted snippets. Position tracking in posting lists would add storage overhead and indexing cost. Highlighting is best done at the application layer by retrieving the full document from MySQL and marking matches there.
+Yes (v1.6.0+). Add the `HIGHLIGHT` clause to receive snippet fragments with configurable tags (`TAG`), fragment length (`SNIPPET_LEN`), and fragment count (`MAX_FRAGMENTS`). Highlighting requires `verify_text` to be `"ascii"` or `"all"` since snippets are taken from stored normalized text. See [Query Guide — Highlighting](/docs/queries#highlighting).
+
+### Does MygramDB support relevance ranking?
+
+Yes (v1.6.0+). Use `SORT _score DESC` to rank results by BM25 relevance (`k1=1.2`, `b=0.75`). IDF and TF are computed at query time; requires `verify_text` to be `"ascii"` or `"all"`.
 
 ### Can MygramDB scale horizontally?
 
@@ -83,7 +87,7 @@ No. MygramDB relies on MySQL's binary log replication protocol, which is MySQL-s
 
 ### Does MygramDB work with MariaDB?
 
-No. MariaDB uses domain-based GTIDs, which are incompatible with MySQL's UUID-based GTIDs. MygramDB's binlog parser is built for MySQL's GTID format. MariaDB support would require a separate GTID implementation.
+Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTIDs (`domain-server-sequence`). The server flavor is auto-detected from `SELECT VERSION()`, so the same `mysql` config section works for both MySQL 8.4/9.x and MariaDB. E2E tested against MariaDB 10.11 and 11.4.
 
 ## Indexing and Search
 
@@ -245,7 +249,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.5.4 (April 2026). The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on scalability (event-driven reactor I/O model), stability (thread safety fixes, replication edge cases), and operational features (Prometheus metrics, health checks, Kubernetes readiness).
+Development started in November 2025. The current version is 1.6.0 (April 2026), which adds BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, a V2 dump format with per-section CRC32, and MariaDB binlog replication support. The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on search feature depth, scalability (event-driven reactor I/O model), stability (thread safety fixes, replication edge cases), and operational features (Prometheus metrics, health checks, Kubernetes readiness).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 
