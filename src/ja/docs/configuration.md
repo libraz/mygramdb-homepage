@@ -108,7 +108,8 @@ tables:
     text_source:
       column: "content"        # 検索対象カラム
     primary_key: "id"          # プライマリキー（デフォルト: "id"）
-    ngram_size: 2              # CJK向けN-gramサイズ（デフォルト: 2）
+    ngram_size: 2              # ASCII/英数字向けN-gramサイズ（デフォルト: 2）
+    kanji_ngram_size: 1        # CJK文字向けN-gramサイズ（0 = ngram_size を使用）
     filters:                   # フィルタ用カラム
       - name: "status"
         type: "int"

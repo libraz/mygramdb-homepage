@@ -108,7 +108,8 @@ tables:
     text_source:
       column: "content"        # Column to search
     primary_key: "id"          # Primary key column (default: "id")
-    ngram_size: 2              # N-gram size for multibyte text (default: 2)
+    ngram_size: 2              # N-gram size for ASCII/alphanumeric (default: 2)
+    kanji_ngram_size: 1        # N-gram size for CJK characters (0 = use ngram_size)
     filters:                   # Columns for filtering
       - name: "status"
         type: "int"

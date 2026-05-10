@@ -106,8 +106,8 @@ Without verification, the query `"quantum"` returns approximately 58,000 candida
 The tradeoff is memory: storing text for 1.1M documents adds approximately 1.5 GB of RAM. Three modes are available:
 
 - `off` (default) -- No text storage, no verification. Fastest, lowest memory.
+- `ascii` -- Verifies only ASCII-only queries against stored text. Moderate memory.
 - `all` -- All candidates are verified. Exact results.
-- `paginated` -- Only the paginated result window is verified. Lower cost for large result sets.
 
 ::: tip
 For most applications, `verify_text: all` is recommended. The memory cost is modest compared to the index itself, and the latency overhead is negligible (sub-millisecond even with verification).

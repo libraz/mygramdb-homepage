@@ -90,7 +90,7 @@ head:
 
 ```bash
 # 1. MygramDBを起動
-docker run -d -p 11016:11016 \
+docker run -d -p 11016:11016 -p 8080:8080 \
   -e MYSQL_HOST=your-mysql \
   ghcr.io/libraz/mygram-db:latest
 

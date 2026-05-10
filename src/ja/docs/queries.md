@@ -152,15 +152,17 @@ mygram> FACET articles status
 mygram> FACET articles category "search text" FILTER status = 1 LIMIT 10
 ```
 
-HTTP：
+レスポンス（件数の降順）：
 
-```bash
-curl -X POST http://localhost:8080/articles/facet \
-  -H "Content-Type: application/json" \
-  -d '{"column": "category", "q": "検索テキスト", "filters": {"status": 1}, "limit": 10}'
+```
+OK FACET <column>
+<value1> <count1>
+<value2> <count2>
+...
+END
 ```
 
-結果は件数の降順で返されます。検索クエリ（AND/NOT/FILTERのフルクローズ対応）にマッチするドキュメントに限定することも可能です。
+FACETはTCPテキストプロトコル経由でのみ提供されます。`SEARCH` と同じく AND/NOT/FILTER/LIMIT を組み合わせて、特定の検索結果にスコープを絞った集計も可能です。
 
 ## シノニム展開
 
@@ -210,7 +212,7 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-すべてのクエリはHTTPでも利用可能（POST + JSONボディ）：
+`SEARCH`、`COUNT`、ドキュメント取得（GET）はHTTPでも利用可能です（POST + JSONボディ、単一ドキュメントはGET）：
 
 ```bash
 curl -X POST http://localhost:8080/articles/search \
@@ -219,10 +221,12 @@ curl -X POST http://localhost:8080/articles/search \
 ```
 
 ```bash
-curl -X POST http://localhost:8080/articles/search \
+curl -X POST http://localhost:8080/articles/count \
   -H "Content-Type: application/json" \
-  -d '{"q": "golang", "limit": 0}'
+  -d '{"q": "golang"}'
 ```
+
+`FACET` と管理系コマンドはTCP専用です。
 
 ## 演算子の優先順位
 

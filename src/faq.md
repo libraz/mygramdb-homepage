@@ -176,7 +176,7 @@ MygramDB monitors memory usage via health check endpoints but does not enforce t
 
 ### What's the query protocol?
 
-A custom text-based protocol over TCP (default port 11016), similar to Memcached. Also available as REST/JSON over HTTP (same port).
+A custom text-based protocol over TCP (default port 11016), similar to Memcached. A separate REST/JSON HTTP API is also available on its own port (default 8080, disabled by default).
 
 TCP example:
 ```
@@ -185,7 +185,9 @@ SEARCH articles golang SORT created_at DESC LIMIT 10\r\n
 
 HTTP example:
 ```bash
-curl "http://localhost:11016/api/v1/search?table=articles&q=golang&sort=created_at&order=desc&limit=10"
+curl -X POST http://localhost:8080/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang", "sort": {"column": "created_at", "order": "DESC"}, "limit": 10}'
 ```
 
 It is not SQL. The protocol is intentionally minimal — search, count, get by ID, and admin commands.
@@ -249,7 +251,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.6.0 (April 2026), which adds BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, a V2 dump format with per-section CRC32, and MariaDB binlog replication support. The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on search feature depth, scalability (event-driven reactor I/O model), stability (thread safety fixes, replication edge cases), and operational features (Prometheus metrics, health checks, Kubernetes readiness).
+Development started in November 2025. The current version is 1.6.1 (May 2026); the 1.6.x line adds BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, a V2 dump format with per-section CRC32, and MariaDB binlog replication support. The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on search feature depth, scalability (event-driven reactor I/O model), stability (thread safety fixes, replication edge cases), and operational features (Prometheus metrics, health checks, Kubernetes readiness).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 

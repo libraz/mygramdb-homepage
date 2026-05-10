@@ -102,6 +102,8 @@ bun add mygramdb-client
 import { MygramClient } from 'mygramdb-client'
 
 const client = new MygramClient({ host: 'localhost', port: 11016 })
+await client.connect()
+
 const results = await client.search('articles', 'hello world')
 ```
 

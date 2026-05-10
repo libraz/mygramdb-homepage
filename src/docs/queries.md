@@ -152,15 +152,17 @@ mygram> FACET articles status
 mygram> FACET articles category "search text" FILTER status = 1 LIMIT 10
 ```
 
-HTTP:
+Response (sorted by count, DESC):
 
-```bash
-curl -X POST http://localhost:8080/articles/facet \
-  -H "Content-Type: application/json" \
-  -d '{"column": "category", "q": "optional text", "filters": {"status": 1}, "limit": 10}'
+```
+OK FACET <column>
+<value1> <count1>
+<value2> <count2>
+...
+END
 ```
 
-Results are sorted by count (DESC). Optionally scoped to documents matching a search query with full clause support (AND/NOT/FILTER).
+FACET is exposed over the TCP text protocol only. It supports the same AND/NOT/FILTER/LIMIT clauses as `SEARCH` when scoping aggregation to a query.
 
 ## Synonym Expansion
 
@@ -210,7 +212,7 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-All queries are also available via HTTP (POST with JSON body):
+`SEARCH`, `COUNT`, and document GET are also exposed over HTTP (POST with JSON body, GET for single-document fetch):
 
 ```bash
 curl -X POST http://localhost:8080/articles/search \
@@ -219,10 +221,12 @@ curl -X POST http://localhost:8080/articles/search \
 ```
 
 ```bash
-curl -X POST http://localhost:8080/articles/search \
+curl -X POST http://localhost:8080/articles/count \
   -H "Content-Type: application/json" \
-  -d '{"q": "golang", "limit": 0}'
+  -d '{"q": "golang"}'
 ```
+
+`FACET` and admin commands are TCP-only.
 
 ## Operator Precedence
 
