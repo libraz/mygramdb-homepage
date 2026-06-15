@@ -20,6 +20,12 @@ mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
+In a single-database configuration, `articles` resolves to that database's table. In a multi-database configuration, qualify the table as `<database>.<table>`:
+
+```
+mygram> SEARCH app_db.articles hello world
+```
+
 ## Boolean Operators
 
 ### AND - All terms must match
@@ -162,11 +168,15 @@ OK FACET <column>
 END
 ```
 
-FACET is exposed over the TCP text protocol only. It supports the same AND/NOT/FILTER/LIMIT clauses as `SEARCH` when scoping aggregation to a query.
+FACET supports the same AND/NOT/FILTER/LIMIT clauses as `SEARCH` when scoping aggregation to a query.
+
+Since v1.7.0, FACET is also exposed over HTTP at `POST /tables/{identity}/facet`. The HTTP body uses `column`, optional `q`, optional `filters`, and optional `limit`.
 
 ## Synonym Expansion
 
 When a synonym dictionary is configured (`synonyms.enable: true`, see [Configuration](/docs/configuration#synonym-dictionary)), search terms are transparently expanded to OR-groups of their synonyms at query time. No query-side syntax change is needed — a query for `car` will also match `automobile` and `vehicle` when they are grouped in the TSV dictionary.
+
+Synonyms are configured per table under `tables[*].synonyms`. Fuzzy search takes a separate execution path and is not combined with synonym expansion for the same query.
 
 ## Pagination
 
@@ -212,21 +222,23 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-`SEARCH`, `COUNT`, and document GET are also exposed over HTTP (POST with JSON body, GET for single-document fetch):
+`SEARCH`, `COUNT`, `FACET`, and document GET are also exposed over HTTP. v1.7.0 uses the `/tables/{identity}/...` route shape:
 
 ```bash
-curl -X POST http://localhost:8080/articles/search \
+curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "golang tutorial", "limit": 10}'
-```
 
-```bash
-curl -X POST http://localhost:8080/articles/count \
+curl -X POST http://localhost:8080/tables/articles/count \
   -H "Content-Type: application/json" \
   -d '{"q": "golang"}'
+
+curl -X POST http://localhost:8080/tables/articles/facet \
+  -H "Content-Type: application/json" \
+  -d '{"column": "category", "q": "golang", "limit": 10}'
 ```
 
-`FACET` and admin commands are TCP-only.
+With two or more configured databases, use `/tables/app_db.articles/...`. Admin commands such as `SET`, `SHOW VARIABLES`, `SYNC`, and `DUMP` remain TCP/CLI-only.
 
 ## Operator Precedence
 
@@ -255,6 +267,6 @@ Example: `a OR b AND c` is parsed as `a OR (b AND c)`
 
 ## Detailed Documentation
 
-- [Full Query Syntax Reference](https://github.com/libraz/mygram-db/blob/main/docs/en/query_syntax.md)
-- [HTTP API](https://github.com/libraz/mygram-db/blob/main/docs/en/http-api.md)
-- [Protocol Reference](https://github.com/libraz/mygram-db/blob/main/docs/en/protocol.md)
+- [Full Query Syntax Reference](/docs/query-syntax)
+- [HTTP API](/docs/http-api)
+- [Protocol Reference](/docs/protocol)

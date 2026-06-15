@@ -11,11 +11,15 @@ head:
 
 全文検索ソリューションは要件に応じて選ぶ必要があります。それぞれの特徴を比較します。
 
+::: info 選び方の前提
+MygramDBは「既にMySQL/MariaDBに正本データがあり、検索だけを高速化したい」ケースに特化しています。検索エンジンをデータ基盤の中心に置きたい場合や、分散分析基盤が必要な場合はElasticsearchなどの方が適しています。
+:::
+
 ## 早見表
 
 | 項目 | MygramDB | Elasticsearch | MySQL FULLTEXT |
 |------|----------|---------------|----------------|
-| **レイテンシ** | 1ms以下 | 50〜500ms | 100〜3000ms |
+| **レイテンシ** | ベンチマークでは1ms未満が中心 | 50〜500ms程度 | 100〜3000ms程度 |
 | **導入** | バイナリ1つ | クラスタ構築 | 標準搭載 |
 | **データ同期** | MySQL / MariaDB binlogで自動 | ETLが必要 | 不要 |
 | **スケール** | 単一ノード | 分散可能 | 単一ノード |
@@ -32,8 +36,8 @@ head:
 **向いているケース:** MySQLを使っていて、手軽に検索を高速化したい
 
 **良い点:**
-- 常にサブミリ秒の安定したレスポンス
-- binlogで勝手に同期、設定不要（MySQL 8.4/9.xおよびMariaDB 10.6+/11.x対応）
+- ベンチマークではサブミリ秒級のレスポンス
+- MySQL / MariaDBのbinlogから自動同期（MySQL 8.4/9.xおよびMariaDB 10.6+/11.x対応）
 - バイナリ1つ置くだけで動く
 - クラスタ管理なし
 - 日本語のN-gram検索が得意
@@ -42,6 +46,10 @@ head:
 **注意点:**
 - 分散検索はできない
 - データがメモリに収まる必要あり
+
+::: tip ETLが不要な意味
+MygramDBでは、アプリケーションが検索用データを別途pushする必要はありません。ただし、MySQL側のGTID、ROW形式binlog、レプリケーションユーザー、初回 `SYNC` などの設定は必要です。
+:::
 
 ### Elasticsearch
 
@@ -70,14 +78,14 @@ head:
 - データ同期の手間なし
 
 **注意点:**
-- 遅い（100〜3000ms）
+- 大規模データでは遅くなりやすい
 - 並列アクセスに弱い（2-8 QPS）
 - キャッシュ状態で性能が大きく変動
 - スケールしない
 
 ## 性能比較
 
-詳しい数値は[ベンチマーク](/ja/benchmarks)をご覧ください。要点：110万件のWikipedia記事で、MygramDBはサブミリ秒のレイテンシで2,634-11,766 QPSを達成。MySQL FULLTEXTは300-2,566msのレイテンシで2-8 QPS。
+詳しい数値は[ベンチマーク](/ja/benchmarks)をご覧ください。要点：110万件のWikipedia記事を使った測定では、MygramDBはサブミリ秒級のレイテンシで2,634-11,766 QPSを達成。MySQL FULLTEXTは300-2,566msのレイテンシで2-8 QPSでした。
 
 ## 移行方法
 
@@ -88,14 +96,18 @@ head:
 3. 検索だけMygramDBに向ける
 4. 書き込みはMySQLのまま
 
+::: warning HTTPルートのバージョン差
+v1.7.0以降のHTTP APIは `/tables/{identity}/search` を使います。古い `/{table}/search` 形式は削除されています。移行時は[v1.7移行ガイド](/ja/docs/migration-v1.7)を確認してください。
+:::
+
 ```bash
-# 1. MygramDBを起動
+# 1. MygramDBを起動（実運用では設定ファイルまたは環境変数を用途に合わせて指定）
 docker run -d -p 11016:11016 -p 8080:8080 \
   -e MYSQL_HOST=your-mysql \
   ghcr.io/libraz/mygram-db:latest
 
-# 2. MygramDBで検索
-curl -X POST http://localhost:8080/articles/search \
+# 2. 初回同期後、MygramDBで検索
+curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "検索ワード"}'
 ```

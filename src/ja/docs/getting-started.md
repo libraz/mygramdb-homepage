@@ -1,11 +1,19 @@
 # クイックスタート
 
-5分でMygramDBを起動しましょう。
+最小構成でMygramDBを起動し、MySQL上の既存データを読み込んで検索できるところまで確認します。
 
 ## 前提条件
 
 - GTIDが有効なMySQL 8.4/9.x、またはMariaDB 10.6+/11.x
 - RHEL/AlmaLinux/Rocky Linux 9、Ubuntu 22.04/24.04、またはDocker
+
+::: info 用語補足
+**GTID** はMySQLの変更履歴に付く一意な番号です。MygramDBはGTIDを使って、再起動後も「どこまでMySQLの変更を読んだか」を正確に引き継ぎます。
+:::
+
+::: warning MySQL側の準備も必要です
+MygramDBはMySQL / MariaDBのbinlogを読むため、MySQL側でGTID、ROW形式binlog、`binlog_row_image=FULL`、レプリケーションユーザー、対象テーブルへの `SELECT` 権限を用意してください。詳しい設定は[MySQLレプリケーション](/ja/docs/replication)を参照してください。
+:::
 
 ## インストール
 
@@ -41,6 +49,9 @@ tables:
       column: "content"
     primary_key: "id"
 
+replication:
+  server_id: 83917
+
 api:
   tcp:
     port: 11016
@@ -54,8 +65,13 @@ network:
     - "127.0.0.1/32"
 ```
 
-> [!IMPORTANT]
-> `allow_cidrs`の設定は必須です。設定がない場合、すべての接続が拒否されます。接続元のIPアドレスをリストに追加してください。
+::: warning allow_cidrs は必須
+`allow_cidrs`の設定は必須です。設定がない場合、すべての接続が拒否されます。接続元のIPアドレスをリストに追加してください。
+:::
+
+::: info 用語補足
+**CIDR** はIPアドレスの範囲指定です。`127.0.0.1/32` はローカルホストのみ、`10.0.0.0/8` は `10.` で始まるプライベートネットワーク全体を意味します。
+:::
 
 ## サービスを開始
 
@@ -70,12 +86,27 @@ sudo systemctl enable --now mygramdb
 mygram-cli -h localhost -p 11016
 ```
 
-接続後、検索クエリを実行：
+接続後、まず初回同期を実行します。`SYNC` はMySQLの既存行を読み込み、検索インデックスを作成します。
+
+```
+mygram> SYNC articles
+OK SYNC STARTED articles
+
+mygram> SYNC STATUS
+OK SYNC STATUS
+...
+```
+
+同期が完了したら検索クエリを実行します。
 
 ```
 mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
+
+::: tip 結果が0件になる場合
+`SYNC STATUS` で同期状態を確認し、MySQL側に検索語を含む行があるか、設定の `text_source.column` が正しいかを確認してください。複数DB構成では `SEARCH app_db.articles hello world` のように `<database>.<table>` 形式で指定します。
+:::
 
 ## 次のステップ
 
@@ -85,6 +116,7 @@ OK RESULTS 3 101 205 387
 
 ## 詳細ドキュメント
 
-- [設定リファレンス（詳細）](https://github.com/libraz/mygram-db/blob/main/docs/ja/configuration.md)
-- [MySQLレプリケーション](https://github.com/libraz/mygram-db/blob/main/docs/ja/replication.md)
-- [運用ガイド](https://github.com/libraz/mygram-db/blob/main/docs/ja/operations.md)
+- [設定リファレンス（詳細）](/ja/docs/configuration)
+- [MySQLレプリケーション](/ja/docs/replication)
+- [運用ガイド](/ja/docs/operations)
+- [v1.7移行ガイド](/ja/docs/migration-v1.7)

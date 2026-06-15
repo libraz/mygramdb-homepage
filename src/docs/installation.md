@@ -37,7 +37,7 @@ docker run -d \
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.6.1`
+- `ghcr.io/libraz/mygram-db:1.7.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
@@ -145,6 +145,6 @@ mygram-cli --help
 
 ## Detailed Documentation
 
-- [Full Installation Guide](https://github.com/libraz/mygram-db/blob/main/docs/en/installation.md)
-- [Docker Deployment](https://github.com/libraz/mygram-db/blob/main/docs/en/docker-deployment.md)
-- [Operations Guide](https://github.com/libraz/mygram-db/blob/main/docs/en/operations.md)
+- [Docker Deployment](/docs/docker-deployment)
+- [Operations Guide](/docs/operations)
+- [v1.7 Migration Guide](/docs/migration-v1.7)

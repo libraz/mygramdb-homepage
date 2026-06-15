@@ -2,8 +2,13 @@
 
 MygramDBで効果的に検索する方法を学びましょう。
 
-> [!WARNING]
-> クエリを実行する前に、設定ファイルの `allow_cidrs` にIPアドレスが登録されていることを確認してください。CIDR登録がない場合、すべての接続が拒否されます。[ネットワークセキュリティ](/ja/docs/configuration#ネットワークセキュリティ)を参照してください。
+::: warning 接続元IPを許可
+クエリを実行する前に、設定ファイルの `allow_cidrs` にIPアドレスが登録されていることを確認してください。CIDR登録がない場合、すべての接続が拒否されます。[ネットワークセキュリティ](/ja/docs/configuration#ネットワークセキュリティ)を参照してください。
+:::
+
+::: info 用語補足
+**CIDR** はIPアドレス範囲の書き方です。接続できない場合は、まず `network.allow_cidrs` にクライアントのIPが含まれているか確認してください。
+:::
 
 ## mygram-cliで接続
 
@@ -20,7 +25,17 @@ mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
+単一DB構成では `articles` はそのDB内のテーブルとして解決されます。複数DB構成では `<database>.<table>` 形式で指定してください。
+
+```
+mygram> SEARCH app_db.articles hello world
+```
+
 ## ブール演算子
+
+::: tip 演算子の読み方
+`AND` は「両方含む」、`OR` は「どれかを含む」、`NOT` は「含むものを除外」です。複雑な条件では括弧を使うと意図が明確になります。
+:::
 
 ### AND - すべての語句を含む
 
@@ -40,6 +55,8 @@ mygram> SEARCH articles golang OR python OR rust
 mygram> SEARCH articles tutorial NOT beginner
 ```
 
+`NOT` だけの検索はできません。除外条件は、検索語やフィルタなどの候補集合を絞り込むために使います。
+
 ### 組み合わせ
 
 ```
@@ -48,7 +65,7 @@ mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
 
 ## フレーズ検索
 
-引用符で完全一致：
+引用符で囲むと、語句の並びを保ったフレーズとして検索します。
 
 ```
 mygram> SEARCH articles "machine learning"
@@ -70,6 +87,10 @@ mygram> SEARCH articles tech FILTER status = 1
 mygram> SEARCH articles tech FILTER views > 1000
 mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
 ```
+
+::: warning フィルタ対象カラムは設定が必要
+`FILTER` で使えるのは、設定ファイルの `tables[*].filters` または `tables[*].required_filters` に定義したカラムです。定義していないカラムは、MySQLに存在していてもMygramDBの検索時フィルタには使えません。
+:::
 
 複数フィルタ（AND条件）：
 
@@ -162,11 +183,15 @@ OK FACET <column>
 END
 ```
 
-FACETはTCPテキストプロトコル経由でのみ提供されます。`SEARCH` と同じく AND/NOT/FILTER/LIMIT を組み合わせて、特定の検索結果にスコープを絞った集計も可能です。
+FACETは `SEARCH` と同じく AND/NOT/FILTER/LIMIT を組み合わせて、特定の検索結果にスコープを絞った集計も可能です。
+
+v1.7.0以降、FACETはHTTPでも `POST /tables/{identity}/facet` から利用できます。HTTPボディでは `column`、任意の `q`、任意の `filters`、任意の `limit` を指定します。
 
 ## シノニム展開
 
-シノニム辞書（`synonyms.enable: true`、[設定](/ja/docs/configuration#シノニム辞書)を参照）が有効な場合、検索語句はクエリ時に同義語のORグループへ自動展開されます。クエリ側の構文変更は不要で、例えば `car` を検索すると、TSV辞書で同じグループに定義された `automobile` や `vehicle` にもマッチします。
+シノニム辞書（`tables[*].synonyms.enable: true`、[設定](/ja/docs/configuration#テーブル単位のシノニム)を参照）が有効な場合、検索語句はクエリ時に同義語のORグループへ自動展開されます。クエリ側の構文変更は不要で、例えば `car` を検索すると、TSV辞書で同じグループに定義された `automobile` や `vehicle` にもマッチします。
+
+シノニムはテーブルごとの設定です。ファジー検索は別の実行パスを使うため、同じクエリ内ではシノニム展開と組み合わせません。
 
 ## ページネーション
 
@@ -212,21 +237,23 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-`SEARCH`、`COUNT`、ドキュメント取得（GET）はHTTPでも利用可能です（POST + JSONボディ、単一ドキュメントはGET）：
+`SEARCH`、`COUNT`、`FACET`、ドキュメントGETはHTTPでも利用できます。v1.7.0以降は `/tables/{identity}/...` のルート形式を使います。
 
 ```bash
-curl -X POST http://localhost:8080/articles/search \
+curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "golang tutorial", "limit": 10}'
-```
 
-```bash
-curl -X POST http://localhost:8080/articles/count \
+curl -X POST http://localhost:8080/tables/articles/count \
   -H "Content-Type: application/json" \
   -d '{"q": "golang"}'
+
+curl -X POST http://localhost:8080/tables/articles/facet \
+  -H "Content-Type: application/json" \
+  -d '{"column": "category", "q": "golang", "limit": 10}'
 ```
 
-`FACET` と管理系コマンドはTCP専用です。
+2つ以上のDBを設定している場合は `/tables/app_db.articles/...` のように指定します。`SET`、`SHOW VARIABLES`、`SYNC`、`DUMP` などの管理系コマンドはTCP/CLI専用です。
 
 ## 演算子の優先順位
 
@@ -238,8 +265,9 @@ curl -X POST http://localhost:8080/articles/count \
 
 例：`a OR b AND c` は `a OR (b AND c)` と解釈されます
 
-> [!TIP]
-> 意図を明確にし、予期しない結果を避けるため括弧を使用してください。
+::: tip 括弧で意図を固定
+意図を明確にし、予期しない結果を避けるため括弧を使用してください。
+:::
 
 ## パフォーマンスのヒント
 
@@ -255,6 +283,6 @@ curl -X POST http://localhost:8080/articles/count \
 
 ## 詳細ドキュメント
 
-- [クエリ構文リファレンス（詳細）](https://github.com/libraz/mygram-db/blob/main/docs/ja/query_syntax.md)
-- [HTTP API](https://github.com/libraz/mygram-db/blob/main/docs/ja/http-api.md)
-- [プロトコルリファレンス](https://github.com/libraz/mygram-db/blob/main/docs/ja/protocol.md)
+- [クエリ構文リファレンス（詳細）](/ja/docs/query-syntax)
+- [HTTP API](/ja/docs/http-api)
+- [プロトコルリファレンス](/ja/docs/protocol)

@@ -1,5 +1,9 @@
 # インストール
 
+::: info どの方法を選ぶべきか
+RHEL/AlmaLinux/Rocky LinuxではRPM、UbuntuではDEB、動作確認やコンテナ基盤ではDockerを使うのが基本です。ソースビルドは開発や独自ビルドが必要な場合に選んでください。
+:::
+
 ## RPMパッケージ（推奨）
 
 RHEL、AlmaLinux、Rocky Linux 9/10向け。[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest)からダウンロード：
@@ -32,15 +36,19 @@ docker pull ghcr.io/libraz/mygram-db:latest
 docker run -d \
   -p 11016:11016 \
   -p 8080:8080 \
-  -v /path/to/config.yaml:/etc/mygramdb/config.yaml \
+  -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
   ghcr.io/libraz/mygram-db:latest
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.6.1`
+- `ghcr.io/libraz/mygram-db:1.7.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
+
+::: warning 設定ファイルを用意してから起動
+Dockerで本番運用する場合は、MySQL接続情報、レプリケーション設定、対象テーブル、`network.allow_cidrs` を含む設定ファイルを用意してマウントしてください。単にイメージを起動しただけでは、既存データの初期同期は完了しません。
+:::
 
 ## DEBパッケージ
 
@@ -133,10 +141,15 @@ mygramdb --help
 mygram-cli --help
 ```
 
+::: info インストール後に必要な作業
+パッケージやDockerイメージを入れただけでは、検索対象のデータは読み込まれません。MySQL接続、対象テーブル、ネットワーク許可範囲を設定したあと、初回は `SYNC <table>` を実行して既存データからインデックスを作成してください。
+:::
+
 ## セキュリティ
 
-> [!CAUTION]
-> MygramDBはセキュリティのため**root権限での実行を拒否**します。常に専用の非特権ユーザーで実行してください。
+::: danger rootでは実行しない
+MygramDBはセキュリティのため**root権限での実行を拒否**します。常に専用の非特権ユーザーで実行してください。
+:::
 
 ## 次のステップ
 
@@ -145,6 +158,6 @@ mygram-cli --help
 
 ## 詳細ドキュメント
 
-- [インストールガイド（詳細）](https://github.com/libraz/mygram-db/blob/main/docs/ja/installation.md)
-- [Dockerデプロイ](https://github.com/libraz/mygram-db/blob/main/docs/ja/docker-deployment.md)
-- [運用ガイド](https://github.com/libraz/mygram-db/blob/main/docs/ja/operations.md)
+- [Dockerデプロイ](/ja/docs/docker-deployment)
+- [運用ガイド](/ja/docs/operations)
+- [v1.7移行ガイド](/ja/docs/migration-v1.7)

@@ -10,18 +10,16 @@ const fontsDir = join(__dirname, 'fonts')
 // Read SVG
 const svgContent = readFileSync(join(publicDir, 'og-image.svg'), 'utf-8')
 
-// Read font
-const orbitronFont = readFileSync(join(fontsDir, 'Orbitron-Bold.ttf'))
-
-// Render with resvg
+// Render with resvg — Orbitron (logo wordmark) + IBM Plex (body/mono)
 const resvg = new Resvg(svgContent, {
   font: {
     fontFiles: [
       join(fontsDir, 'Orbitron-Bold.ttf'),
-      join(fontsDir, 'SpaceGrotesk-Regular.ttf'),
-      join(fontsDir, 'SpaceGrotesk-Medium.ttf'),
+      join(fontsDir, 'IBMPlexSans-VF.ttf'),
+      join(fontsDir, 'IBMPlexMono-Medium.ttf'),
+      join(fontsDir, 'IBMPlexMono-SemiBold.ttf'),
     ],
-    loadSystemFonts: true,
+    loadSystemFonts: false,
   },
 })
 

@@ -81,6 +81,10 @@ For most use cases (up to ~50M documents on a 64-128GB server), a single node is
 
 No. Each query targets a single table: `SEARCH articles hello world`. MygramDB supports configuring multiple tables, but each has its own independent index and document store. Cross-table search would need to be handled at the application layer with separate queries.
 
+### Can one MygramDB instance index multiple MySQL databases?
+
+Yes (v1.7.0+). Each table has an effective identity of `<database>.<table>`. If all configured tables belong to one database, bare names like `articles` continue to work. If the configuration spans two or more databases, table references must be qualified, for example `SEARCH app_db.articles mysql` or `POST /tables/app_db.articles/search`.
+
 ### Does MygramDB support PostgreSQL?
 
 No. MygramDB relies on MySQL's binary log replication protocol, which is MySQL-specific. PostgreSQL uses a different mechanism (logical replication with WAL). There are no current plans for PostgreSQL support.
@@ -185,12 +189,12 @@ SEARCH articles golang SORT created_at DESC LIMIT 10\r\n
 
 HTTP example:
 ```bash
-curl -X POST http://localhost:8080/articles/search \
+curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "golang", "sort": {"column": "created_at", "order": "DESC"}, "limit": 10}'
 ```
 
-It is not SQL. The protocol is intentionally minimal — search, count, get by ID, and admin commands.
+In multi-database deployments, qualify the route as `/tables/app_db.articles/search`. It is not SQL. The protocol is intentionally minimal — search, count, facet, get by ID, and admin commands.
 
 ### Is there TLS or authentication?
 
@@ -251,7 +255,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.6.1 (May 2026); the 1.6.x line adds BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, a V2 dump format with per-section CRC32, and MariaDB binlog replication support. The project has been used in production on a high-traffic service (details under NDA). The release cadence is active, with focus on search feature depth, scalability (event-driven reactor I/O model), stability (thread safety fixes, replication edge cases), and operational features (Prometheus metrics, health checks, Kubernetes readiness).
+Development started in November 2025. The current version is 1.7.0 (released June 15, 2026). The 1.6 line added BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, V2 dumps, and MariaDB binlog replication. The 1.7 line adds database-qualified table identity, multi-database indexing, HTTP `/tables/{identity}/...` routes, HTTP FACET, boolean search parity, multi-table consistent snapshots, and GTID-coordinated dumps. The project has been used in production on a high-traffic service (details under NDA).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 

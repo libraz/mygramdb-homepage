@@ -95,7 +95,7 @@ docker run -d -p 11016:11016 -p 8080:8080 \
   ghcr.io/libraz/mygram-db:latest
 
 # 2. Search via MygramDB
-curl -X POST http://localhost:8080/articles/search \
+curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "search term"}'
 ```

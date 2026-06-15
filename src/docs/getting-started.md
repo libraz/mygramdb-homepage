@@ -41,6 +41,9 @@ tables:
       column: "content"
     primary_key: "id"
 
+replication:
+  server_id: 83917
+
 api:
   tcp:
     port: 11016
@@ -85,6 +88,7 @@ OK RESULTS 3 101 205 387
 
 ## Detailed Documentation
 
-- [Full Configuration Reference](https://github.com/libraz/mygram-db/blob/main/docs/en/configuration.md)
-- [MySQL Replication](https://github.com/libraz/mygram-db/blob/main/docs/en/replication.md)
-- [Operations Guide](https://github.com/libraz/mygram-db/blob/main/docs/en/operations.md)
+- [Full Configuration Reference](/docs/configuration)
+- [MySQL Replication](/docs/replication)
+- [Operations Guide](/docs/operations)
+- [v1.7 Migration Guide](/docs/migration-v1.7)

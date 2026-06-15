@@ -38,7 +38,7 @@ MygramDB operates in three phases:
 
 ### Phase 1: Initial Snapshot
 
-On first startup (no existing dump file), MygramDB performs a consistent snapshot of the source table:
+When `SYNC` is run, or when `replication.auto_initial_snapshot: true` is configured, MygramDB performs a consistent snapshot of the source table. The default is `auto_initial_snapshot: false`, so production operators explicitly choose when the initial MySQL read happens:
 
 ```mermaid
 sequenceDiagram
@@ -150,7 +150,7 @@ flowchart LR
 
 Since v1.5.0, snapshot writes use **atomic file operations** (write to temp file, then rename) to prevent corruption if the process is interrupted during a dump.
 
-If no snapshot exists, MygramDB performs a full initial snapshot from MySQL (Phase 1 above).
+If no snapshot has been loaded, run `SYNC <table>` (or `SYNC <database>.<table>` in multi-database configurations) to build the initial snapshot. Automatic startup snapshots only run when `replication.auto_initial_snapshot` is explicitly enabled.
 
 ## Memory Layout
 

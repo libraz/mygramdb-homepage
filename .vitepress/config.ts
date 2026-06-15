@@ -19,7 +19,7 @@ const softwareApplicationJsonLd = {
   description: 'In-memory full-text search engine that replaces slow MySQL FULLTEXT. Tens to hundreds of times faster with real-time MySQL binlog replication.',
   url: siteUrl,
   downloadUrl: githubUrl,
-  softwareVersion: '1.6.0',
+  softwareVersion: '1.7.0',
   author: {
     '@type': 'Person',
     name: 'libraz'
@@ -100,10 +100,10 @@ export default withMermaid(defineConfig({
   },
 
   head: [
-    // Google Fonts
+    // Google Fonts — Orbitron (logo wordmark), IBM Plex Sans (body/headings), IBM Plex Mono (metrics/code)
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
-    ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Space+Grotesk:wght@400;500;600&display=swap' }],
+    ['link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap' }],
 
     // JSON-LD structured data
     ['script', { type: 'application/ld+json' }, JSON.stringify(softwareApplicationJsonLd)],
@@ -147,9 +147,9 @@ export default withMermaid(defineConfig({
           { text: '比較', link: '/ja/comparison' },
           { text: 'FAQ', link: '/ja/faq' },
           {
-            text: 'v1.6.0',
+            text: 'v1.7.0',
             items: [
-              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.6.0.md' },
+              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.7.0.md' },
               { text: '変更履歴', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
             ]
           }
@@ -160,16 +160,42 @@ export default withMermaid(defineConfig({
               text: '概要',
               items: [
                 { text: '仕組み', link: '/ja/docs/how-it-works' },
-                { text: 'アーキテクチャ', link: '/ja/docs/architecture' }
+                { text: 'アーキテクチャ', link: '/ja/docs/architecture' },
+                { text: '用語集', link: '/ja/docs/glossary' }
               ]
             },
             {
               text: 'はじめに',
               items: [
                 { text: 'クイックスタート', link: '/ja/docs/getting-started' },
+                { text: 'v1.7移行ガイド', link: '/ja/docs/migration-v1.7' },
                 { text: 'インストール', link: '/ja/docs/installation' },
                 { text: '設定', link: '/ja/docs/configuration' },
                 { text: 'クエリガイド', link: '/ja/docs/queries' }
+              ]
+            },
+            {
+              text: 'ガイド',
+              items: [
+                { text: '運用', link: '/ja/docs/operations' },
+                { text: 'レプリケーション', link: '/ja/docs/replication' },
+                { text: 'レプリケーション管理', link: '/ja/docs/replication-management' },
+                { text: 'スナップショット', link: '/ja/docs/snapshot' },
+                { text: 'パフォーマンス', link: '/ja/docs/performance' },
+                { text: 'Dockerデプロイ', link: '/ja/docs/docker-deployment' },
+                { text: '開発', link: '/ja/docs/development' },
+                { text: 'Linuxテスト', link: '/ja/docs/linux-testing' }
+              ]
+            },
+            {
+              text: 'リファレンス',
+              items: [
+                { text: 'プロトコル', link: '/ja/docs/protocol' },
+                { text: 'HTTP API', link: '/ja/docs/http-api' },
+                { text: 'クエリ構文', link: '/ja/docs/query-syntax' },
+                { text: 'SYNCコマンド', link: '/ja/docs/sync-command' },
+                { text: '公式クライアント', link: '/ja/docs/client-libraries' },
+                { text: 'C/C++ libmygramclient', link: '/ja/docs/client-library' }
               ]
             }
           ]
@@ -186,9 +212,9 @@ export default withMermaid(defineConfig({
       { text: 'Comparison', link: '/comparison' },
       { text: 'FAQ', link: '/faq' },
       {
-        text: 'v1.6.0',
+        text: 'v1.7.0',
         items: [
-          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.6.0.md' },
+          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.7.0.md' },
           { text: 'Changelog', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
         ]
       }
@@ -207,9 +233,34 @@ export default withMermaid(defineConfig({
           text: 'Getting Started',
           items: [
             { text: 'Quick Start', link: '/docs/getting-started' },
+            { text: 'v1.7 Migration', link: '/docs/migration-v1.7' },
             { text: 'Installation', link: '/docs/installation' },
             { text: 'Configuration', link: '/docs/configuration' },
             { text: 'Query Guide', link: '/docs/queries' }
+          ]
+        },
+        {
+          text: 'Guides',
+          items: [
+            { text: 'Operations', link: '/docs/operations' },
+            { text: 'Replication', link: '/docs/replication' },
+            { text: 'Replication Management', link: '/docs/replication-management' },
+            { text: 'Snapshot', link: '/docs/snapshot' },
+            { text: 'Performance', link: '/docs/performance' },
+            { text: 'Docker Deployment', link: '/docs/docker-deployment' },
+            { text: 'Development', link: '/docs/development' },
+            { text: 'Linux Testing', link: '/docs/linux-testing' }
+          ]
+        },
+        {
+          text: 'Reference',
+          items: [
+            { text: 'Protocol', link: '/docs/protocol' },
+            { text: 'HTTP API', link: '/docs/http-api' },
+            { text: 'Query Syntax', link: '/docs/query-syntax' },
+            { text: 'SYNC Command', link: '/docs/sync-command' },
+            { text: 'Official Clients', link: '/docs/client-libraries' },
+            { text: 'C/C++ libmygramclient', link: '/docs/client-library' }
           ]
         }
       ]

@@ -23,15 +23,15 @@
   },
   "devDependencies": {
     "@fontsource/orbitron": "^5.2.8",
-    "@iconify-json/lucide": "^1.2.98",
+    "@iconify-json/lucide": "^1.2.112",
     "@iconify-json/mdi": "^1.2.3",
     "@resvg/resvg-js": "^2.6.2",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.1",
     "vitepress": "^1.6.4"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
-    "mermaid": "^11.13.0",
+    "mermaid": "^11.15.0",
     "vitepress-plugin-mermaid": "^2.0.17"
   }
 }

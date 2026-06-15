@@ -53,8 +53,8 @@ async function renderChart() {
   const textColor = isDark ? '#ffffffde' : '#1a1a1a'
   const textDim = isDark ? '#ffffff80' : '#00000066'
   const gridColor = isDark ? '#ffffff12' : '#0000000a'
-  const mysqlColor = isDark ? '#ff6b6b' : '#d63031'
-  const mgColor = isDark ? '#55efc4' : '#00b894'
+  const mysqlColor = isDark ? '#fb7185' : '#e11d48'
+  const mgColor = isDark ? '#60a5fa' : '#2563eb'
 
   // Normalize: MySQL = 100%, MygramDB = relative
   // Normalize: max value across the entire chart = 100%, minimum 1.5% for visibility
@@ -113,7 +113,7 @@ async function renderChart() {
         y: {
           ticks: {
             color: textColor,
-            font: { size: 12, weight: '500' as any, family: "'Space Grotesk', sans-serif" },
+            font: { size: 12, weight: '500' as any, family: "'IBM Plex Sans', sans-serif" },
             padding: 6,
           },
           grid: { display: false },
@@ -127,7 +127,7 @@ async function renderChart() {
           align: 'start' as const,
           labels: {
             color: textColor,
-            font: { size: 11, family: "'Space Grotesk', sans-serif" },
+            font: { size: 11, family: "'IBM Plex Sans', sans-serif" },
             boxWidth: 12,
             boxHeight: 12,
             borderRadius: 3,
@@ -158,7 +158,7 @@ async function renderChart() {
 
             // MySQL value on bar
             ctx.save()
-            ctx.font = '500 10px "Space Grotesk", sans-serif'
+            ctx.font = '500 10px "IBM Plex Sans", sans-serif'
             ctx.textBaseline = 'middle'
             const mysqlText = formatValue(d.mysql)
             const mgText = formatValue(d.mygramdb)
@@ -193,11 +193,11 @@ async function renderChart() {
               const badgeX = chart.chartArea.right + 8
               const badgeY = (bar0.y + bar1.y) / 2
 
-              ctx.font = '700 11px "Space Grotesk", sans-serif'
+              ctx.font = '700 11px "IBM Plex Sans", sans-serif'
               const spW = ctx.measureText(sp).width
 
               // Pill background
-              ctx.fillStyle = isDark ? '#55efc420' : '#00b89415'
+              ctx.fillStyle = isDark ? '#60a5fa20' : '#2563eb15'
               const pillW = spW + 14
               const pillH = 20
               const pillX = badgeX - 2
@@ -207,7 +207,7 @@ async function renderChart() {
               ctx.fill()
 
               // Pill text
-              ctx.fillStyle = isDark ? '#55efc4' : '#00b894'
+              ctx.fillStyle = isDark ? '#60a5fa' : '#2563eb'
               ctx.textAlign = 'left'
               ctx.textBaseline = 'middle'
               ctx.fillText(sp, badgeX + 5, badgeY)
