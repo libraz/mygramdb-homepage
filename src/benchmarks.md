@@ -11,6 +11,8 @@ head:
 
 Tested on **1.1M Wikipedia articles** (1M English + 100K Japanese, avg. 666 chars per article) with MySQL 8.4 FULLTEXT (ngram parser). MygramDB v1.5.0 with `verify_text: all` and query cache disabled. All numbers are p50 over 10 iterations.
 
+The benchmark data remains from the v1.5.0 run. MygramDB v1.8.0 keeps the same core in-memory search model, but real-world latency varies with data size, `verify_text`, filters, sort mode, query cache, and concurrency.
+
 ::: info Reproducible
 Run these benchmarks yourself: `make bench-up && make bench-run` in the [repository](https://github.com/libraz/mygram-db).
 :::

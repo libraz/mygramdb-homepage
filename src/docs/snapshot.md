@@ -28,7 +28,7 @@ In v1.7.0 and later, snapshot metadata preserves each table's database name. Thi
 Save the current database state to a snapshot file.
 
 **Syntax:**
-```
+```mygram
 DUMP SAVE <filepath> [WITH STATISTICS]
 ```
 
@@ -37,7 +37,7 @@ DUMP SAVE <filepath> [WITH STATISTICS]
 - `WITH STATISTICS` (optional): Include performance statistics in the snapshot
 
 **Examples:**
-```sql
+```mygram
 -- Basic snapshot
 DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
 
@@ -46,7 +46,7 @@ DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp WITH STATISTICS
 ```
 
 **Response:**
-```
+```mygram
 OK SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
 tables: 2
 size: 1234567 bytes
@@ -58,7 +58,7 @@ gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 Load a snapshot file and restore the database state.
 
 **Syntax:**
-```
+```mygram
 DUMP LOAD <filepath>
 ```
 
@@ -66,12 +66,12 @@ DUMP LOAD <filepath>
 - `<filepath>`: Path to the snapshot file to load
 
 **Examples:**
-```sql
+```mygram
 DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **Response:**
-```
+```mygram
 OK LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
 tables: 2
 documents: 10000
@@ -90,7 +90,7 @@ gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 Verify the integrity of a snapshot file without loading it.
 
 **Syntax:**
-```
+```mygram
 DUMP VERIFY <filepath>
 ```
 
@@ -98,12 +98,12 @@ DUMP VERIFY <filepath>
 - `<filepath>`: Path to the snapshot file to verify
 
 **Examples:**
-```sql
+```mygram
 DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **Response (Success):**
-```
+```mygram
 OK VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
 status: valid
 crc: verified
@@ -111,7 +111,7 @@ size: verified
 ```
 
 **Response (Failure):**
-```
+```mygram
 ERROR CRC mismatch: file may be corrupted
 expected: 0x12345678
 actual: 0x87654321
@@ -122,7 +122,7 @@ actual: 0x87654321
 Display metadata about a snapshot file without loading it.
 
 **Syntax:**
-```
+```mygram
 DUMP INFO <filepath>
 ```
 
@@ -130,12 +130,12 @@ DUMP INFO <filepath>
 - `<filepath>`: Path to the snapshot file
 
 **Examples:**
-```sql
+```mygram
 DUMP INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **Response:**
-```
+```mygram
 OK INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 version: 1
 gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
@@ -165,7 +165,7 @@ The snapshot header includes the expected file size:
 
 Always verify snapshot integrity before loading:
 
-```sql
+```mygram
 -- 1. Verify integrity
 DUMP VERIFY mygramdb.dmp
 
@@ -182,7 +182,7 @@ DUMP LOAD mygramdb.dmp
 
 If CRC verification fails, the snapshot file is corrupted:
 
-```
+```mygram
 ERROR CRC32 mismatch: expected 0x12345678, got 0x87654321 (file may be corrupted)
 ```
 
@@ -195,7 +195,7 @@ ERROR CRC32 mismatch: expected 0x12345678, got 0x87654321 (file may be corrupted
 
 If the file size doesn't match the expected size:
 
-```
+```mygram
 ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be truncated or corrupted)
 ```
 
@@ -208,7 +208,7 @@ ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be
 
 If the snapshot version is too new:
 
-```
+```mygram
 ERROR Snapshot file version 2 is newer than supported version 1
 ```
 
@@ -359,7 +359,7 @@ When `DUMP LOAD` completes, MygramDB automatically resumes replication:
 
 **Example:**
 
-```
+```mygram
 # 1. Server crashes at GTID 1-100
 # 2. Restart MygramDB
 # 3. Verify and load snapshot from GTID 1-80

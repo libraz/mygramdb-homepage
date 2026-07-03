@@ -33,7 +33,7 @@ MygramDB supports a rich boolean query syntax for complex text search operations
 
 ### Command Format
 
-```
+```mygram
 SEARCH <table> <query_expression> [FILTER ...] [SORT ...] [LIMIT ...] [OFFSET ...]
 COUNT <table> <query_expression> [FILTER ...]
 ```
@@ -46,34 +46,34 @@ COUNT <table> <query_expression> [FILTER ...]
 
 ### Simple Term Search
 
-```
+```mygram
 SEARCH <table> <term>
 ```
 
 Example:
-```
+```mygram
 SEARCH threads golang
 ```
 
 ### Response Format
 
 **SEARCH Response:**
-```
+```mygram
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
 Example:
-```
+```mygram
 OK RESULTS 3 101 205 387
 ```
 
 **COUNT Response:**
-```
+```mygram
 OK COUNT <number>
 ```
 
 Example:
-```
+```mygram
 OK COUNT 42
 ```
 
@@ -85,12 +85,12 @@ OK COUNT 42
 
 Search for documents containing **all** specified terms.
 
-```
+```mygram
 SEARCH <table> term1 AND term2 AND term3
 ```
 
 Example:
-```
+```mygram
 SEARCH threads golang AND tutorial
 ```
 
@@ -98,12 +98,12 @@ SEARCH threads golang AND tutorial
 
 Search for documents containing **any** of the specified terms.
 
-```
+```mygram
 SEARCH <table> term1 OR term2 OR term3
 ```
 
 Example:
-```
+```mygram
 SEARCH threads golang OR python OR rust
 ```
 
@@ -111,12 +111,12 @@ SEARCH threads golang OR python OR rust
 
 Exclude documents containing specific terms.
 
-```
+```mygram
 SEARCH <table> term1 NOT term2
 ```
 
 Example:
-```
+```mygram
 SEARCH threads tutorial NOT beginner
 ```
 
@@ -130,12 +130,12 @@ SEARCH threads tutorial NOT beginner
 
 Use parentheses to group expressions and control operator precedence:
 
-```
+```mygram
 SEARCH <table> (term1 OR term2) AND term3
 ```
 
 Example:
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial
 ```
 
@@ -145,12 +145,12 @@ This finds documents containing "tutorial" AND either "golang" OR "python".
 
 You can nest multiple levels of parentheses:
 
-```
+```mygram
 SEARCH <table> ((term1 OR term2) AND term3) OR term4
 ```
 
 Example:
-```
+```mygram
 SEARCH threads ((golang OR python) AND web) OR rust
 ```
 
@@ -162,19 +162,19 @@ This finds:
 
 #### Find Go or Python tutorials, excluding beginner content
 
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial NOT beginner
 ```
 
 #### Find database content about MySQL or PostgreSQL, excluding SQLite
 
-```
+```mygram
 SEARCH posts database AND (mysql OR postgresql) NOT sqlite
 ```
 
 #### Find machine learning content in Python or R, excluding TensorFlow
 
-```
+```mygram
 SEARCH articles "machine learning" AND (python OR R) NOT tensorflow
 ```
 
@@ -207,7 +207,7 @@ When no parentheses are used, operators have the following precedence (highest t
 
 Use double quotes `"` or single quotes `'` for exact phrase matching:
 
-```
+```mygram
 SEARCH <table> "exact phrase"
 SEARCH <table> 'machine learning'
 ```
@@ -224,7 +224,7 @@ Supported escape sequences inside quoted strings:
 - `\'` - Single quote
 
 Example:
-```
+```mygram
 SEARCH articles "hello \"world\""
 ```
 
@@ -232,7 +232,7 @@ SEARCH articles "hello \"world\""
 
 Quoted phrases can be combined with boolean operators:
 
-```
+```mygram
 SEARCH threads "web framework" AND (golang OR python)
 SEARCH posts "machine learning" NOT "deep learning"
 ```
@@ -245,7 +245,7 @@ Filter results by column values using the `FILTER` clause.
 
 ### Syntax
 
-```
+```mygram
 SEARCH <table> <query> FILTER <column> <operator> <value> [FILTER <col> <op> <val> ...]
 ```
 
@@ -254,7 +254,7 @@ Multiple filters can be specified (all must match - AND logic).
 ### Supported Operators
 
 - `=` or `EQ` - Equal
-- `!=` or `NE` - Not equal
+- `!=`, `<>`, or `NE` - Not equal
 - `>` or `GT` - Greater than
 - `>=` or `GTE` - Greater than or equal
 - `<` or `LT` - Less than
@@ -263,24 +263,25 @@ Multiple filters can be specified (all must match - AND logic).
 ### Examples
 
 **Single filter:**
-```
+```mygram
 SEARCH articles tech FILTER status = 1
 ```
 
 **Multiple filters:**
-```
+```mygram
 SEARCH articles tech FILTER status = 1 FILTER category = ai
 ```
 
 **Comparison operators:**
-```
+```mygram
 SEARCH articles tech FILTER views > 1000
 SEARCH articles tech FILTER created_at >= 2024-01-01
 SEARCH articles tech FILTER priority != 0
+SEARCH articles tech FILTER status <> archived
 ```
 
 **With boolean queries:**
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial FILTER status = published
 ```
 
@@ -290,7 +291,7 @@ MygramDB supports filtering on indexed filter columns:
 
 - **Integer**: `status=1`, `priority=5`
 - **String**: `category=tech`, `author=john`
-- **Date/Time**: `created_at=2024-01-15T10:30:00`
+- **Date/Time**: `created_at=2024-01-15T10:30:00`, `published_on=2024-01-15`
 
 **Note:** Only columns configured as filters in `config.yaml` can be used in FILTER clauses.
 
@@ -308,7 +309,7 @@ Sort search results using the `SORT` clause.
 
 ### Syntax
 
-```
+```mygram
 SEARCH <table> <query> SORT <column> [ASC|DESC]
 ```
 
@@ -318,7 +319,7 @@ SEARCH <table> <query> SORT <column> [ASC|DESC]
 
 If `SORT` is not specified, results are sorted by **primary key in descending order** (newest first).
 
-```
+```mygram
 SEARCH threads golang
 -- Equivalent to: SEARCH threads golang SORT id DESC
 ```
@@ -326,13 +327,13 @@ SEARCH threads golang
 ### Sorting by Primary Key
 
 **Full syntax:**
-```
+```mygram
 SEARCH threads golang SORT id ASC
 SEARCH threads golang SORT id DESC
 ```
 
 **Shorthand syntax (recommended):**
-```
+```mygram
 SEARCH threads golang SORT ASC   -- Primary key ascending
 SEARCH threads golang SORT DESC  -- Primary key descending
 ```
@@ -341,14 +342,14 @@ SEARCH threads golang SORT DESC  -- Primary key descending
 
 Sort by any indexed filter column:
 
-```
+```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
 SEARCH posts database SORT score ASC LIMIT 20
 ```
 
 ### Combining with Boolean Queries
 
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial SORT created_at DESC LIMIT 10
 SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT score ASC
 ```
@@ -383,12 +384,12 @@ Control the number of results returned using `LIMIT` and `OFFSET`.
 
 ### LIMIT - Maximum Results
 
-```
+```mygram
 SEARCH <table> <query> LIMIT <n>
 ```
 
 Example:
-```
+```mygram
 SEARCH articles tech LIMIT 10
 ```
 
@@ -397,12 +398,12 @@ SEARCH articles tech LIMIT 10
 
 ### OFFSET - Skip Results
 
-```
+```mygram
 SEARCH <table> <query> OFFSET <n>
 ```
 
 Example:
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 20
 ```
 
@@ -411,17 +412,17 @@ This returns results 21-30 (skips first 20).
 ### Pagination Examples
 
 **Page 1 (first 10 results):**
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 0
 ```
 
 **Page 2 (results 11-20):**
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 10
 ```
 
 **Page 3 (results 21-30):**
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 20
 ```
 
@@ -437,7 +438,7 @@ Keep boolean expressions compact or raise the limit in `config.yaml` if applicat
 
 ### Complete Example with All Options
 
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial
   FILTER status = published
   SORT created_at DESC
@@ -466,7 +467,7 @@ Sort results by relevance using the BM25 ranking function.
 
 ### Syntax
 
-```
+```mygram
 SEARCH <table> <query> SORT _score [ASC|DESC]
 ```
 
@@ -483,7 +484,7 @@ BM25 computes a relevance score for each document based on:
 
 ### Examples
 
-```
+```mygram
 SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 SEARCH articles golang AND tutorial SORT _score LIMIT 20
 ```
@@ -499,7 +500,7 @@ memory:
 
 ### Combining with Filters
 
-```
+```mygram
 SEARCH articles "database" SORT _score DESC FILTER category = tech LIMIT 10
 ```
 
@@ -511,7 +512,7 @@ Return text snippets with search terms highlighted using configurable tags.
 
 ### Syntax
 
-```
+```mygram
 SEARCH <table> <query> HIGHLIGHT [TAG <open> <close>] [SNIPPET_LEN <n>] [MAX_FRAGMENTS <n>]
 ```
 
@@ -526,17 +527,17 @@ SEARCH <table> <query> HIGHLIGHT [TAG <open> <close>] [SNIPPET_LEN <n>] [MAX_FRA
 ### Examples
 
 Default highlighting:
-```
+```mygram
 SEARCH articles "machine learning" HIGHLIGHT LIMIT 10
 ```
 
 Custom tags:
-```
+```mygram
 SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
 ```
 
 Longer snippets with more fragments:
-```
+```mygram
 SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 ```
 
@@ -546,7 +547,7 @@ Highlighting requires `verify_text` to be set to `"ascii"` or `"all"` in configu
 
 ### Combining with Other Clauses
 
-```
+```mygram
 SEARCH articles "tech" HIGHLIGHT TAG <b> </b> SORT _score DESC FILTER status = 1 LIMIT 10
 ```
 
@@ -558,7 +559,7 @@ Match terms within a specified Levenshtein edit distance (insertions, deletions,
 
 ### Syntax
 
-```
+```mygram
 SEARCH <table> <query> FUZZY [distance]
 ```
 
@@ -570,7 +571,7 @@ SEARCH <table> <query> FUZZY [distance]
 
 ### Examples
 
-```
+```mygram
 SEARCH articles "machne" FUZZY LIMIT 10
 SEARCH articles "databse" FUZZY 2 LIMIT 10
 ```
@@ -578,6 +579,8 @@ SEARCH articles "databse" FUZZY 2 LIMIT 10
 ### Performance
 
 Fuzzy search pre-filters candidates by length difference to avoid unnecessary distance computations. Use `FUZZY 1` (default) for best performance.
+
+`FUZZY` accepts only `1` or `2`. Other distance values return an explicit query error.
 
 ---
 
@@ -588,37 +591,37 @@ Fuzzy search pre-filters candidates by length difference to avoid unnecessary di
 The following will return errors:
 
 **Empty parentheses:**
-```
+```mygram
 SEARCH threads ()
 ERROR Invalid query: empty expression in parentheses
 ```
 
 **Unclosed parentheses:**
-```
+```mygram
 SEARCH threads (golang AND python
 ERROR Invalid query: unclosed parentheses
 ```
 
 **Extra closing parentheses:**
-```
+```mygram
 SEARCH threads golang AND python)
 ERROR Invalid query: unexpected closing parenthesis
 ```
 
 **Operator without operands:**
-```
+```mygram
 SEARCH threads AND
 ERROR Invalid query: operator without operands
 ```
 
 **Trailing operator:**
-```
+```mygram
 SEARCH threads golang AND
 ERROR Invalid query: trailing operator
 ```
 
 **Unclosed quotes:**
-```
+```mygram
 SEARCH threads "golang tutorial
 ERROR Invalid query: unclosed quote
 ```
@@ -626,13 +629,13 @@ ERROR Invalid query: unclosed quote
 ### Invalid Filters
 
 **Non-existent table:**
-```
+```mygram
 SEARCH nonexistent tech
 ERROR Table not found: nonexistent
 ```
 
 **Invalid filter column:**
-```
+```mygram
 SEARCH articles tech FILTER invalid_column=1
 ERROR Filter column not found: invalid_column
 ```
@@ -640,7 +643,7 @@ ERROR Filter column not found: invalid_column
 ### Invalid Sorting
 
 **Non-existent column:**
-```
+```mygram
 SEARCH articles tech SORT nonexistent DESC
 WARNING Column 'nonexistent' not found in documents, treating as NULL
 ```
@@ -651,9 +654,13 @@ Note: Non-existent columns generate a warning but don't error (treated as NULL).
 
 ## Performance Tips
 
+Each `SEARCH` runs through a fixed pipeline: the query is parsed to an AST, n-gram lookup produces candidate documents, then AND/NOT/FILTER narrow that candidate set in sequence before SORT and LIMIT/OFFSET produce the final page. The tips below each target one stage of this pipeline, and the DEBUG command reports timing per stage using these same names.
+
+<img src="/diagrams/query-pipeline.svg" alt="A query is parsed to an AST, n-gram lookup produces candidates, AND intersection, NOT exclusion, and FILTER application shrink the candidate set in that order, then SORT uses a partial sort when LIMIT is present and OFFSET and LIMIT are applied last before results are returned." class="doc-diagram" />
+
 ### 1. Place Restrictive Terms First
 
-```
+```mygram
 -- Good: Specific term first
 SEARCH articles "machine learning" AND tutorial
 
@@ -663,7 +670,7 @@ SEARCH articles tutorial AND "machine learning"
 
 ### 2. Use Parentheses for Clarity
 
-```
+```mygram
 -- Explicit and readable
 SEARCH threads (golang OR python) AND (web OR api)
 
@@ -673,7 +680,7 @@ SEARCH threads golang OR python AND web OR api
 
 ### 3. Avoid Leading NOT Operators
 
-```
+```mygram
 -- Good: Positive term first
 SEARCH articles tech NOT old
 
@@ -685,7 +692,7 @@ Leading NOT requires scanning all documents before exclusion.
 
 ### 4. Combine Filters and Text Search
 
-```
+```mygram
 -- Good: Filter narrows results early
 SEARCH articles tech FILTER category = ai FILTER status = 1
 
@@ -697,7 +704,7 @@ Filters on indexed columns are faster than text search on those terms.
 
 ### 5. Always Use LIMIT for Large Result Sets
 
-```
+```mygram
 -- Good: Uses partial_sort optimization
 SEARCH articles tech SORT created_at DESC LIMIT 10
 
@@ -707,7 +714,7 @@ SEARCH articles tech SORT created_at DESC
 
 ### 6. Minimize Deep Pagination
 
-```
+```mygram
 -- Efficient
 SEARCH articles tech LIMIT 10 OFFSET 0
 
@@ -723,12 +730,12 @@ Consider alternative pagination strategies for deep results (e.g., cursor-based)
 
 All boolean query syntax works with `COUNT` as well:
 
-```
+```mygram
 COUNT <table> <query_expression> [FILTER ...]
 ```
 
 Examples:
-```
+```mygram
 COUNT threads (golang OR python) AND tutorial
 COUNT articles tech FILTER status = 1 FILTER category = ai
 COUNT posts database AND (mysql OR postgresql) NOT sqlite
@@ -776,17 +783,17 @@ MygramDB uses n-gram tokenization for indexing and search:
 Manually trigger snapshot synchronization from MySQL to MygramDB.
 
 **Syntax:**
-```
+```mygram
 SYNC <table_name>
 ```
 
 **Example:**
-```
+```mygram
 SYNC articles
 ```
 
 **Response:**
-```
+```mygram
 OK SYNC STARTED table=articles job_id=1
 ```
 
@@ -797,12 +804,12 @@ OK SYNC STARTED table=articles job_id=1
 Check the progress and status of SYNC operations.
 
 **Syntax:**
-```
+```mygram
 SYNC STATUS
 ```
 
 **Response Examples:**
-```
+```mygram
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
 status=IDLE message="No sync operation performed"

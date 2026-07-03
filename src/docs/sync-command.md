@@ -39,6 +39,8 @@ replication:
   start_from: "snapshot"
 ```
 
+In v1.8.0 and later, `auto_initial_snapshot: true` requires `start_from: "snapshot"` for both single-table and multi-table deployments.
+
 ## Commands
 
 ### SYNC - Trigger Snapshot Synchronization
@@ -46,7 +48,7 @@ replication:
 Manually trigger snapshot synchronization for a specific table.
 
 **Syntax:**
-```
+```mygram
 SYNC <table_name>
 ```
 
@@ -65,12 +67,12 @@ echo "SYNC articles" | nc localhost 11016
 ```
 
 **Response (Success):**
-```
+```mygram
 OK SYNC STARTED table=articles job_id=1
 ```
 
 **Response (Error):**
-```
+```mygram
 ERROR SYNC already in progress for table 'articles'
 ERROR Memory critically low. Cannot start SYNC. Check system memory.
 ERROR Table 'products' not found in configuration
@@ -88,7 +90,7 @@ ERROR Table 'products' not found in configuration
 Check the progress and status of SYNC operations.
 
 **Syntax:**
-```
+```mygram
 SYNC STATUS
 ```
 
@@ -104,22 +106,22 @@ echo "SYNC STATUS" | nc localhost 11016
 **Response Examples:**
 
 **In Progress:**
-```
+```mygram
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
 ```
 
 **Completed:**
-```
+```mygram
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
 ```
 
 **Failed:**
-```
+```mygram
 table=articles status=FAILED rows=5000 error="MySQL connection lost"
 ```
 
 **Idle (No sync performed):**
-```
+```mygram
 status=IDLE message="No sync operation performed"
 ```
 
@@ -144,6 +146,10 @@ status=IDLE message="No sync operation performed"
 - **DISABLED**: Replication is disabled in configuration
 - **FAILED**: Snapshot succeeded but replication failed to start (check logs)
 
+The diagram below traces a SYNC through its full lifecycle: the initial memory-health check, the snapshot build during which HTTP reads for that table return `503`, the automatic replication handoff, and the terminal states, alongside the operations it mutually excludes.
+
+<img src="/diagrams/sync-lifecycle.svg" alt="A SYNC passes a memory-health check, builds a snapshot from a MySQL SELECT while HTTP reads for that table return 503, captures the GTID, automatically starts replication with outcomes started, already running, disabled, or failed, and ends in completed, failed, or cancelled — while OPTIMIZE and DUMP operations are mutually excluded with a running SYNC." class="doc-diagram" />
+
 ## Command Conflicts
 
 ### Operations Blocked During SYNC
@@ -154,17 +160,23 @@ status=IDLE message="No sync operation performed"
 | `REPLICATION START` | **Blocked** | SYNC automatically starts replication when complete |
 | `SYNC` (same table) | **Blocked** | SYNC already in progress for this table |
 
+### Operations That Block Starting SYNC
+
+In v1.8.0 and later, a new `SYNC` request is rejected while `OPTIMIZE`, `DUMP SAVE`, or `DUMP LOAD` is in progress. Retry after the current operation completes.
+
 ### Operations Allowed During SYNC
 
 | Command | Behavior | Notes |
 |---------|----------|-------|
-| `SEARCH` | Allowed | Returns partial results (data loaded so far) |
-| `COUNT` | Allowed | Returns current count (increases as sync progresses) |
-| `GET` | Allowed | Returns document if loaded, error if not yet loaded |
+| `SEARCH` | Allowed over TCP/CLI | Returns partial results (data loaded so far) |
+| `COUNT` | Allowed over TCP/CLI | Returns current count (increases as sync progresses) |
+| `GET` | Allowed over TCP/CLI | Returns document if loaded, error if not yet loaded |
 | `INFO` | Allowed | Shows current server state including sync progress |
 | `DUMP SAVE` | **Warning** | Allowed but logs warning (saving incomplete snapshot) |
 | `SYNC` (different table) | Allowed | Multi-table support, independent operations |
 | `REPLICATION STOP` | Allowed | Independent operation |
+
+HTTP table reads (`search`, `count`, `facet`, and document `GET`) return `503` while the target table is synchronizing.
 
 ## Usage Scenarios
 

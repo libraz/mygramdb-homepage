@@ -52,7 +52,7 @@ tables:
 
 When all configured tables belong to one database, bare table references still work:
 
-```text
+```mygram
 SEARCH articles mysql
 SYNC articles
 GET articles 123
@@ -60,7 +60,7 @@ GET articles 123
 
 When the configuration spans two or more databases, every TCP, CLI, C++, C API, and HTTP table reference must use `<database>.<table>`:
 
-```text
+```mygram
 SEARCH app_db.articles mysql
 SYNC archive_db.articles
 GET app_db.articles 123

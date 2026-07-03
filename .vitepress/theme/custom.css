@@ -367,11 +367,13 @@
 }
 
 /* --------------------------------------------------------- Version badge */
+.vp-doc h2:has(.version-badge),
 .vp-doc h3:has(.version-badge) {
   display: flex;
   align-items: center;
 }
 
+.vp-doc h2 .version-badge,
 .vp-doc h3 .version-badge {
   margin-left: auto;
 }
@@ -505,10 +507,63 @@ div[class*="language-"] code {
 .dark .vp-code .token.environment { color: #79b8ff !important; }
 
 /* --------------------------------------------------------- Custom callouts */
-/* clean filled cards — rounded, no decorative border */
+/* soft filled cards with no edge decoration — severity is carried by the
+   background tint (deepened from VitePress's own per-type token) and by the
+   role-coloured type label + leading icon, never by an accent bar */
 .vp-doc .custom-block {
-  border-radius: 10px;
   border: none;
+  border-radius: 12px;
+}
+
+/* deepen each block's native VitePress tint toward its semantic hue so the
+   severity ordering reads without a coloured border (adapts in dark mode
+   because the base token and --mg-slow-1 both flip) */
+.vp-doc .custom-block.tip {
+  background: color-mix(in srgb, var(--vp-custom-block-tip-bg) 80%, var(--vp-c-brand-3));
+}
+.vp-doc .custom-block.warning {
+  background: color-mix(in srgb, var(--vp-custom-block-warning-bg) 82%, #b45309);
+}
+.vp-doc .custom-block.danger {
+  background: color-mix(in srgb, var(--vp-custom-block-danger-bg) 82%, var(--mg-slow-1));
+}
+.vp-doc .custom-block.caution {
+  background: color-mix(in srgb, var(--vp-custom-block-caution-bg) 82%, var(--mg-slow-1));
+}
+
+/* role-coloured type label; the leading icon inherits this via currentColor */
+.vp-doc .custom-block.tip .custom-block-title { color: var(--vp-c-brand-3); }
+.vp-doc .custom-block.warning .custom-block-title { color: #b45309; }
+.vp-doc .custom-block.danger .custom-block-title,
+.vp-doc .custom-block.caution .custom-block-title { color: var(--mg-slow-1); }
+.dark .vp-doc .custom-block.warning .custom-block-title { color: #f59e0b; }
+
+/* small leading glyph before the TIP/WARNING/DANGER label, masked so it takes
+   the label's role colour; per-type shape set via --mg-callout-icon */
+.vp-doc .custom-block-title::before {
+  content: '';
+  display: inline-block;
+  width: 17px;
+  height: 17px;
+  margin-right: 6px;
+  vertical-align: -3px;
+  background-color: currentColor;
+  -webkit-mask: var(--mg-callout-icon) center / contain no-repeat;
+  mask: var(--mg-callout-icon) center / contain no-repeat;
+}
+.vp-doc .custom-block.tip .custom-block-title {
+  --mg-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2A7 7 0 0 0 5 9c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9Z'/%3E%3C/svg%3E");
+}
+.vp-doc .custom-block.info .custom-block-title,
+.vp-doc .custom-block.details .custom-block-title {
+  --mg-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10a10 10 0 0 0 10-10A10 10 0 0 0 12 2Z'/%3E%3C/svg%3E");
+}
+.vp-doc .custom-block.warning .custom-block-title {
+  --mg-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2Z'/%3E%3C/svg%3E");
+}
+.vp-doc .custom-block.danger .custom-block-title,
+.vp-doc .custom-block.caution .custom-block-title {
+  --mg-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8.27 3L3 8.27v7.46L8.27 21h7.46L21 15.73V8.27L15.73 3M13 17.3a1 1 0 0 1-2 0a1 1 0 0 1 2 0m0-3.8a1 1 0 0 1-2 0V9a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
 }
 
 /* ---------------------------------------------------------------- Nav brand */
@@ -662,6 +717,50 @@ div[class*="language-"] code {
   color: var(--vp-c-brand-1);
   font-weight: 500;
 }
+
+/* ------------------------------------------------------------- Doc diagrams */
+.vp-doc .doc-diagram {
+  display: block;
+  width: 100%;
+  max-width: 960px;
+  height: auto;
+  margin: 24px auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  /* matches the light #f8fafc canvas baked into every diagram SVG, so no
+     dark slivers show around the SVG's own rounded corners in dark mode */
+  background: #f8fafc;
+}
+
+.dark .vp-doc .doc-diagram {
+  border-color: var(--mg-panel-border);
+}
+
+/* Diagram/figure legend — real swatches bound to theme tokens instead of
+   emoji color keys, so captions restyle correctly in dark mode */
+.vp-doc .mg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 4px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12.5px;
+  color: var(--vp-c-text-3);
+}
+
+.vp-doc .mg-legend .swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: baseline;
+}
+
+.vp-doc .mg-legend .swatch--fast { background: var(--vp-c-brand-3); }
+.vp-doc .mg-legend .swatch--slow { background: var(--mg-slow-2); }
+.vp-doc .mg-legend .swatch--ok { background: #15803d; }
+.vp-doc .mg-legend .swatch--gate { background: #b45309; }
 
 /* ---------------------------------------------------------------- Responsive */
 @media (max-width: 640px) {

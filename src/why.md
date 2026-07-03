@@ -13,6 +13,10 @@ MySQL FULLTEXT search becomes painfully slow as your data grows. Here's why, and
 
 ## The Problem
 
+The two architectures answer the same query through completely different data paths: one round-trips through disk-resident structures, the other stays entirely in RAM.
+
+<img src="/diagrams/query-path-comparison.svg" alt="A MySQL FULLTEXT query passes through B-tree pages on disk, uncompressed posting lists, and an external sort to answer in 100 to 3000 milliseconds, while the same query in MygramDB runs against delta and Roaring compressed posting lists in RAM with SIMD intersection and answers in under one millisecond." class="doc-diagram" />
+
 ### Disk I/O Bottleneck
 
 MySQL FULLTEXT stores indexes on disk using B-tree pages. Every search query requires:

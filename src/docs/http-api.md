@@ -67,7 +67,7 @@ Content-Type: application/json
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `q` | string | Yes | Search query with AND/NOT operators |
+| `q` | string | Yes | Literal search query text with boolean operators; request options must use JSON fields |
 | `filters` | object | No | Filter conditions (column: value pairs) |
 | `limit` | integer | No | Maximum results to return (default: 100, max: 1000) |
 | `offset` | integer | No | Number of results to skip (default: 0) |
@@ -83,6 +83,8 @@ Content-Type: application/json
 - **OR operator**: `"(mysql OR postgresql) AND performance"`
 - **NOT operator**: `"news NOT sports"`
 - **Combined**: `"tech AND AI NOT old"`
+
+`q` is never used to smuggle control clauses. Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`; text that looks like `LIMIT` or `SORT` inside `q` is treated as search text or a boolean-query token.
 
 **Response (200 OK):**
 
@@ -500,7 +502,7 @@ Liveness probe. Returns `200 OK` while the HTTP server process is running, even 
 
 ### GET /health/ready
 
-Readiness probe for traffic gating. Returns `200 OK` only when the node can accept search traffic. Returns `503 Service Unavailable` while a dump load is in progress or when configured replication is unavailable.
+Readiness probe for traffic gating. Returns `200 OK` only when the node can accept search traffic. Returns `503 Service Unavailable` while a dump load or table synchronization is in progress, or when configured replication is unavailable. In v1.8.0 and later, table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
 
 ### GET /health/detail
 
@@ -692,7 +694,7 @@ All error responses follow this format:
 | 400 | Bad Request (invalid input) |
 | 404 | Not Found (document doesn't exist) |
 | 500 | Internal Server Error |
-| 503 | Service Unavailable (feature not enabled) |
+| 503 | Service unavailable, feature not enabled, replication unavailable, or table synchronization in progress |
 
 ## Monitoring
 

@@ -250,6 +250,10 @@ When connecting or reconnecting to MySQL, the server performs:
 
 ### Failover Detection Behavior
 
+After a connection loss, the server reconnects with exponential backoff and re-runs the validation checks above before resuming replication. The outcome of that validation determines whether streaming resumes automatically or replication halts for manual intervention.
+
+<img src="/diagrams/failover-validation-flow.svg" alt="After a lost connection MygramDB reconnects with exponential backoff and validates the server: disabled GTID mode or missing tables stop replication and require manual intervention, a changed server UUID logs a failover warning and continues, and a passing validation resumes streaming from the saved GTID." class="doc-diagram" />
+
 #### Scenario 1: Normal Reconnection (Same Server)
 
 ```log
@@ -398,7 +402,7 @@ curl http://localhost:8080/health/live
 
 # Readiness check
 curl http://localhost:8080/health/ready
-# Returns: 200 if ready, 503 if loading
+# Returns: 200 if ready; 503 during dump load, table sync, or replication unavailability
 
 # Detailed health status
 curl http://localhost:8080/health/detail

@@ -60,7 +60,7 @@ tables:
 
 設定内のすべてのテーブルが1つのDBに属する場合、修飾なしのテーブル名も引き続き使えます。
 
-```text
+```mygram
 SEARCH articles mysql
 SYNC articles
 GET articles 123
@@ -68,7 +68,7 @@ GET articles 123
 
 設定が2つ以上のDBにまたがる場合、TCP、CLI、C++、C API、HTTP のすべてで `<database>.<table>` の指定が必要です。
 
-```text
+```mygram
 SEARCH app_db.articles mysql
 SYNC archive_db.articles
 GET app_db.articles 123

@@ -10,11 +10,11 @@ function heroCopy(isJa: boolean) {
   return isJa
     ? {
         kicker: 'インメモリ検索エンジン',
-        meta: ['MITライセンス', '単一バイナリ', 'MySQL & MariaDB', 'v1.7'],
+        meta: ['MITライセンス', '単一バイナリ', 'MySQL & MariaDB', 'v1.8'],
       }
     : {
         kicker: 'In-memory search engine',
-        meta: ['MIT licensed', 'Single binary', 'MySQL & MariaDB', 'v1.7'],
+        meta: ['MIT licensed', 'Single binary', 'MySQL & MariaDB', 'v1.8'],
       }
 }
 

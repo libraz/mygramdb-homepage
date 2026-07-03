@@ -43,6 +43,8 @@ replication:
   start_from: "snapshot"
 ```
 
+v1.8.0以降、`auto_initial_snapshot: true` を使う場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` が必要です。
+
 ## コマンド
 
 ### SYNC - スナップショット同期を開始
@@ -54,7 +56,7 @@ replication:
 :::
 
 **構文:**
-```
+```mygram
 SYNC <table_name>
 ```
 
@@ -73,12 +75,12 @@ echo "SYNC articles" | nc localhost 11016
 ```
 
 **レスポンス（成功）:**
-```
+```mygram
 OK SYNC STARTED table=articles job_id=1
 ```
 
 **レスポンス（エラー）:**
-```
+```mygram
 ERROR SYNC already in progress for table 'articles'
 ERROR Memory critically low. Cannot start SYNC. Check system memory.
 ERROR Table 'products' not found in configuration
@@ -100,7 +102,7 @@ SYNC 操作の進捗とステータスを確認します。
 :::
 
 **構文:**
-```
+```mygram
 SYNC STATUS
 ```
 
@@ -116,22 +118,22 @@ echo "SYNC STATUS" | nc localhost 11016
 **レスポンス例:**
 
 **進行中:**
-```
+```mygram
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
 ```
 
 **完了:**
-```
+```mygram
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
 ```
 
 **失敗:**
-```
+```mygram
 table=articles status=FAILED rows=5000 error="MySQL connection lost"
 ```
 
 **アイドル（同期未実施）:**
-```
+```mygram
 status=IDLE message="No sync operation performed"
 ```
 
@@ -156,6 +158,10 @@ status=IDLE message="No sync operation performed"
 - **DISABLED**: 設定でレプリケーションが無効
 - **FAILED**: スナップショットは成功したがレプリケーションの開始に失敗（ログを確認）
 
+次の図は、SYNCのライフサイクル全体を示します。メモリ健全性チェックに始まり、スナップショット構築中は対象テーブルへのHTTP読み取りが `503` を返すこと、完了後のレプリケーション自動開始、そして終了状態と、SYNCと相互排他になる操作の関係です。
+
+<img src="/diagrams/sync-lifecycle.svg" alt="SYNCはメモリ健全性チェックを経てMySQLのSELECTからスナップショットを構築し、その間対象テーブルへのHTTP読み取りは503を返し、GTIDを取得後にレプリケーションを自動開始(開始・既に稼働・無効・失敗)して完了・失敗・キャンセルのいずれかで終わり、実行中はOPTIMIZEやDUMPと相互排他になることを示す状態遷移図" class="doc-diagram" />
+
 ## コマンドの競合
 
 ### SYNC 中に拒否される操作
@@ -166,17 +172,23 @@ status=IDLE message="No sync operation performed"
 | `REPLICATION START` | **拒否** | SYNC 完了時にレプリケーションを自動開始するため |
 | `SYNC`（同じテーブル） | **拒否** | このテーブルの SYNC は既に進行中 |
 
+### SYNC開始を拒否する実行中操作
+
+v1.8.0以降、`OPTIMIZE`、`DUMP SAVE`、`DUMP LOAD` の実行中は新しい `SYNC` が拒否されます。現在の操作が完了してから再実行してください。
+
 ### SYNC 中に許可される操作
 
 | コマンド | 動作 | 備考 |
 |---------|----------|-------|
-| `SEARCH` | 許可 | 部分的な結果を返す（これまでにロードされたデータ） |
-| `COUNT` | 許可 | 現在のカウントを返す（同期の進行に伴い増加） |
-| `GET` | 許可 | ロード済みなら返す、未ロードならエラー |
+| `SEARCH` | TCP/CLIでは許可 | 部分的な結果を返す（これまでにロードされたデータ） |
+| `COUNT` | TCP/CLIでは許可 | 現在のカウントを返す（同期の進行に伴い増加） |
+| `GET` | TCP/CLIでは許可 | ロード済みなら返す、未ロードならエラー |
 | `INFO` | 許可 | 同期の進捗を含む現在のサーバー状態を表示 |
 | `DUMP SAVE` | **警告** | 許可されるが警告をログ記録（同期途中の状態を保存する可能性） |
 | `SYNC`（別のテーブル） | 許可 | マルチテーブル対応、独立した操作 |
 | `REPLICATION STOP` | 許可 | 独立した操作 |
+
+HTTPのテーブル読み取り（search、count、facet、ドキュメントGET）は、対象テーブルの同期中に `503` を返します。
 
 ::: info SYNC中の検索結果
 SYNC中の `SEARCH` や `COUNT` は、すでに読み込み済みのデータを対象にします。全件を反映した結果が必要な処理では、`SYNC STATUS` が `COMPLETED` になるまで待ってからクエリしてください。

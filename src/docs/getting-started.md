@@ -7,6 +7,10 @@ Get MygramDB up and running in 5 minutes.
 - MySQL 8.4/9.x with GTID enabled, or MariaDB 10.6+/11.x
 - RHEL/AlmaLinux/Rocky Linux 9, Ubuntu 22.04/24.04, or Docker
 
+MygramDB deploys next to your existing database as a sidecar: your application keeps writing to MySQL/MariaDB unchanged, MygramDB follows the binlog to build its own search index, and only search queries go to MygramDB.
+
+<img src="/diagrams/deployment-topology.svg" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." class="doc-diagram" />
+
 ## Quick Install
 
 ### RPM (RHEL/AlmaLinux/Rocky Linux 9)
@@ -75,7 +79,7 @@ mygram-cli -h localhost -p 11016
 
 Once connected, run a search query:
 
-```
+```mygram
 mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
@@ -91,4 +95,5 @@ OK RESULTS 3 101 205 387
 - [Full Configuration Reference](/docs/configuration)
 - [MySQL Replication](/docs/replication)
 - [Operations Guide](/docs/operations)
+- [v1.8 Upgrade Notes](/docs/upgrade-v1.8)
 - [v1.7 Migration Guide](/docs/migration-v1.7)

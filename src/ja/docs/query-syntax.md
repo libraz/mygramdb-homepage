@@ -37,7 +37,7 @@ MygramDBのクエリはSQLではなく、検索用の小さなコマンド言語
 
 ### コマンドフォーマット
 
-```
+```mygram
 SEARCH <table> <query_expression> [FILTER ...] [SORT ...] [LIMIT ...] [OFFSET ...]
 COUNT <table> <query_expression> [FILTER ...]
 ```
@@ -48,34 +48,34 @@ COUNT <table> <query_expression> [FILTER ...]
 
 ### シンプルな検索
 
-```
+```mygram
 SEARCH <table> <term>
 ```
 
 例：
-```
+```mygram
 SEARCH threads golang
 ```
 
 ### レスポンスフォーマット
 
 **SEARCHレスポンス:**
-```
+```mygram
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
 例：
-```
+```mygram
 OK RESULTS 3 101 205 387
 ```
 
 **COUNTレスポンス:**
-```
+```mygram
 OK COUNT <number>
 ```
 
 例：
-```
+```mygram
 OK COUNT 42
 ```
 
@@ -87,12 +87,12 @@ OK COUNT 42
 
 **すべて**の指定された用語を含むドキュメントを検索します。
 
-```
+```mygram
 SEARCH <table> term1 AND term2 AND term3
 ```
 
 例：
-```
+```mygram
 SEARCH threads golang AND tutorial
 ```
 
@@ -104,12 +104,12 @@ SEARCH threads golang AND tutorial
 
 指定された用語の**いずれか**を含むドキュメントを検索します。
 
-```
+```mygram
 SEARCH <table> term1 OR term2 OR term3
 ```
 
 例：
-```
+```mygram
 SEARCH threads golang OR python OR rust
 ```
 
@@ -117,12 +117,12 @@ SEARCH threads golang OR python OR rust
 
 特定の用語を含むドキュメントを除外します。
 
-```
+```mygram
 SEARCH <table> term1 NOT term2
 ```
 
 例：
-```
+```mygram
 SEARCH threads tutorial NOT beginner
 ```
 
@@ -138,12 +138,12 @@ SEARCH threads tutorial NOT beginner
 
 括弧を使用して式をグループ化し、演算子の優先順位を制御できます：
 
-```
+```mygram
 SEARCH <table> (term1 OR term2) AND term3
 ```
 
 例：
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial
 ```
 
@@ -153,12 +153,12 @@ SEARCH threads (golang OR python) AND tutorial
 
 複数レベルの括弧をネストできます：
 
-```
+```mygram
 SEARCH <table> ((term1 OR term2) AND term3) OR term4
 ```
 
 例：
-```
+```mygram
 SEARCH threads ((golang OR python) AND web) OR rust
 ```
 
@@ -170,19 +170,19 @@ SEARCH threads ((golang OR python) AND web) OR rust
 
 #### GoまたはPythonのチュートリアルを検索し、初心者向けコンテンツを除外
 
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial NOT beginner
 ```
 
 #### MySQLまたはPostgreSQLに関するデータベースコンテンツを検索し、SQLiteを除外
 
-```
+```mygram
 SEARCH posts database AND (mysql OR postgresql) NOT sqlite
 ```
 
 #### PythonまたはRで機械学習コンテンツを検索し、TensorFlowを除外
 
-```
+```mygram
 SEARCH articles "machine learning" AND (python OR R) NOT tensorflow
 ```
 
@@ -217,7 +217,7 @@ SEARCH articles "machine learning" AND (python OR R) NOT tensorflow
 
 語句の並びを保ったフレーズ検索には、ダブルクォーテーション `"` またはシングルクォーテーション `'` を使います。
 
-```
+```mygram
 SEARCH <table> "exact phrase"
 SEARCH <table> 'machine learning'
 ```
@@ -234,7 +234,7 @@ SEARCH <table> 'machine learning'
 - `\'` - シングルクォーテーション
 
 例：
-```
+```mygram
 SEARCH articles "hello \"world\""
 ```
 
@@ -242,7 +242,7 @@ SEARCH articles "hello \"world\""
 
 引用符で囲まれたフレーズはブール演算子と組み合わせることができます：
 
-```
+```mygram
 SEARCH threads "web framework" AND (golang OR python)
 SEARCH posts "machine learning" NOT "deep learning"
 ```
@@ -255,7 +255,7 @@ SEARCH posts "machine learning" NOT "deep learning"
 
 ### 構文
 
-```
+```mygram
 SEARCH <table> <query> FILTER <column> <operator> <value> [FILTER <col> <op> <val> ...]
 ```
 
@@ -264,7 +264,7 @@ SEARCH <table> <query> FILTER <column> <operator> <value> [FILTER <col> <op> <va
 ### サポートされる演算子
 
 - `=` または `EQ` - 等しい
-- `!=` または `NE` - 等しくない
+- `!=`、`<>`、または `NE` - 等しくない
 - `>` または `GT` - より大きい
 - `>=` または `GTE` - 以上
 - `<` または `LT` - より小さい
@@ -273,24 +273,25 @@ SEARCH <table> <query> FILTER <column> <operator> <value> [FILTER <col> <op> <va
 ### 例
 
 **単一フィルタ:**
-```
+```mygram
 SEARCH articles tech FILTER status = 1
 ```
 
 **複数フィルタ:**
-```
+```mygram
 SEARCH articles tech FILTER status = 1 FILTER category = ai
 ```
 
 **比較演算子:**
-```
+```mygram
 SEARCH articles tech FILTER views > 1000
 SEARCH articles tech FILTER created_at >= 2024-01-01
 SEARCH articles tech FILTER priority != 0
+SEARCH articles tech FILTER status <> archived
 ```
 
 **ブール演算クエリと組み合わせ:**
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial FILTER status = published
 ```
 
@@ -300,7 +301,7 @@ MygramDBでは、設定ファイルで `filters` に登録したカラムだけ�
 
 - **整数**: `status=1`, `priority=5`
 - **文字列**: `category=tech`, `author=john`
-- **日付/時刻**: `created_at=2024-01-15T10:30:00`
+- **日付/時刻**: `created_at=2024-01-15T10:30:00`, `published_on=2024-01-15`
 
 ::: warning FILTERには設定が必要
 `config.yaml` で `filters` に登録していないカラムは `FILTER` で使えません。行をインデックス対象に含めるかどうかを決める `required_filters` とは別の設定です。
@@ -320,7 +321,7 @@ MygramDBでは、設定ファイルで `filters` に登録したカラムだけ�
 
 ### 構文
 
-```
+```mygram
 SEARCH <table> <query> SORT <column> [ASC|DESC]
 ```
 
@@ -332,7 +333,7 @@ MygramDBでは `ORDER BY` 構文は使えません。検索結果の並び替え
 
 `SORT`が指定されていない場合、結果は**プライマリキーの降順**でソートされます（最新が最初）。
 
-```
+```mygram
 SEARCH threads golang
 -- 以下と同等: SEARCH threads golang SORT id DESC
 ```
@@ -340,13 +341,13 @@ SEARCH threads golang
 ### プライマリキーでソート
 
 **完全な構文:**
-```
+```mygram
 SEARCH threads golang SORT id ASC
 SEARCH threads golang SORT id DESC
 ```
 
 **省略記法（推奨）:**
-```
+```mygram
 SEARCH threads golang SORT ASC   -- プライマリキー昇順
 SEARCH threads golang SORT DESC  -- プライマリキー降順
 ```
@@ -355,14 +356,14 @@ SEARCH threads golang SORT DESC  -- プライマリキー降順
 
 インデックス化された任意のフィルタカラムでソート：
 
-```
+```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
 SEARCH posts database SORT score ASC LIMIT 20
 ```
 
 ### ブール演算クエリとの組み合わせ
 
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial SORT created_at DESC LIMIT 10
 SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT score ASC
 ```
@@ -397,12 +398,12 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT score ASC
 
 ### LIMIT - 最大結果数
 
-```
+```mygram
 SEARCH <table> <query> LIMIT <n>
 ```
 
 例：
-```
+```mygram
 SEARCH articles tech LIMIT 10
 ```
 
@@ -411,12 +412,12 @@ SEARCH articles tech LIMIT 10
 
 ### OFFSET - 結果のスキップ
 
-```
+```mygram
 SEARCH <table> <query> OFFSET <n>
 ```
 
 例：
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 20
 ```
 
@@ -425,17 +426,17 @@ SEARCH articles tech LIMIT 10 OFFSET 20
 ### ページネーションの例
 
 **ページ1（最初の10件）:**
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 0
 ```
 
 **ページ2（結果11-20）:**
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 10
 ```
 
 **ページ3（結果21-30）:**
-```
+```mygram
 SEARCH articles tech LIMIT 10 OFFSET 20
 ```
 
@@ -451,7 +452,7 @@ MygramDB は、検索語・AND/NOT 条件・FILTER 値を合計したクエリ�
 
 ### 複数のオプションを組み合わせた例
 
-```
+```mygram
 SEARCH threads (golang OR python) AND tutorial
   FILTER status = published
   SORT created_at DESC
@@ -484,7 +485,7 @@ BM25ランキング関数を使用して、関連度順に結果をソートし�
 
 ### 構文
 
-```
+```mygram
 SEARCH <table> <query> SORT _score [ASC|DESC]
 ```
 
@@ -501,7 +502,7 @@ BM25は以下に基づいて各ドキュメントの関連度スコアを計算�
 
 ### 例
 
-```
+```mygram
 SEARCH articles "機械学習" SORT _score DESC LIMIT 10
 SEARCH articles golang AND tutorial SORT _score LIMIT 20
 ```
@@ -517,7 +518,7 @@ memory:
 
 ### フィルタとの組み合わせ
 
-```
+```mygram
 SEARCH articles "データベース" SORT _score DESC FILTER category = tech LIMIT 10
 ```
 
@@ -533,7 +534,7 @@ SEARCH articles "データベース" SORT _score DESC FILTER category = tech LIM
 
 ### 構文
 
-```
+```mygram
 SEARCH <table> <query> HIGHLIGHT [TAG <open> <close>] [SNIPPET_LEN <n>] [MAX_FRAGMENTS <n>]
 ```
 
@@ -548,17 +549,17 @@ SEARCH <table> <query> HIGHLIGHT [TAG <open> <close>] [SNIPPET_LEN <n>] [MAX_FRA
 ### 例
 
 デフォルトのハイライト：
-```
+```mygram
 SEARCH articles "機械学習" HIGHLIGHT LIMIT 10
 ```
 
 カスタムタグ：
-```
+```mygram
 SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
 ```
 
 長いスニペットとより多くのフラグメント：
-```
+```mygram
 SEARCH articles "データベース" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 ```
 
@@ -568,7 +569,7 @@ SEARCH articles "データベース" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 L
 
 ### 他の句との組み合わせ
 
-```
+```mygram
 SEARCH articles "技術" HIGHLIGHT TAG <b> </b> SORT _score DESC FILTER status = 1 LIMIT 10
 ```
 
@@ -584,7 +585,7 @@ SEARCH articles "技術" HIGHLIGHT TAG <b> </b> SORT _score DESC FILTER status =
 
 ### 構文
 
-```
+```mygram
 SEARCH <table> <query> FUZZY [distance]
 ```
 
@@ -596,7 +597,7 @@ SEARCH <table> <query> FUZZY [distance]
 
 ### 例
 
-```
+```mygram
 SEARCH articles "まちがい" FUZZY LIMIT 10
 SEARCH articles "データベス" FUZZY 2 LIMIT 10
 ```
@@ -604,6 +605,8 @@ SEARCH articles "データベス" FUZZY 2 LIMIT 10
 ### パフォーマンス
 
 あいまい検索は、不要な距離計算を避けるため、長さの差で事前に候補を絞り込みます。性能を優先する場合は `FUZZY 1`（デフォルト）を使ってください。
+
+`FUZZY` に指定できる距離は `1` または `2` だけです。それ以外の値は明示的なクエリエラーになります。
 
 ---
 
@@ -614,37 +617,37 @@ SEARCH articles "データベス" FUZZY 2 LIMIT 10
 以下のクエリはエラーを返します：
 
 **空の括弧:**
-```
+```mygram
 SEARCH threads ()
 ERROR Invalid query: empty expression in parentheses
 ```
 
 **閉じられていない括弧:**
-```
+```mygram
 SEARCH threads (golang AND python
 ERROR Invalid query: unclosed parentheses
 ```
 
 **余分な閉じ括弧:**
-```
+```mygram
 SEARCH threads golang AND python)
 ERROR Invalid query: unexpected closing parenthesis
 ```
 
 **オペランドのない演算子:**
-```
+```mygram
 SEARCH threads AND
 ERROR Invalid query: operator without operands
 ```
 
 **末尾の演算子:**
-```
+```mygram
 SEARCH threads golang AND
 ERROR Invalid query: trailing operator
 ```
 
 **閉じられていない引用符:**
-```
+```mygram
 SEARCH threads "golang tutorial
 ERROR Invalid query: unclosed quote
 ```
@@ -652,13 +655,13 @@ ERROR Invalid query: unclosed quote
 ### 無効なフィルタ
 
 **存在しないテーブル:**
-```
+```mygram
 SEARCH nonexistent tech
 ERROR Table not found: nonexistent
 ```
 
 **無効なフィルタカラム:**
-```
+```mygram
 SEARCH articles tech FILTER invalid_column=1
 ERROR Filter column not found: invalid_column
 ```
@@ -666,7 +669,7 @@ ERROR Filter column not found: invalid_column
 ### 無効なソート
 
 **存在しないカラム:**
-```
+```mygram
 SEARCH articles tech SORT nonexistent DESC
 WARNING Column 'nonexistent' not found in documents, treating as NULL
 ```
@@ -677,9 +680,13 @@ WARNING Column 'nonexistent' not found in documents, treating as NULL
 
 ## パフォーマンスのヒント
 
+各`SEARCH`は決まったパイプラインで実行されます。クエリはASTに解析され、N-gram参照で候補ドキュメントが得られ、AND・NOT・FILTERが順に候補集合を絞り込み、最後にSORTとLIMIT/OFFSETが結果ページを確定します。以下の各ヒントはこのパイプラインのどこか一段階に対応しており、DEBUGコマンドも同じ名前の段階ごとに所要時間を報告します。
+
+<img src="/diagrams/query-pipeline.svg" alt="クエリはASTに解析され、N-gram参照で候補が得られ、AND積集合・NOT除外・FILTER適用の順に候補集合が絞り込まれ、LIMITがある場合は部分ソートが使われ、最後にOFFSETとLIMITが適用されて結果が返るまでの実行パイプラインを示す図" class="doc-diagram" />
+
 ### 1. 制約の強い用語を先に配置
 
-```
+```mygram
 -- 良い: 具体的な用語を先に
 SEARCH articles "machine learning" AND tutorial
 
@@ -689,7 +696,7 @@ SEARCH articles tutorial AND "machine learning"
 
 ### 2. 複雑な条件では括弧を使う
 
-```
+```mygram
 -- 明示的で読みやすい
 SEARCH threads (golang OR python) AND (web OR api)
 
@@ -699,7 +706,7 @@ SEARCH threads golang OR python AND web OR api
 
 ### 3. 先頭のNOT演算子を避ける
 
-```
+```mygram
 -- 良い: 肯定的な用語を先に
 SEARCH articles tech NOT old
 
@@ -711,7 +718,7 @@ SEARCH articles NOT old
 
 ### 4. フィルタとテキスト検索を組み合わせる
 
-```
+```mygram
 -- 良い: フィルタで早期に結果を絞り込む
 SEARCH articles tech FILTER category = ai FILTER status = 1
 
@@ -723,7 +730,7 @@ SEARCH articles tech AND ai AND published
 
 ### 5. 大規模結果セットにはLIMITを付ける
 
-```
+```mygram
 -- 良い: partial_sort最適化を使用
 SEARCH articles tech SORT created_at DESC LIMIT 10
 
@@ -733,7 +740,7 @@ SEARCH articles tech SORT created_at DESC
 
 ### 6. 深いページネーションを避ける
 
-```
+```mygram
 -- 効率的
 SEARCH articles tech LIMIT 10 OFFSET 0
 
@@ -749,12 +756,12 @@ SEARCH articles tech LIMIT 10 OFFSET 10000
 
 すべてのブール演算クエリ構文は`COUNT`でも使用できます：
 
-```
+```mygram
 COUNT <table> <query_expression> [FILTER ...]
 ```
 
 例：
-```
+```mygram
 COUNT threads (golang OR python) AND tutorial
 COUNT articles tech FILTER status = 1 FILTER category = ai
 COUNT posts database AND (mysql OR postgresql) NOT sqlite

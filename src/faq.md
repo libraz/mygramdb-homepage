@@ -99,7 +99,7 @@ Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTI
 
 N-gram tokenization is language-agnostic. Morphological analyzers (MeCab, kuromoji, jieba) require dictionaries, language detection, and version management. N-gram works uniformly across Latin, multibyte ideographic scripts, and mixed-script content without any per-language configuration.
 
-MygramDB uses a hybrid approach: bigrams (size 2) for ASCII/alphanumeric text and unigrams (size 1) for multibyte ideographic characters (e.g. CJK). Both sizes are configurable per table via `ngram_size` and `kanji_ngram_size`.
+MygramDB uses a hybrid approach: bigrams (size 2) for ASCII/alphanumeric text and unigrams (size 1) for multibyte ideographic characters (e.g. CJK). Both sizes are configurable per table via `ngram_size` and `kanji_ngram_size`. Since v1.8.0, the omitted `ngram_size` default is `2`.
 
 ### How are Roaring bitmaps used?
 
@@ -183,7 +183,7 @@ MygramDB monitors memory usage via health check endpoints but does not enforce t
 A custom text-based protocol over TCP (default port 11016), similar to Memcached. A separate REST/JSON HTTP API is also available on its own port (default 8080, disabled by default).
 
 TCP example:
-```
+```mygram
 SEARCH articles golang SORT created_at DESC LIMIT 10\r\n
 ```
 
@@ -209,7 +209,7 @@ MygramDB is designed to run inside a private network, behind a reverse proxy or 
 The building blocks are there. Health check endpoints are built in:
 
 - `GET /health/live` — Liveness probe (200 if process is running)
-- `GET /health/ready` — Readiness probe (503 during initial sync, 200 when ready)
+- `GET /health/ready` — Readiness probe (503 during dump load, table sync, or replication unavailability; 200 when ready)
 - `GET /health/detail` — Detailed status with uptime, index stats, memory
 
 Prometheus metrics are available at `GET /metrics`. The Docker image runs as a non-root user (UID 1000). The author runs MygramDB on Docker, not Kubernetes, so K8s-specific operational advice is limited.
@@ -255,7 +255,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.7.0 (released June 15, 2026). The 1.6 line added BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, V2 dumps, and MariaDB binlog replication. The 1.7 line adds database-qualified table identity, multi-database indexing, HTTP `/tables/{identity}/...` routes, HTTP FACET, boolean search parity, multi-table consistent snapshots, and GTID-coordinated dumps. The project has been used in production on a high-traffic service (details under NDA).
+Development started in November 2025. The current version is 1.8.0 (released July 3, 2026). The 1.6 line added BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, V2 dumps, and MariaDB binlog replication. The 1.7 line added database-qualified table identity, multi-database indexing, HTTP `/tables/{identity}/...` routes, HTTP FACET, boolean search parity, multi-table consistent snapshots, and GTID-coordinated dumps. The 1.8 line focuses on replication correctness, HTTP/query parity, and reliability hardening. The project has been used in production on a high-traffic service (details under NDA).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 

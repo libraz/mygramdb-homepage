@@ -43,25 +43,25 @@ Search for documents containing specified text.
 
 ### Syntax
 
-```
+```mygram
 SEARCH <db.table> <text> [OPTIONS]
 ```
 
 ### Basic Examples
 
 Simple search:
-```
+```mygram
 SEARCH app_db.articles hello
 ```
 
 With filters and pagination:
-```
+```mygram
 SEARCH app_db.articles tech FILTER status = 1 LIMIT 10
 ```
 
 ### Response
 
-```
+```mygram
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
@@ -75,19 +75,19 @@ Count documents matching search criteria (without returning IDs).
 
 ### Syntax
 
-```
+```mygram
 COUNT <db.table> <text> [OPTIONS]
 ```
 
 ### Example
 
-```
+```mygram
 COUNT app_db.articles tech AND AI FILTER status = 1
 ```
 
 ### Response
 
-```
+```mygram
 OK COUNT <number>
 ```
 
@@ -101,29 +101,29 @@ Retrieve a document by primary key.
 
 ### Syntax
 
-```
+```mygram
 GET <db.table> <primary_key>
 ```
 
 ### Example
 
-```
+```mygram
 GET app_db.articles 12345
 ```
 
 ### Response
 
-```
+```mygram
 OK DOC <primary_key> <filter1=value1> <filter2=value2> ...
 ```
 
 Example:
-```
+```mygram
 OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
 ```
 
 Not found:
-```
+```mygram
 ERROR Document not found
 ```
 
@@ -135,7 +135,7 @@ Get comprehensive server information and statistics (Redis-style format).
 
 ### Syntax
 
-```
+```mygram
 INFO
 ```
 
@@ -143,7 +143,7 @@ INFO
 
 Returns server information in Redis-style key-value format with multiple sections:
 
-```
+```mygram
 OK INFO
 
 # Server
@@ -214,7 +214,7 @@ The CONFIG command family provides runtime configuration help, inspection, and v
 Display help for configuration options.
 
 **Syntax:**
-```
+```mygram
 CONFIG HELP [path]
 ```
 
@@ -224,12 +224,12 @@ CONFIG HELP [path]
 **Examples:**
 
 Show all top-level configuration sections:
-```
+```mygram
 CONFIG HELP
 ```
 
 Response:
-```
+```mygram
 +OK
 Available configuration sections:
   mysql        - MySQL connection settings
@@ -247,12 +247,12 @@ Use "CONFIG HELP <section>" for detailed information.
 ```
 
 Show help for a specific section:
-```
+```mygram
 CONFIG HELP mysql
 ```
 
 Response:
-```
+```mygram
 +OK
 mysql - MySQL connection settings
 
@@ -279,12 +279,12 @@ Properties:
 ```
 
 Show help for a specific property:
-```
+```mygram
 CONFIG HELP mysql.port
 ```
 
 Response:
-```
+```mygram
 +OK
 mysql.port
 
@@ -301,7 +301,7 @@ Description: MySQL server port
 Display current configuration values. Sensitive fields (passwords, secrets) are masked with `***`.
 
 **Syntax:**
-```
+```mygram
 CONFIG SHOW [path]
 ```
 
@@ -311,12 +311,12 @@ CONFIG SHOW [path]
 **Examples:**
 
 Show entire current configuration:
-```
+```mygram
 CONFIG SHOW
 ```
 
 Response:
-```
+```mygram
 +OK
 mysql:
   host: "127.0.0.1"
@@ -339,17 +339,17 @@ replication:
 ```
 
 Show specific section:
-```
+```mygram
 CONFIG SHOW mysql
 ```
 
 Show specific property:
-```
+```mygram
 CONFIG SHOW mysql.port
 ```
 
 Response:
-```
+```mygram
 +OK
 3306
 ```
@@ -361,7 +361,7 @@ Response:
 Verify a configuration file without loading it.
 
 **Syntax:**
-```
+```mygram
 CONFIG VERIFY <filepath>
 ```
 
@@ -371,12 +371,12 @@ CONFIG VERIFY <filepath>
 **Examples:**
 
 Verify valid config:
-```
+```mygram
 CONFIG VERIFY /etc/mygramdb/config.yaml
 ```
 
 Response (success):
-```
+```mygram
 +OK
 Configuration is valid
   Tables: 2 (articles, products)
@@ -384,12 +384,12 @@ Configuration is valid
 ```
 
 Verify invalid config:
-```
+```mygram
 CONFIG VERIFY /tmp/invalid.yaml
 ```
 
 Response (error):
-```
+```mygram
 -ERR Configuration validation failed:
   - mysql.port: value 99999 exceeds maximum 65535
   - tables[0].name: missing required field
@@ -406,18 +406,18 @@ The DUMP command family provides unified snapshot management with integrity veri
 Save complete snapshot to single binary file (`.dmp`). This command runs **asynchronously** and returns immediately.
 
 **Syntax:**
-```
+```mygram
 DUMP SAVE [<filepath>] [--with-stats]
 ```
 
 **Response:**
-```
+```mygram
 OK DUMP_STARTED <filepath>
 Use DUMP STATUS to monitor progress
 ```
 
 **Example:**
-```
+```mygram
 DUMP SAVE /backup/mygramdb.dmp --with-stats
 ```
 
@@ -428,12 +428,12 @@ Use `DUMP STATUS` to monitor progress and check completion.
 Load snapshot from binary file.
 
 **Syntax:**
-```
+```mygram
 DUMP LOAD [<filepath>]
 ```
 
 **Example:**
-```
+```mygram
 DUMP LOAD /backup/mygramdb.dmp
 ```
 
@@ -442,12 +442,12 @@ DUMP LOAD /backup/mygramdb.dmp
 Verify snapshot file integrity without loading data.
 
 **Syntax:**
-```
+```mygram
 DUMP VERIFY [<filepath>]
 ```
 
 **Example:**
-```
+```mygram
 DUMP VERIFY /backup/mygramdb.dmp
 ```
 
@@ -456,12 +456,12 @@ DUMP VERIFY /backup/mygramdb.dmp
 Display snapshot file metadata (version, GTID, tables, size, flags).
 
 **Syntax:**
-```
+```mygram
 DUMP INFO [<filepath>]
 ```
 
 **Example:**
-```
+```mygram
 DUMP INFO /backup/mygramdb.dmp
 ```
 
@@ -470,12 +470,12 @@ DUMP INFO /backup/mygramdb.dmp
 Monitor the progress of async dump operations (DUMP SAVE).
 
 **Syntax:**
-```
+```mygram
 DUMP STATUS
 ```
 
 **Response:**
-```
+```mygram
 OK DUMP_STATUS
 save_in_progress: <true|false>
 load_in_progress: <true|false>
@@ -499,7 +499,7 @@ END
 - `FAILED`: Last dump operation failed
 
 **Example (during save):**
-```
+```mygram
 OK DUMP_STATUS
 save_in_progress: true
 load_in_progress: false
@@ -523,25 +523,25 @@ Aggregate distinct values of a filter column with document counts.
 
 ### Syntax
 
-```
+```mygram
 FACET <table> <column> [search_text] [AND <term>] [NOT <term>] [FILTER <col> <op> <value>] [LIMIT <n>]
 ```
 
 ### Examples
 
 All values of status column:
-```
+```mygram
 FACET articles status
 ```
 
 Values scoped to search results:
-```
+```mygram
 FACET articles category "machine learning" FILTER status = 1 LIMIT 10
 ```
 
 ### Response
 
-```
+```mygram
 OK FACET <num_values>
 <value1>	<count1>
 <value2>	<count2>
@@ -558,7 +558,7 @@ Get current replication status.
 
 ### Syntax
 
-```
+```mygram
 REPLICATION STATUS
 ```
 
@@ -566,7 +566,7 @@ REPLICATION STATUS
 
 Multi-line key-value format:
 
-```
+```mygram
 OK REPLICATION
 status: <running|stopped|not_configured>
 current_gtid: <current_gtid>
@@ -584,7 +584,7 @@ END
 - **queue_size**: Pending events in queue (only shown when running)
 
 Example (running):
-```
+```mygram
 OK REPLICATION
 status: running
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
@@ -594,7 +594,7 @@ END
 ```
 
 Example (stopped):
-```
+```mygram
 OK REPLICATION
 status: stopped
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
@@ -610,13 +610,13 @@ Stop binlog replication (index becomes read-only).
 
 ### Syntax
 
-```
+```mygram
 REPLICATION STOP
 ```
 
 ### Response
 
-```
+```mygram
 OK REPLICATION_STOPPED
 ```
 
@@ -628,13 +628,13 @@ Resume binlog replication.
 
 ### Syntax
 
-```
+```mygram
 REPLICATION START
 ```
 
 ### Response
 
-```
+```mygram
 OK REPLICATION_STARTED
 ```
 
@@ -646,7 +646,7 @@ Manually trigger snapshot synchronization from MySQL to MygramDB for a specific 
 
 ### Syntax
 
-```
+```mygram
 SYNC <table_name>
 ```
 
@@ -656,13 +656,13 @@ SYNC <table_name>
 
 ### Response (Success)
 
-```
+```mygram
 OK SYNC STARTED table=<table_name> job_id=1
 ```
 
 ### Response (Error)
 
-```
+```mygram
 ERROR SYNC already in progress for table '<table_name>'
 ERROR Memory critically low. Cannot start SYNC. Check system memory.
 ERROR Table '<table_name>' not found in configuration
@@ -700,29 +700,29 @@ Check the progress and status of SYNC operations.
 
 ### Syntax
 
-```
+```mygram
 SYNC STATUS
 ```
 
 ### Response Examples
 
 **In Progress:**
-```
+```mygram
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
 ```
 
 **Completed:**
-```
+```mygram
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
 ```
 
 **Failed:**
-```
+```mygram
 table=articles status=FAILED rows=5000 error="MySQL connection lost"
 ```
 
 **Idle:**
-```
+```mygram
 status=IDLE message="No sync operation performed"
 ```
 
@@ -763,7 +763,7 @@ Optimize index posting lists (convert Delta Encoding to Roaring Bitmap based on 
 
 ### Syntax
 
-```
+```mygram
 OPTIMIZE
 ```
 
@@ -806,29 +806,29 @@ OPTIMIZE
 ### Response
 
 **Success:**
-```
+```mygram
 OK OPTIMIZED terms=<total> delta=<count> roaring=<count> memory=<size>
 ```
 
 Example:
-```
+```mygram
 OK OPTIMIZED terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
 ```
 
 **Errors:**
 
 Already optimizing:
-```
+```mygram
 ERROR Another OPTIMIZE operation is already in progress
 ```
 
 Memory critically low:
-```
+```mygram
 ERROR Memory critically low. Cannot start optimization: available=1.50 GB total=8.00 GB
 ```
 
 Insufficient memory:
-```
+```mygram
 ERROR Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
 ```
 
@@ -840,7 +840,7 @@ Enable or disable debug mode for the current connection to see detailed query ex
 
 ### Syntax
 
-```
+```mygram
 DEBUG ON
 DEBUG OFF
 ```
@@ -855,13 +855,13 @@ DEBUG OFF
 
 ### Response
 
-```
+```mygram
 OK DEBUG_ON
 ```
 
 or
 
-```
+```mygram
 OK DEBUG_OFF
 ```
 
@@ -869,7 +869,7 @@ OK DEBUG_OFF
 
 When debug mode is enabled, SEARCH and COUNT commands return additional debug information:
 
-```
+```mygram
 OK RESULTS <count> <id1> <id2> ...
 
 # DEBUG
@@ -912,12 +912,12 @@ offset: <value> [(default)]
 
 All errors follow this format:
 
-```
+```mygram
 ERROR <error_message>
 ```
 
 Examples:
-```
+```mygram
 ERROR Unknown command
 ERROR Table not found: products
 ERROR Invalid GTID format

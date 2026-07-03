@@ -7,6 +7,10 @@
 - GTIDが有効なMySQL 8.4/9.x、またはMariaDB 10.6+/11.x
 - RHEL/AlmaLinux/Rocky Linux 9、Ubuntu 22.04/24.04、またはDocker
 
+MygramDBは既存のデータベースの隣に配置するサイドカーです。アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBはbinlogを追従して独自の検索インデックスを構築し、検索クエリのみがMygramDBへ送られます。
+
+<img src="/diagrams/deployment-topology.svg" alt="アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBがGTID binlogストリームを追従してインメモリ検索インデックスを維持し、検索クエリのみをTCP 11016またはHTTP 8080でMygramDBに送る構成図" class="doc-diagram" />
+
 ::: info 用語補足
 **GTID** はMySQLの変更履歴に付く一意な番号です。MygramDBはGTIDを使って、再起動後も「どこまでMySQLの変更を読んだか」を正確に引き継ぎます。
 :::
@@ -88,7 +92,7 @@ mygram-cli -h localhost -p 11016
 
 接続後、まず初回同期を実行します。`SYNC` はMySQLの既存行を読み込み、検索インデックスを作成します。
 
-```
+```mygram
 mygram> SYNC articles
 OK SYNC STARTED articles
 
@@ -99,7 +103,7 @@ OK SYNC STATUS
 
 同期が完了したら検索クエリを実行します。
 
-```
+```mygram
 mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
@@ -119,4 +123,5 @@ OK RESULTS 3 101 205 387
 - [設定リファレンス（詳細）](/ja/docs/configuration)
 - [MySQLレプリケーション](/ja/docs/replication)
 - [運用ガイド](/ja/docs/operations)
+- [v1.8アップグレードノート](/ja/docs/upgrade-v1.8)
 - [v1.7移行ガイド](/ja/docs/migration-v1.7)

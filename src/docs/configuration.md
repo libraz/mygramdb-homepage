@@ -113,6 +113,8 @@ In a single-database configuration, bare references such as `SEARCH articles hel
 
 `required_filters` decide which rows are indexed. Rows that do not match these conditions are omitted from the index; during replication, rows moving out of the condition are removed and rows moving in are added.
 
+<img src="/diagrams/filter-indexing.svg" alt="required_filters decide whether MySQL rows enter the index, while search-time filters narrow already indexed rows at query time." class="doc-diagram" />
+
 ```yaml
 tables:
   - name: "articles"
@@ -143,7 +145,7 @@ filters:
     bucket: "day"
 ```
 
-Supported filter types include signed and unsigned integer sizes, `float`, `double`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. `bucket` is available for datetime-like values with `minute`, `hour`, or `day`.
+Supported filter types include signed and unsigned integer sizes, `float`, `double`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. `bucket` is available for datetime-like values with `minute`, `hour`, or `day`. `ENUM` and `SET` columns cannot be configured as filters because binlog row events do not carry the labels needed to keep initial load and replication semantics identical.
 
 ## N-gram And Posting Lists
 
@@ -159,7 +161,7 @@ tables:
       use_roaring: "auto"
 ```
 
-`ngram_size` applies to ASCII/alphanumeric text. `kanji_ngram_size` applies to CJK characters; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
+`ngram_size` applies to ASCII/alphanumeric text. In v1.8.0 and later, the omitted default is `2`; set `ngram_size: 1` explicitly only if you need the old unigram behavior. `kanji_ngram_size` applies to CJK characters; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
 
 `freq_bits` can be `0`, `4`, or `8`. BM25 scoring and highlighting use stored normalized text when `memory.verify_text` is enabled; they do not require `freq_bits`.
 
@@ -198,7 +200,7 @@ replication:
   queue_size: 10000
 ```
 
-`auto_initial_snapshot` defaults to `false`; start the first load explicitly with `SYNC <table>` for each table you want to load. This avoids accidentally loading large tables on startup. Set it to `true` only when startup-time loading is intentional.
+`auto_initial_snapshot` defaults to `false`; start the first load explicitly with `SYNC <table>` for each table you want to load. This avoids accidentally loading large tables on startup. Set it to `true` only when startup-time loading is intentional. In v1.8.0 and later, `auto_initial_snapshot: true` requires `start_from: "snapshot"` for both single-table and multi-table deployments.
 
 `start_from` accepts:
 
@@ -291,7 +293,7 @@ dump:
   retain: 3
 ```
 
-`interval_sec: 0` disables automatic dumps. Manual `DUMP SAVE` uses `default_filename` unless a path is provided. In v1.7.0, dump metadata preserves each table's database so multi-database identities round-trip correctly.
+`interval_sec: 0` disables automatic dumps. Manual `DUMP SAVE` uses `default_filename` unless a path is provided. In v1.7.0 and later, dump metadata preserves each table's database so multi-database identities round-trip correctly.
 
 ## Network Security
 

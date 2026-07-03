@@ -11,6 +11,10 @@ head:
 
 MygramDB runs as a sidecar process alongside MySQL (8.4/9.x) or MariaDB (10.6+/11.x). It reads the upstream server's binary log to build and maintain an in-memory full-text index, then serves search queries over TCP and HTTP. The server flavor is auto-detected from `SELECT VERSION()`, so the same binary and config work with either.
 
+<img src="/diagrams/system-flow.svg" alt="MySQL remains the source of truth while MygramDB reads snapshots and binlog events, maintains an in-memory index, and serves search traffic over TCP or HTTP." class="doc-diagram" />
+
+The important boundary is ownership: MySQL/MariaDB remains the durable source of truth for writes and normal SQL. MygramDB keeps a derived search index that can be rebuilt from a snapshot plus binlog replay.
+
 ## System Overview
 
 ```mermaid

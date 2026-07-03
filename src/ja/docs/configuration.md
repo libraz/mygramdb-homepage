@@ -137,6 +137,8 @@ tables:
 
 `required_filters` はインデックス対象行を決めます。条件に一致しない行はインデックス化されません。レプリケーション中、条件から外れた行は削除され、条件に入った行は追加されます。
 
+<img src="/diagrams/filter-indexing.svg" alt="required_filters はMySQLの行をインデックスに入れるかを決め、検索時の filters はインデックス済みの行をクエリ時に絞り込むことを示す図" class="doc-diagram" />
+
 ::: warning `required_filters` と `filters` の違い
 `required_filters` は「そもそもインデックスに入れるか」を決めます。`filters` は「検索時に絞り込める列」を登録します。たとえば論理削除済みレコードを最初から検索対象外にしたい場合は `required_filters`、検索画面でステータス別に絞りたい場合は `filters` を使います。
 :::
@@ -171,7 +173,7 @@ filters:
     bucket: "day"
 ```
 
-フィルタ型は符号あり/なし整数、`float`、`double`、`string`、`varchar`、`text`、`datetime`、`date`、`timestamp`、`time` に対応します。日時系には `minute`、`hour`、`day` の `bucket` を指定できます。
+フィルタ型は符号あり/なし整数、`float`、`double`、`string`、`varchar`、`text`、`datetime`、`date`、`timestamp`、`time` に対応します。日時系には `minute`、`hour`、`day` の `bucket` を指定できます。`ENUM` と `SET` はフィルタ型として設定できません。binlog行イベントだけではラベルを復元できず、初期ロードとレプリケーションで意味がずれる可能性があるためです。
 
 ## N-gram とポスティングリスト
 
@@ -187,7 +189,7 @@ tables:
       use_roaring: "auto"
 ```
 
-`ngram_size` はASCII/英数字に適用されます。`kanji_ngram_size` はCJK文字に適用され、`0` の場合は `ngram_size` を使います。`cross_boundary_ngrams` は `字A` のような文字種境界をまたぐN-gramを生成するかを制御します。
+`ngram_size` はASCII/英数字に適用されます。v1.8.0以降、省略時のデフォルトは `2` です。旧来のユニグラム挙動が必要な場合だけ `ngram_size: 1` を明示してください。`kanji_ngram_size` はCJK文字に適用され、`0` の場合は `ngram_size` を使います。`cross_boundary_ngrams` は `字A` のような文字種境界をまたぐN-gramを生成するかを制御します。
 
 ::: info 用語補足
 **N-gram** は文字列を小さな断片に分けたものです。日本語のように単語の区切りが空白で分からない言語でも、文字単位・2文字単位で分けることで辞書なしに検索できます。
@@ -234,7 +236,7 @@ replication:
   queue_size: 10000
 ```
 
-`auto_initial_snapshot` のデフォルトは `false` です。初回ロードは、読み込みたい各テーブルに対して `SYNC <table>` を明示的に実行します。起動時に大きなテーブルを意図せず読み込むことを避けるためです。起動時ロードが必要な場合のみ `true` にしてください。
+`auto_initial_snapshot` のデフォルトは `false` です。初回ロードは、読み込みたい各テーブルに対して `SYNC <table>` を明示的に実行します。起動時に大きなテーブルを意図せず読み込むことを避けるためです。起動時ロードが必要な場合のみ `true` にしてください。v1.8.0以降、`auto_initial_snapshot: true` を使う場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` が必要です。
 
 `start_from` は次を指定できます。
 
@@ -335,7 +337,7 @@ dump:
   retain: 3
 ```
 
-`interval_sec: 0` は自動ダンプを無効化します。手動の `DUMP SAVE` はパスを指定しない場合 `default_filename` を使います。v1.7.0 では、ダンプメタデータに各テーブルのDB名が保存されるため、複数DBの識別子を正しく復元できます。
+`interval_sec: 0` は自動ダンプを無効化します。手動の `DUMP SAVE` はパスを指定しない場合 `default_filename` を使います。v1.7.0以降、ダンプメタデータに各テーブルのDB名が保存されるため、複数DBの識別子を正しく復元できます。
 
 ::: warning ダンプ保存先は永続化する
 DockerやKubernetesで運用する場合、`dump.dir` は永続ボリュームに置いてください。コンテナ内の一時的なファイルシステムに保存すると、再作成時にダンプが失われます。

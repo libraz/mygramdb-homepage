@@ -80,7 +80,7 @@ Content-Type: application/json
 
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| `q` | string | はい | AND/NOT演算子を使用した検索クエリ |
+| `q` | string | はい | ブール演算子を含む検索テキスト。検索オプションはJSONフィールドで指定 |
 | `filters` | object | いいえ | フィルタ条件（カラム: 値のペア） |
 | `limit` | integer | いいえ | 返す最大結果数（デフォルト: 100、最大: 1000） |
 | `offset` | integer | いいえ | スキップする結果数（デフォルト: 0） |
@@ -100,6 +100,8 @@ HTTP APIでは `LIMIT`、`FILTER`、`SORT` などを `q` 文字列に混ぜず�
 - **OR演算子**: `"(mysql OR postgresql) AND performance"`
 - **NOT演算子**: `"news NOT sports"`
 - **組み合わせ**: `"tech AND AI NOT old"`
+
+`q` は制御句の差し込みには使われません。`limit`、`offset`、`sort`、`filters`、`highlight`、`fuzzy` はJSONフィールドで指定してください。`q` 内の `LIMIT` や `SORT` のような文字列は、検索テキストまたはブールクエリのトークンとして扱われます。
 
 **レスポンス (200 OK):**
 
@@ -524,7 +526,7 @@ GET /health HTTP/1.1
 
 ### GET /health/ready
 
-トラフィック制御用のレディネスプローブです。検索トラフィックを受け付けられる場合のみ `200 OK` を返します。DUMP LOAD 中、または設定済みレプリケーションが利用不可の場合は `503 Service Unavailable` を返します。
+トラフィック制御用のレディネスプローブです。検索トラフィックを受け付けられる場合のみ `200 OK` を返します。DUMP LOAD 中、テーブル同期中、または設定済みレプリケーションが利用不可の場合は `503 Service Unavailable` を返します。v1.8.0以降、テーブル読み取りルート（search、count、facet、ドキュメントGET）も対象テーブルの同期中は `503` を返します。
 
 ::: tip live と ready の使い分け
 Kubernetesでは `/health/live` をLiveness Probe、`/health/ready` をReadiness Probeに使ってください。`live` は「プロセスを再起動すべきか」、`ready` は「検索トラフィックを流してよいか」を見るためのものです。
@@ -720,7 +722,7 @@ for doc in data['results']:
 | 400 | 不正なリクエスト（無効な入力） |
 | 404 | 見つかりません（ドキュメントが存在しない） |
 | 500 | 内部サーバーエラー |
-| 503 | サービス利用不可（機能が有効でない） |
+| 503 | サービス利用不可、機能無効、レプリケーション利用不可、またはテーブル同期中 |
 
 ## 監視
 

@@ -43,7 +43,7 @@ MygramDBのダンプは、MygramDBを速く復旧するためのファイルで�
 現在のMygramDBの検索状態をスナップショットファイルに保存します。
 
 **構文:**
-```
+```mygram
 DUMP SAVE <filepath> [WITH STATISTICS]
 ```
 
@@ -52,7 +52,7 @@ DUMP SAVE <filepath> [WITH STATISTICS]
 - `WITH STATISTICS`（オプション）: パフォーマンス統計情報をスナップショットに含める
 
 **例:**
-```sql
+```mygram
 -- 基本的なスナップショット
 DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
 
@@ -61,7 +61,7 @@ DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp WITH STATISTICS
 ```
 
 **レスポンス:**
-```
+```mygram
 OK SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
 tables: 2
 size: 1234567 bytes
@@ -73,7 +73,7 @@ gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 スナップショットファイルを読み込み、MygramDBの検索状態を復元します。
 
 **構文:**
-```
+```mygram
 DUMP LOAD <filepath>
 ```
 
@@ -81,12 +81,12 @@ DUMP LOAD <filepath>
 - `<filepath>`: 読み込むスナップショットファイルのパス
 
 **例:**
-```sql
+```mygram
 DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **レスポンス:**
-```
+```mygram
 OK LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
 tables: 2
 documents: 10000
@@ -107,7 +107,7 @@ gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 スナップショットファイルを読み込まずに整合性を検証します。
 
 **構文:**
-```
+```mygram
 DUMP VERIFY <filepath>
 ```
 
@@ -115,12 +115,12 @@ DUMP VERIFY <filepath>
 - `<filepath>`: 検証するスナップショットファイルのパス
 
 **例:**
-```sql
+```mygram
 DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **レスポンス（成功）:**
-```
+```mygram
 OK VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
 status: valid
 crc: verified
@@ -128,7 +128,7 @@ size: verified
 ```
 
 **レスポンス（失敗）:**
-```
+```mygram
 ERROR CRC mismatch: file may be corrupted
 expected: 0x12345678
 actual: 0x87654321
@@ -139,7 +139,7 @@ actual: 0x87654321
 スナップショットファイルを読み込まずにメタデータを表示します。
 
 **構文:**
-```
+```mygram
 DUMP INFO <filepath>
 ```
 
@@ -147,12 +147,12 @@ DUMP INFO <filepath>
 - `<filepath>`: スナップショットファイルのパス
 
 **例:**
-```sql
+```mygram
 DUMP INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **レスポンス:**
-```
+```mygram
 OK INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 version: 1
 gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
@@ -186,7 +186,7 @@ timestamp: 1672531200 (2023-01-01 00:00:00 UTC)
 
 読み込み前に必ずスナップショットの整合性を検証してください：
 
-```sql
+```mygram
 -- 1. 整合性を検証
 DUMP VERIFY mygramdb.dmp
 
@@ -203,7 +203,7 @@ DUMP LOAD mygramdb.dmp
 
 CRC検証が失敗した場合、スナップショットファイルが破損しています：
 
-```
+```mygram
 ERROR CRC32 mismatch: expected 0x12345678, got 0x87654321 (file may be corrupted)
 ```
 
@@ -216,7 +216,7 @@ ERROR CRC32 mismatch: expected 0x12345678, got 0x87654321 (file may be corrupted
 
 ファイルサイズが期待値と一致しない場合：
 
-```
+```mygram
 ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be truncated or corrupted)
 ```
 
@@ -229,7 +229,7 @@ ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be
 
 スナップショットのバージョンが新しすぎる場合：
 
-```
+```mygram
 ERROR Snapshot file version 2 is newer than supported version 1
 ```
 
@@ -380,7 +380,7 @@ dump:
 
 **例:**
 
-```
+```mygram
 # 1. サーバーがGTID 1-100でクラッシュ
 # 2. MygramDBを再起動
 # 3. GTID 1-80のスナップショットを検証して読み込み

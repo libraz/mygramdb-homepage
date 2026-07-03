@@ -198,7 +198,7 @@ tables:
 ```
 
 検索対象を早い段階で絞り込み、結果セットを小さくします。
-```
+```mygram
 SEARCH articles tech FILTER status=1 AND category_id=5 LIMIT 100
 ```
 
@@ -217,7 +217,7 @@ SEARCH articles tech FILTER status=1 AND category_id=5 LIMIT 100
 
 定期的に実行して転置リストのストレージを最適化:
 
-```
+```mygram
 OPTIMIZE
 ```
 
@@ -255,7 +255,7 @@ graph TD
 
 `INFO` コマンドで主要メトリクスを監視します。
 
-```
+```mygram
 INFO
 ```
 
@@ -270,7 +270,7 @@ INFO
 
 `DUMP SAVE` コマンドでスナップショットを作成:
 
-```
+```mygram
 DUMP SAVE /path/to/snapshot.dmp
 ```
 
@@ -285,19 +285,19 @@ DUMP SAVE /path/to/snapshot.dmp
 ### クエリが期待より遅い
 
 1. **インデックスが最適化されているか確認:**
-   ```
+   ```mygram
    OPTIMIZE
    ```
 
 2. **メモリ使用量を確認:**
-   ```
+   ```mygram
    INFO
    ```
    `index_size`とプロセスRSSを確認してください。`hard_limit_mb`は予約済みで、
    現時点ではプロセスメモリ上限を強制しません。
 
 3. **デバッグモードを有効化:**
-   ```
+   ```mygram
    DEBUG ON
    SEARCH table term LIMIT 100
    ```
@@ -306,7 +306,7 @@ DUMP SAVE /path/to/snapshot.dmp
 ### 高メモリ使用量
 
 1. **OPTIMIZE を実行:**
-   ```
+   ```mygram
    OPTIMIZE
    ```
    密な転置リストを Roaring ビットマップに変換（10-30%削減）。

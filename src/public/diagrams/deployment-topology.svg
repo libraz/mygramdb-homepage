@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="400" viewBox="0 0 1040 400" role="img" aria-labelledby="title desc">
+  <title id="title">Where MygramDB sits: sidecar search topology</title>
+  <desc id="desc">The application keeps writing to MySQL or MariaDB unchanged while MygramDB runs alongside as an in-memory search replica fed by the GTID binlog and an initial SYNC snapshot, and the application routes only its search queries to MygramDB.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg{fill:#f8fafc}
+      .app{fill:#fff7ed;stroke:#c2410c;stroke-width:2}
+      .mysql{fill:#e0f2fe;stroke:#0369a1;stroke-width:2}
+      .mygram{fill:#dbeafe;stroke:#1d4ed8;stroke-width:2}
+      .title{font:700 20px system-ui,-apple-system,Segoe UI,sans-serif;fill:#172033}
+      .text{font:500 15px system-ui,-apple-system,Segoe UI,sans-serif;fill:#334155}
+      .small{font:500 13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#64748b}
+      .chip{font:500 13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#334155}
+      .line{fill:none;stroke:#334155;stroke-width:3;marker-end:url(#arrow)}
+      .dash{fill:none;stroke:#334155;stroke-width:3;stroke-dasharray:8 8;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect class="bg" width="1040" height="400" rx="18"/>
+
+  <!-- Application panel -->
+  <rect class="app" x="40" y="125" width="200" height="150" rx="10"/>
+  <text class="title" x="140" y="192" text-anchor="middle">Application</text>
+  <text class="small" x="140" y="224" text-anchor="middle">unchanged code path</text>
+
+  <!-- MySQL / MariaDB panel -->
+  <rect class="mysql" x="330" y="110" width="240" height="190" rx="10"/>
+  <text class="title" x="450" y="180" text-anchor="middle">MySQL / MariaDB</text>
+  <path d="M375 225 h150 a16 16 0 0 1 0 32 h-150 a16 16 0 0 1 0-32z" fill="#bae6fd" stroke="#0369a1" stroke-width="2"/>
+  <text class="small" x="450" y="246" text-anchor="middle">source of truth</text>
+
+  <!-- MygramDB panel -->
+  <rect class="mygram" x="670" y="80" width="330" height="250" rx="12"/>
+  <text class="title" x="835" y="132" text-anchor="middle">MygramDB</text>
+  <text class="text" x="835" y="178" text-anchor="middle">in-memory n-gram index</text>
+  <text class="text" x="835" y="208" text-anchor="middle">BM25 · filters · facets</text>
+  <path d="M737 261 h196 a17 17 0 0 1 0 34 h-196 a17 17 0 0 1 0-34z" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="2"/>
+  <text class="small" x="835" y="283" text-anchor="middle">TCP 11016 / HTTP 8080</text>
+
+  <!-- Application -> MySQL: writes -->
+  <path class="line" d="M240 200 h90"/>
+  <text class="small" x="285" y="188" text-anchor="middle">writes (unchanged)</text>
+
+  <!-- MySQL -> MygramDB: GTID binlog stream -->
+  <path class="line" d="M570 165 h100"/>
+  <text class="small" x="620" y="150" text-anchor="middle">GTID binlog stream</text>
+
+  <!-- MySQL -> MygramDB: initial SYNC snapshot -->
+  <path class="dash" d="M570 255 h100"/>
+  <text class="small" x="620" y="278" text-anchor="middle">initial SYNC snapshot</text>
+
+  <!-- Application -> MygramDB: search queries -->
+  <path class="line" d="M175 125 C 330 55, 610 55, 745 80"/>
+  <text class="small" x="395" y="34" text-anchor="middle">search queries</text>
+  <path d="M500 18 h120 a13 13 0 0 1 0 26 h-120 a13 13 0 0 1 0-26z" fill="#f1f5f9" stroke="#475569" stroke-width="2"/>
+  <text class="chip" x="560" y="35" text-anchor="middle">0.08–0.42 ms</text>
+
+  <text class="small" x="520" y="380" text-anchor="middle">No write-path changes — MygramDB is a read-only search sidecar, not a second datastore.</text>
+</svg>

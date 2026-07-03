@@ -119,6 +119,8 @@ replication:
   start_from: "snapshot"
 ```
 
+v1.8.0以降、起動時の自動スナップショットを有効にする場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` が必要です。
+
 ```bash
 # テーブルのスナップショット同期を開始
 mygram-cli SYNC articles
@@ -146,6 +148,10 @@ v1.7.0以降、各テーブルは `<database>.<table>` の有効識別子を持�
 replication:
   start_from: "snapshot"
 ```
+
+下の図は、この保証がトランザクション境界をまたいでどう成り立つかを示しています。スナップショットトランザクションが開始すると同時に `gtid_executed` が取得され、その凍結されたビューの中だけでテーブルを読み取る間も新規書き込みはbinlogに蓄積され続け、スナップショット完了後はまさに取得したそのGTIDからbinlogストリーミングが再開されます。
+
+<img src="/diagrams/gtid-snapshot-handoff.svg" alt="MygramDBがコンシステントスナップショットのトランザクション開始時点でgtid_executedを取得し、その凍結ビュー内でテーブルを読み取る間に新規書き込みはbinlogに蓄積され、取得したGTIDのちょうど次からbinlogストリーミングを開始することでトランザクションの欠落も二重適用も起きないことを示すタイムライン図" class="doc-diagram" />
 
 **動作:**
 - データ一貫性のため `START TRANSACTION WITH CONSISTENT SNAPSHOT` を使用

@@ -41,7 +41,7 @@ docker run -d \
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.7.0`
+- `ghcr.io/libraz/mygram-db:1.8.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
@@ -160,4 +160,5 @@ MygramDBはセキュリティのため**root権限での実行を拒否**しま�
 
 - [Dockerデプロイ](/ja/docs/docker-deployment)
 - [運用ガイド](/ja/docs/operations)
+- [v1.8アップグレードノート](/ja/docs/upgrade-v1.8)
 - [v1.7移行ガイド](/ja/docs/migration-v1.7)

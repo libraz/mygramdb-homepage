@@ -20,14 +20,14 @@ mygram-cli -h localhost -p 11016
 
 ## 基本検索
 
-```
+```mygram
 mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
 単一DB構成では `articles` はそのDB内のテーブルとして解決されます。複数DB構成では `<database>.<table>` 形式で指定してください。
 
-```
+```mygram
 mygram> SEARCH app_db.articles hello world
 ```
 
@@ -39,19 +39,19 @@ mygram> SEARCH app_db.articles hello world
 
 ### AND - すべての語句を含む
 
-```
+```mygram
 mygram> SEARCH articles golang AND tutorial
 ```
 
 ### OR - いずれかの語句を含む
 
-```
+```mygram
 mygram> SEARCH articles golang OR python OR rust
 ```
 
 ### NOT - 語句を除外
 
-```
+```mygram
 mygram> SEARCH articles tutorial NOT beginner
 ```
 
@@ -59,7 +59,7 @@ mygram> SEARCH articles tutorial NOT beginner
 
 ### 組み合わせ
 
-```
+```mygram
 mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
 ```
 
@@ -67,14 +67,14 @@ mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
 
 引用符で囲むと、語句の並びを保ったフレーズとして検索します。
 
-```
+```mygram
 mygram> SEARCH articles "machine learning"
 mygram> SEARCH articles '機械学習'
 ```
 
 演算子と組み合わせ：
 
-```
+```mygram
 mygram> SEARCH articles "web framework" AND (golang OR python)
 ```
 
@@ -82,7 +82,7 @@ mygram> SEARCH articles "web framework" AND (golang OR python)
 
 カラム値でフィルタ：
 
-```
+```mygram
 mygram> SEARCH articles tech FILTER status = 1
 mygram> SEARCH articles tech FILTER views > 1000
 mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
@@ -94,7 +94,7 @@ mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
 
 複数フィルタ（AND条件）：
 
-```
+```mygram
 mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 ```
 
@@ -103,7 +103,7 @@ mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 | 演算子 | 別名 | 説明 |
 |----------|-------|-------------|
 | `=` | `EQ` | 等しい |
-| `!=` | `NE` | 等しくない |
+| `!=` / `<>` | `NE` | 等しくない |
 | `>` | `GT` | より大きい |
 | `>=` | `GTE` | 以上 |
 | `<` | `LT` | より小さい |
@@ -113,14 +113,14 @@ mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 
 プライマリキーでソート：
 
-```
+```mygram
 mygram> SEARCH articles golang SORT ASC
 mygram> SEARCH articles golang SORT DESC
 ```
 
 カラムでソート：
 
-```
+```mygram
 mygram> SEARCH articles golang SORT created_at DESC
 mygram> SEARCH articles golang SORT score ASC
 ```
@@ -129,7 +129,7 @@ mygram> SEARCH articles golang SORT score ASC
 
 予約カラム `_score` を指定するとBM25関連度でソートできます（v1.6.0以降）：
 
-```
+```mygram
 mygram> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 ```
 
@@ -139,7 +139,7 @@ BM25は `k1=1.2`、`b=0.75` をパラメータとし、クエリ時にIDFとTF�
 
 マッチした語句をタグで囲んだスニペットを返却（v1.6.0以降）：
 
-```
+```mygram
 mygram> SEARCH articles "machine learning" HIGHLIGHT LIMIT 10
 mygram> SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
 mygram> SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
@@ -157,7 +157,7 @@ HIGHLIGHTの使用には `verify_text` を `"ascii"` または `"all"` に設定
 
 Levenshtein編集距離の範囲内で語句をマッチ（v1.6.0以降）：
 
-```
+```mygram
 mygram> SEARCH articles "machne" FUZZY LIMIT 10
 mygram> SEARCH articles "databse" FUZZY 2 LIMIT 10
 ```
@@ -168,14 +168,14 @@ mygram> SEARCH articles "databse" FUZZY 2 LIMIT 10
 
 フィルタカラムの値を件数付きで集計（v1.6.0以降）：
 
-```
+```mygram
 mygram> FACET articles status
 mygram> FACET articles category "search text" FILTER status = 1 LIMIT 10
 ```
 
 レスポンス（件数の降順）：
 
-```
+```mygram
 OK FACET <column>
 <value1> <count1>
 <value2> <count2>
@@ -195,7 +195,7 @@ v1.7.0以降、FACETはHTTPでも `POST /tables/{identity}/facet` から利用�
 
 ## ページネーション
 
-```
+```mygram
 mygram> SEARCH articles golang LIMIT 10
 mygram> SEARCH articles golang LIMIT 10 OFFSET 20
 ```
@@ -204,7 +204,7 @@ mygram> SEARCH articles golang LIMIT 10 OFFSET 20
 
 IDなしでカウントのみ取得：
 
-```
+```mygram
 mygram> COUNT articles golang AND tutorial
 OK COUNT 42
 ```
@@ -213,25 +213,25 @@ OK COUNT 42
 
 ### 最新のGoチュートリアルを検索
 
-```
+```mygram
 mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
 ```
 
 ### データベースに関する人気記事
 
-```
+```mygram
 mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
 ```
 
 ### 関連度順＋ハイライト付き
 
-```
+```mygram
 mygram> SEARCH articles "machine learning" SORT _score DESC HIGHLIGHT LIMIT 10
 ```
 
 ### カテゴリ内のアクティブユーザー数
 
-```
+```mygram
 mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 ```
 

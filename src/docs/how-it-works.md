@@ -94,6 +94,8 @@ flowchart TD
 
 N-gram indexing is inherently approximate. A query for `"quantum"` generates bi-grams `["qu", "ua", "an", "nt", "tu", "um"]`. Any document containing all six bi-grams is a candidate -- but some candidates are false positives:
 
+<img src="/diagrams/verify-text.svg" alt="verify_text checks candidate documents from n-gram intersection against stored normalized text and removes false positives before results are returned." class="doc-diagram" />
+
 | Document text | Contains all bi-grams? | Actually contains "quantum"? |
 |---------------|----------------------|----------------------------|
 | "quantum mechanics" | Yes | Yes |

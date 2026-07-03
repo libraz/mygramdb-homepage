@@ -1,10 +1,10 @@
 ---
 title: MygramDB プロトコルリファレンス - TCPテキストコマンド
-description: MygramDBのTCPプロトコル完全リファレンス。SEARCH、COUNT、GET、INFO、CONFIG、DUMP、FACET、REPLICATION、OPTIMIZE、DEBUGコマンドの構文、レスポンス、例。
+description: MygramDBのTCPプロトコル完全リファレンス。SEARCH、COUNT、GET、INFO、CONFIG、DUMP、FACET、REPLICATION、SYNC、OPTIMIZE、DEBUGコマンドの構文、レスポンス、例。
 head:
   - - meta
     - name: keywords
-      content: MygramDB プロトコル, TCP テキストプロトコル, SEARCH コマンド, COUNT, DUMP, REPLICATION, OPTIMIZE, FACET, mygram-cli, コマンドリファレンス
+      content: MygramDB プロトコル, TCP テキストプロトコル, SEARCH コマンド, COUNT, DUMP, REPLICATION, SYNC, OPTIMIZE, FACET, mygram-cli, コマンドリファレンス
 ---
 
 # プロトコルリファレンス
@@ -51,25 +51,25 @@ TCPプロトコルは `mygram-cli` や管理コマンドに向いています。
 
 ### 構文
 
-```
+```mygram
 SEARCH <db.table> <text> [OPTIONS]
 ```
 
 ### 基本例
 
 シンプルな検索：
-```
+```mygram
 SEARCH app_db.articles hello
 ```
 
 フィルタとページネーション付き：
-```
+```mygram
 SEARCH app_db.articles tech FILTER status = 1 LIMIT 10
 ```
 
 ### レスポンス
 
-```
+```mygram
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
@@ -87,19 +87,19 @@ OK RESULTS <total_count> <id1> <id2> <id3> ...
 
 ### 構文
 
-```
+```mygram
 COUNT <db.table> <text> [OPTIONS]
 ```
 
 ### 例
 
-```
+```mygram
 COUNT app_db.articles tech AND AI FILTER status = 1
 ```
 
 ### レスポンス
 
-```
+```mygram
 OK COUNT <number>
 ```
 
@@ -113,29 +113,29 @@ OK COUNT <number>
 
 ### 構文
 
-```
+```mygram
 GET <db.table> <primary_key>
 ```
 
 ### 例
 
-```
+```mygram
 GET app_db.articles 12345
 ```
 
 ### レスポンス
 
-```
+```mygram
 OK DOC <primary_key> <filter1=value1> <filter2=value2> ...
 ```
 
 例：
-```
+```mygram
 OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
 ```
 
 見つからない場合：
-```
+```mygram
 ERROR Document not found
 ```
 
@@ -147,7 +147,7 @@ ERROR Document not found
 
 ### 構文
 
-```
+```mygram
 INFO
 ```
 
@@ -155,7 +155,7 @@ INFO
 
 Redis形式のキー・バリュー形式で複数のセクションを返します：
 
-```
+```mygram
 OK INFO
 
 # Server
@@ -230,7 +230,7 @@ CONFIGコマンドファミリーは、実行時の設定ヘルプ、検査、�
 設定オプションのヘルプを表示します。
 
 **構文:**
-```
+```mygram
 CONFIG HELP [path]
 ```
 
@@ -240,12 +240,12 @@ CONFIG HELP [path]
 **例:**
 
 すべてのトップレベル設定セクションを表示:
-```
+```mygram
 CONFIG HELP
 ```
 
 レスポンス:
-```
+```mygram
 +OK
 Available configuration sections:
   mysql        - MySQL接続設定
@@ -263,12 +263,12 @@ Available configuration sections:
 ```
 
 特定セクションのヘルプを表示:
-```
+```mygram
 CONFIG HELP mysql
 ```
 
 レスポンス:
-```
+```mygram
 +OK
 mysql - MySQL接続設定
 
@@ -295,12 +295,12 @@ Properties:
 ```
 
 特定プロパティのヘルプを表示:
-```
+```mygram
 CONFIG HELP mysql.port
 ```
 
 レスポンス:
-```
+```mygram
 +OK
 mysql.port
 
@@ -317,7 +317,7 @@ Description: MySQLサーバーのポート
 現在の設定値を表示します。機密フィールド（パスワード、シークレット）は `***` でマスクされます。
 
 **構文:**
-```
+```mygram
 CONFIG SHOW [path]
 ```
 
@@ -327,12 +327,12 @@ CONFIG SHOW [path]
 **例:**
 
 現在の設定全体を表示:
-```
+```mygram
 CONFIG SHOW
 ```
 
 レスポンス:
-```
+```mygram
 +OK
 mysql:
   host: "127.0.0.1"
@@ -355,17 +355,17 @@ replication:
 ```
 
 特定セクションを表示:
-```
+```mygram
 CONFIG SHOW mysql
 ```
 
 特定プロパティを表示:
-```
+```mygram
 CONFIG SHOW mysql.port
 ```
 
 レスポンス:
-```
+```mygram
 +OK
 3306
 ```
@@ -377,7 +377,7 @@ CONFIG SHOW mysql.port
 設定ファイルをロードせずに検証します。
 
 **構文:**
-```
+```mygram
 CONFIG VERIFY <filepath>
 ```
 
@@ -387,12 +387,12 @@ CONFIG VERIFY <filepath>
 **例:**
 
 有効な設定を検証:
-```
+```mygram
 CONFIG VERIFY /etc/mygramdb/config.yaml
 ```
 
 レスポンス（成功）:
-```
+```mygram
 +OK
 Configuration is valid
   Tables: 2 (articles, products)
@@ -400,12 +400,12 @@ Configuration is valid
 ```
 
 無効な設定を検証:
-```
+```mygram
 CONFIG VERIFY /tmp/invalid.yaml
 ```
 
 レスポンス（エラー）:
-```
+```mygram
 -ERR Configuration validation failed:
   - mysql.port: value 99999 exceeds maximum 65535
   - tables[0].name: missing required field
@@ -426,18 +426,18 @@ DUMPコマンドファミリーは、整合性検証を備えた統一的なス�
 完全なスナップショットを単一のバイナリファイル（`.dmp`）に保存します。このコマンドは**非同期**で実行され、即座にレスポンスを返します。
 
 **構文:**
-```
+```mygram
 DUMP SAVE [<filepath>] [--with-stats]
 ```
 
 **レスポンス:**
-```
+```mygram
 OK DUMP_STARTED <filepath>
 Use DUMP STATUS to monitor progress
 ```
 
 **例:**
-```
+```mygram
 DUMP SAVE /backup/mygramdb.dmp --with-stats
 ```
 
@@ -452,12 +452,12 @@ DUMP SAVE /backup/mygramdb.dmp --with-stats
 :::
 
 **構文:**
-```
+```mygram
 DUMP LOAD [<filepath>]
 ```
 
 **例:**
-```
+```mygram
 DUMP LOAD /backup/mygramdb.dmp
 ```
 
@@ -466,12 +466,12 @@ DUMP LOAD /backup/mygramdb.dmp
 データを読み込まずにスナップショットファイルの整合性を検証します。
 
 **構文:**
-```
+```mygram
 DUMP VERIFY [<filepath>]
 ```
 
 **例:**
-```
+```mygram
 DUMP VERIFY /backup/mygramdb.dmp
 ```
 
@@ -480,12 +480,12 @@ DUMP VERIFY /backup/mygramdb.dmp
 スナップショットファイルのメタデータ（バージョン、GTID、テーブル数、サイズ、フラグ）を表示します。
 
 **構文:**
-```
+```mygram
 DUMP INFO [<filepath>]
 ```
 
 **例:**
-```
+```mygram
 DUMP INFO /backup/mygramdb.dmp
 ```
 
@@ -494,12 +494,12 @@ DUMP INFO /backup/mygramdb.dmp
 非同期ダンプ操作（DUMP SAVE）の進捗を監視します。
 
 **構文:**
-```
+```mygram
 DUMP STATUS
 ```
 
 **レスポンス:**
-```
+```mygram
 OK DUMP_STATUS
 save_in_progress: <true|false>
 load_in_progress: <true|false>
@@ -523,7 +523,7 @@ END
 - `FAILED`: 最後のダンプ操作が失敗
 
 **例（保存中）:**
-```
+```mygram
 OK DUMP_STATUS
 save_in_progress: true
 load_in_progress: false
@@ -547,25 +547,25 @@ END
 
 ### 構文
 
-```
+```mygram
 FACET <table> <column> [search_text] [AND <term>] [NOT <term>] [FILTER <col> <op> <value>] [LIMIT <n>]
 ```
 
 ### 例
 
 statusカラムの全値：
-```
+```mygram
 FACET articles status
 ```
 
 検索結果に限定した値：
-```
+```mygram
 FACET articles category "機械学習" FILTER status = 1 LIMIT 10
 ```
 
 ### レスポンス
 
-```
+```mygram
 OK FACET <num_values>
 <value1>	<count1>
 <value2>	<count2>
@@ -582,7 +582,7 @@ OK FACET <num_values>
 
 ### 構文
 
-```
+```mygram
 REPLICATION STATUS
 ```
 
@@ -590,7 +590,7 @@ REPLICATION STATUS
 
 複数行のキーバリュー形式：
 
-```
+```mygram
 OK REPLICATION
 status: <running|stopped|not_configured>
 current_gtid: <current_gtid>
@@ -608,7 +608,7 @@ END
 - **queue_size**: キュー内の保留中イベント数（実行中のみ表示）
 
 例（実行中）：
-```
+```mygram
 OK REPLICATION
 status: running
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
@@ -618,7 +618,7 @@ END
 ```
 
 例（停止中）：
-```
+```mygram
 OK REPLICATION
 status: stopped
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
@@ -638,13 +638,13 @@ binlogレプリケーションを停止します（インデックスは読み�
 
 ### 構文
 
-```
+```mygram
 REPLICATION STOP
 ```
 
 ### レスポンス
 
-```
+```mygram
 OK REPLICATION_STOPPED
 ```
 
@@ -656,13 +656,13 @@ binlogレプリケーションを再開します。
 
 ### 構文
 
-```
+```mygram
 REPLICATION START
 ```
 
 ### レスポンス
 
-```
+```mygram
 OK REPLICATION_STARTED
 ```
 
@@ -678,7 +678,7 @@ OK REPLICATION_STARTED
 
 ### 構文
 
-```
+```mygram
 OPTIMIZE
 ```
 
@@ -721,29 +721,29 @@ OPTIMIZE
 ### レスポンス
 
 **成功時：**
-```
+```mygram
 OK OPTIMIZED terms=<total> delta=<count> roaring=<count> memory=<size>
 ```
 
 例：
-```
+```mygram
 OK OPTIMIZED terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
 ```
 
 **エラー：**
 
 すでに最適化中の場合：
-```
+```mygram
 ERROR Another OPTIMIZE operation is already in progress
 ```
 
 メモリが危機的に低い場合：
-```
+```mygram
 ERROR Memory critically low. Cannot start optimization: available=1.50 GB total=8.00 GB
 ```
 
 メモリ不足の場合：
-```
+```mygram
 ERROR Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
 ```
 
@@ -759,7 +759,7 @@ ERROR Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
 
 ### 構文
 
-```
+```mygram
 DEBUG ON
 DEBUG OFF
 ```
@@ -774,13 +774,13 @@ DEBUG OFF
 
 ### レスポンス
 
-```
+```mygram
 OK DEBUG_ON
 ```
 
 または
 
-```
+```mygram
 OK DEBUG_OFF
 ```
 
@@ -788,7 +788,7 @@ OK DEBUG_OFF
 
 デバッグモードが有効な場合、SEARCHとCOUNTコマンドは追加のデバッグ情報を返します：
 
-```
+```mygram
 OK RESULTS <count> <id1> <id2> ...
 
 # DEBUG
@@ -831,12 +831,12 @@ offset: <value> [(default)]
 
 すべてのエラーは以下の形式に従います：
 
-```
+```mygram
 ERROR <error_message>
 ```
 
 例：
-```
+```mygram
 ERROR Unknown command
 ERROR Table not found: products
 ERROR Invalid GTID format

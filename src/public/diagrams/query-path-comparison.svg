@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="500" viewBox="0 0 1120 500" role="img" aria-labelledby="title desc">
+  <title id="title">MySQL FULLTEXT vs MygramDB query paths</title>
+  <desc id="desc">The same query runs two ways: MySQL FULLTEXT reads disk-resident B-tree pages, uncompressed posting lists, and an external sort to return in 100 to 3000 milliseconds, while MygramDB intersects delta and Roaring posting lists in RAM with SIMD to return in under half a millisecond.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg{fill:#f8fafc}
+      .rose{fill:#ffe4e6;stroke:#be123c;stroke-width:2}
+      .blue{fill:#dbeafe;stroke:#1d4ed8;stroke-width:2}
+      .chip-rose{fill:#fecdd3;stroke:#be123c;stroke-width:2}
+      .chip-blue{fill:#bfdbfe;stroke:#1d4ed8;stroke-width:2}
+      .title{font:700 20px system-ui,-apple-system,Segoe UI,sans-serif;fill:#172033}
+      .text{font:500 15px system-ui,-apple-system,Segoe UI,sans-serif;fill:#334155}
+      .small{font:500 13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#64748b}
+      .time-rose{font:700 20px system-ui,-apple-system,Segoe UI,sans-serif;fill:#be123c}
+      .time-blue{font:700 20px system-ui,-apple-system,Segoe UI,sans-serif;fill:#1d4ed8}
+      .line{fill:none;stroke:#334155;stroke-width:3;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect class="bg" width="1120" height="500" rx="18"/>
+
+  <!-- Top lane: MySQL FULLTEXT (disk path) -->
+  <text class="title" x="555" y="46" text-anchor="middle">MySQL FULLTEXT (disk path)</text>
+
+  <rect class="rose" x="40" y="66" width="120" height="90" rx="10"/>
+  <text class="text" x="100" y="117" text-anchor="middle">query</text>
+
+  <rect class="rose" x="180" y="66" width="200" height="90" rx="10"/>
+  <text class="text" x="280" y="103" text-anchor="middle">B-tree index pages</text>
+  <text class="text" x="280" y="129" text-anchor="middle">read from disk</text>
+
+  <rect class="rose" x="440" y="66" width="200" height="90" rx="10"/>
+  <text class="text" x="540" y="103" text-anchor="middle">uncompressed</text>
+  <text class="text" x="540" y="129" text-anchor="middle">posting lists</text>
+
+  <rect class="rose" x="700" y="66" width="200" height="90" rx="10"/>
+  <text class="text" x="800" y="103" text-anchor="middle">external sort</text>
+  <text class="text" x="800" y="129" text-anchor="middle">/ merge</text>
+
+  <rect class="chip-rose" x="920" y="81" width="170" height="60" rx="30"/>
+  <text class="time-rose" x="1005" y="118" text-anchor="middle">100–3000 ms</text>
+
+  <path class="line" d="M160 111 L180 111"/>
+  <path class="line" d="M380 111 L440 111"/>
+  <path class="line" d="M640 111 L700 111"/>
+  <path class="line" d="M900 111 L920 111"/>
+
+  <text class="small" x="555" y="185" text-anchor="middle">every stage touches disk; latency collapses under concurrency</text>
+
+  <!-- Bottom lane: MygramDB (in-memory path) -->
+  <text class="title" x="555" y="266" text-anchor="middle">MygramDB (in-memory path)</text>
+
+  <rect class="blue" x="40" y="286" width="120" height="90" rx="10"/>
+  <text class="text" x="100" y="337" text-anchor="middle">query</text>
+
+  <rect class="blue" x="180" y="286" width="460" height="90" rx="10"/>
+  <text class="text" x="410" y="323" text-anchor="middle">delta + Roaring posting lists in RAM</text>
+  <text class="text" x="410" y="349" text-anchor="middle">(60–80% smaller)</text>
+
+  <rect class="blue" x="700" y="286" width="200" height="90" rx="10"/>
+  <text class="text" x="800" y="323" text-anchor="middle">SIMD</text>
+  <text class="text" x="800" y="349" text-anchor="middle">intersection</text>
+
+  <rect class="chip-blue" x="920" y="301" width="170" height="60" rx="30"/>
+  <text class="time-blue" x="1005" y="338" text-anchor="middle">0.08–0.42 ms</text>
+
+  <path class="line" d="M160 331 L180 331"/>
+  <path class="line" d="M640 331 L700 331"/>
+  <path class="line" d="M900 331 L920 331"/>
+
+  <text class="small" x="555" y="405" text-anchor="middle">no disk I/O on the query path; latency stays flat under load</text>
+
+  <text class="small" x="560" y="462" text-anchor="middle">Same query, same data — the difference is where the index lives.</text>
+</svg>

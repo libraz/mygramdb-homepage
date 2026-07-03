@@ -13,6 +13,10 @@ head:
 
 ## 何が問題なのか
 
+同じクエリでも、2つのアーキテクチャではたどるデータパスがまったく異なります。一方はディスク上の構造体を経由し、もう一方はすべてRAM上で完結します。
+
+<img src="/diagrams/query-path-comparison.svg" alt="MySQL FULLTEXTのクエリはディスク上のB-treeページ、非圧縮ポスティングリスト、外部ソートを経て100〜3000ミリ秒かかるのに対し、MygramDBでは同じクエリがRAM上のdelta+Roaring圧縮ポスティングリストとSIMD積集合で1ミリ秒未満に完了することを示す比較図" class="doc-diagram" />
+
 ### ディスクI/Oがボトルネック
 
 MySQL FULLTEXTはインデックスをディスク上のB-treeに保存しています。検索のたびに：

@@ -124,7 +124,10 @@ To restore automatic snapshot building on startup:
 ```yaml
 replication:
   auto_initial_snapshot: true   # Restore legacy behavior
+  start_from: "snapshot"
 ```
+
+In v1.8.0 and later, automatic startup snapshots require `start_from: "snapshot"` for both single-table and multi-table deployments.
 
 **Benefits of manual sync:**
 - Prevents unexpected MySQL load during server startup
@@ -150,6 +153,10 @@ Starts from GTID captured during initial snapshot build:
 replication:
   start_from: "snapshot"
 ```
+
+The diagram below traces that guarantee across the transaction boundary: the snapshot transaction opens and `gtid_executed` is captured in the same instant, table reads happen entirely inside that frozen view while new writes keep accumulating in the binlog, and streaming then resumes from precisely that captured GTID once the snapshot completes.
+
+<img src="/diagrams/gtid-snapshot-handoff.svg" alt="A timeline showing that MygramDB captures gtid_executed the instant the consistent snapshot transaction opens, reads all table data inside that frozen view while new writes accumulate in the binlog, and then starts binlog streaming from exactly the captured GTID so no transaction is lost or applied twice." class="doc-diagram" />
 
 **How it works:**
 - Uses `START TRANSACTION WITH CONSISTENT SNAPSHOT` for data consistency

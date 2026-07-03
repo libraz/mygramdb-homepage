@@ -193,7 +193,7 @@ tables:
 ```
 
 Filter early to reduce result set:
-```
+```mygram
 SEARCH articles tech FILTER status=1 AND category_id=5 LIMIT 100
 ```
 
@@ -212,7 +212,7 @@ SEARCH articles tech FILTER status=1 AND category_id=5 LIMIT 100
 
 Run periodically to optimize posting list storage:
 
-```
+```mygram
 OPTIMIZE
 ```
 
@@ -250,7 +250,7 @@ graph TD
 
 Monitor these metrics via `INFO` command:
 
-```
+```mygram
 INFO
 ```
 
@@ -265,7 +265,7 @@ Key metrics:
 
 Use `DUMP SAVE` command to create snapshots:
 
-```
+```mygram
 DUMP SAVE /path/to/snapshot.dmp
 ```
 
@@ -280,19 +280,19 @@ Schedule regular snapshots:
 ### Query is Slower Than Expected
 
 1. **Check if index is optimized:**
-   ```
+   ```mygram
    OPTIMIZE
    ```
 
 2. **Verify memory usage:**
-   ```
+   ```mygram
    INFO
    ```
    Look at `index_size` and process RSS; `hard_limit_mb` is reserved and does
    not enforce a process memory limit today.
 
 3. **Enable debug mode:**
-   ```
+   ```mygram
    DEBUG ON
    SEARCH table term LIMIT 100
    ```
@@ -301,7 +301,7 @@ Schedule regular snapshots:
 ### High Memory Usage
 
 1. **Run OPTIMIZE:**
-   ```
+   ```mygram
    OPTIMIZE
    ```
    Converts dense posting lists to Roaring bitmaps (10-30% reduction).
