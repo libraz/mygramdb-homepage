@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 520" role="img">
+  <title>Initial snapshot sequence</title>
+  <defs>
+    <marker id="is-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.14);font-weight:700;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.86);fill:var(--ink)}
+      .dg .box{stroke-width:2}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .life{stroke:var(--gd);stroke-width:2;stroke-dasharray:6 7}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#is-a)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- lifelines -->
+  <rect class="box blue" x="150" y="24" width="220" height="52" rx="10"/>
+  <rect class="box sky" x="740" y="24" width="220" height="52" rx="10"/>
+  <path class="life" d="M260 80 L260 470"/>
+  <path class="life" d="M850 80 L850 470"/>
+
+  <!-- messages -->
+  <path class="e" d="M262 128 L846 128"/>
+  <path class="e" d="M262 186 L846 186"/>
+  <path class="e" d="M262 296 L846 296"/>
+  <path class="e" d="M262 406 L846 406"/>
+
+  <!-- notes -->
+  <rect class="box amber" x="98" y="212" width="324" height="40" rx="8"/>
+  <rect class="box amber" x="98" y="322" width="324" height="40" rx="8"/>
+  <rect class="box amber" x="98" y="432" width="324" height="40" rx="8"/>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="t" x="260" y="57" text-anchor="middle">MygramDB</text>
+    <text class="t" x="850" y="57" text-anchor="middle">MySQL</text>
+
+    <text class="m" x="554" y="120" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
+    <text class="m" x="554" y="178" text-anchor="middle">SELECT @@global.gtid_executed</text>
+    <text class="m" x="554" y="288" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
+    <text class="m" x="554" y="398" text-anchor="middle">COMMIT</text>
+
+    <text class="s" x="260" y="238" text-anchor="middle">capture the GTID position</text>
+    <text class="s" x="260" y="348" text-anchor="middle">stream rows, build the index</text>
+    <text class="s" x="260" y="458" text-anchor="middle">start binlog from the captured GTID</text>
+
+    <text class="s" x="560" y="504" text-anchor="middle">The GTID is captured inside the same transaction as the read, so no change is lost or applied twice at the handoff.</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="t" x="260" y="57" text-anchor="middle">MygramDB</text>
+    <text class="t" x="850" y="57" text-anchor="middle">MySQL</text>
+
+    <text class="m" x="554" y="120" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
+    <text class="m" x="554" y="178" text-anchor="middle">SELECT @@global.gtid_executed</text>
+    <text class="m" x="554" y="288" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
+    <text class="m" x="554" y="398" text-anchor="middle">COMMIT</text>
+
+    <text class="s" x="260" y="238" text-anchor="middle">GTID 位置を記録</text>
+    <text class="s" x="260" y="348" text-anchor="middle">行をストリーム処理してインデックス構築</text>
+    <text class="s" x="260" y="458" text-anchor="middle">記録した GTID から binlog を開始</text>
+
+    <text class="s" x="560" y="504" text-anchor="middle">読み取りと同じトランザクション内で GTID を取得するため、切り替え時に変更の欠落も二重適用も起きません。</text>
+  </g>
+</svg>

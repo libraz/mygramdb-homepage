@@ -1,0 +1,47 @@
+{
+  "run": {
+    "mygramdbVersion": "1.9.0",
+    "mysqlVersion": "8.4.10",
+    "datasetRows": 1100000,
+    "datasetDescription": "1M English and 100K Japanese Wikipedia articles",
+    "averageCharacters": 666,
+    "verifyText": "all",
+    "queryCache": "disabled",
+    "iterations": 10,
+    "concurrentDurationSeconds": 10,
+    "host": "Apple M4 Max",
+    "dockerMemoryGiB": 32,
+    "containerMemoryGiB": 31.29
+  },
+  "search": [
+    { "label": "Multi-word", "query": "quantum physics", "matches": 104, "mysqlP50Ms": 2928.44, "mygramdbP50Ms": 15.19 },
+    { "label": "Medium-freq", "query": "quantum", "matches": 1961, "mysqlP50Ms": 2072.03, "mygramdbP50Ms": 62.75 },
+    { "label": "Low-freq", "query": "algorithm", "matches": 2498, "mysqlP50Ms": 375.14, "mygramdbP50Ms": 12.78 },
+    { "label": "Rare term", "query": "fibonacci", "matches": 84, "mysqlP50Ms": 1172.29, "mygramdbP50Ms": 53.66 }
+  ],
+  "cjkSearch": [
+    { "label": "日本", "query": "日本", "matches": 32282, "mysqlP50Ms": 917.03, "mygramdbP50Ms": 20.64 },
+    { "label": "東京", "query": "東京", "matches": 6989, "mysqlP50Ms": 201.51, "mygramdbP50Ms": 4.39 },
+    { "label": "科学", "query": "科学", "matches": 1551, "mysqlP50Ms": 3.35, "mygramdbP50Ms": 2.49 }
+  ],
+  "count": [
+    { "label": "Medium-freq", "query": "quantum", "matches": 1961, "mysqlP50Ms": 2000.08, "mygramdbP50Ms": 82.76 },
+    { "label": "Low-freq", "query": "algorithm", "matches": 2498, "mysqlP50Ms": 469.95, "mygramdbP50Ms": 14.06 }
+  ],
+  "consistency": [
+    { "query": "quantum", "matches": 1961 },
+    { "query": "algorithm", "matches": 2498 },
+    { "query": "日本", "matches": 32282 },
+    { "query": "科学", "matches": 1551 }
+  ],
+  "concurrent": [
+    { "connections": 1, "mysqlQps": 2.51, "mygramdbQps": 83, "mysqlP50Ms": 399.71, "mygramdbP50Ms": 11.86 },
+    { "connections": 4, "mysqlQps": 7.09, "mygramdbQps": 245, "mysqlP50Ms": 569.23, "mygramdbP50Ms": 16.45 }
+  ],
+  "memory": {
+    "indexMb": 152,
+    "documentsGb": 1.78,
+    "processRssGb": 3.41,
+    "perMillionDocumentsGb": 3.1
+  }
+}

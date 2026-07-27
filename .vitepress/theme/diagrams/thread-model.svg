@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 580" role="img">
+  <title>MygramDB thread model</title>
+  <defs>
+    <marker id="tm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.06);font-weight:700;fill:var(--ink)}
+      .dg .g{font-size:calc(var(--fs)*0.82);font-weight:700;fill:var(--mut);letter-spacing:.08em}
+      .dg .s{font-size:calc(var(--fs)*0.8);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.76);fill:var(--mut)}
+      .dg .box{stroke-width:2}
+      .dg .grp{fill:none;stroke:var(--gd);stroke-width:2;stroke-dasharray:5 5}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .orange{fill:var(--dg-orange-bg,#fff7ed);stroke:var(--dg-orange-br,#c2410c)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#tm-a)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- groups -->
+  <rect class="grp" x="24" y="44" width="248" height="146" rx="12"/>
+  <rect class="grp" x="300" y="44" width="248" height="146" rx="12"/>
+  <rect class="grp" x="576" y="44" width="248" height="146" rx="12"/>
+  <rect class="grp" x="852" y="44" width="244" height="146" rx="12"/>
+  <rect class="grp" x="300" y="256" width="524" height="164" rx="12"/>
+
+  <!-- boxes -->
+  <rect class="box slate" x="42" y="80" width="212" height="46" rx="9"/>
+  <rect class="box slate" x="42" y="136" width="212" height="46" rx="9"/>
+  <rect class="box blue" x="318" y="90" width="212" height="86" rx="10"/>
+  <rect class="box sky" x="594" y="90" width="212" height="86" rx="10"/>
+  <rect class="box slate" x="870" y="90" width="208" height="86" rx="10"/>
+
+  <rect class="box orange" x="318" y="294" width="156" height="108" rx="10"/>
+  <rect class="box orange" x="486" y="294" width="156" height="108" rx="10"/>
+  <rect class="box orange" x="654" y="294" width="156" height="108" rx="10"/>
+
+  <rect class="box blue" x="424" y="466" width="276" height="66" rx="12"/>
+
+  <!-- edges -->
+  <path class="e" d="M148 130 L148 132"/>
+  <path class="e" d="M424 180 L494 250"/>
+  <path class="e" d="M448 180 L672 250"/>
+  <path class="e" d="M660 180 L428 250"/>
+  <path class="e" d="M396 406 L510 462"/>
+  <path class="e" d="M564 406 L564 462"/>
+  <path class="e" d="M732 406 L618 462"/>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="g" x="148" y="66" text-anchor="middle">MAIN THREAD</text>
+    <text class="t" x="148" y="102" text-anchor="middle">Initialization</text>
+    <text class="s" x="148" y="120" text-anchor="middle">config, snapshot load</text>
+    <text class="t" x="148" y="158" text-anchor="middle">Server orchestrator</text>
+    <text class="s" x="148" y="176" text-anchor="middle">lifecycle management</text>
+
+    <text class="g" x="424" y="66" text-anchor="middle">REACTOR THREAD</text>
+    <text class="t" x="424" y="122" text-anchor="middle">epoll / kqueue loop</text>
+    <text class="s" x="424" y="146" text-anchor="middle">multiplexes every</text>
+    <text class="s" x="424" y="166" text-anchor="middle">connection</text>
+
+    <text class="g" x="700" y="66" text-anchor="middle">BINLOGREADER THREAD</text>
+    <text class="t" x="700" y="122" text-anchor="middle">MySQL binlog</text>
+    <text class="s" x="700" y="146" text-anchor="middle">pushes row events</text>
+    <text class="s" x="700" y="166" text-anchor="middle">into the queue</text>
+
+    <text class="g" x="974" y="66" text-anchor="middle">BACKGROUND</text>
+    <text class="t" x="974" y="122" text-anchor="middle">Snapshot scheduler</text>
+    <text class="s" x="974" y="146" text-anchor="middle">periodic dump on</text>
+    <text class="s" x="974" y="166" text-anchor="middle">dump.interval_sec</text>
+
+    <text class="g" x="562" y="280" text-anchor="middle">WORKER THREAD POOL</text>
+    <text class="t" x="396" y="330" text-anchor="middle">Event apply</text>
+    <text class="s" x="396" y="356" text-anchor="middle">Index + DocStore</text>
+    <text class="s" x="396" y="376" text-anchor="middle">writes</text>
+    <text class="t" x="564" y="330" text-anchor="middle">Query</text>
+    <text class="s" x="564" y="356" text-anchor="middle">concurrent</text>
+    <text class="s" x="564" y="376" text-anchor="middle">reads</text>
+    <text class="t" x="732" y="330" text-anchor="middle">Query</text>
+    <text class="s" x="732" y="356" text-anchor="middle">concurrent</text>
+    <text class="s" x="732" y="376" text-anchor="middle">reads</text>
+
+    <text class="t" x="562" y="497" text-anchor="middle">Index + DocStore</text>
+    <text class="m" x="562" y="519" text-anchor="middle">shared_mutex — many readers, one writer</text>
+
+    <text class="s" x="404" y="212" text-anchor="end">dispatch</text>
+    <text class="s" x="720" y="212" text-anchor="start">event queue</text>
+    <text class="m" x="424" y="446" text-anchor="middle">write lock</text>
+    <text class="m" x="700" y="446" text-anchor="middle">read lock</text>
+
+    <text class="s" x="560" y="562" text-anchor="middle">Searches never block each other. Only the event-apply worker takes the write lock, and only while a row event is applied.</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="g" x="148" y="66" text-anchor="middle">メインスレッド</text>
+    <text class="t" x="148" y="102" text-anchor="middle">初期化</text>
+    <text class="s" x="148" y="120" text-anchor="middle">設定・スナップショット読込</text>
+    <text class="t" x="148" y="158" text-anchor="middle">オーケストレータ</text>
+    <text class="s" x="148" y="176" text-anchor="middle">ライフサイクル管理</text>
+
+    <text class="g" x="424" y="66" text-anchor="middle">REACTOR スレッド</text>
+    <text class="t" x="424" y="122" text-anchor="middle">epoll / kqueue ループ</text>
+    <text class="s" x="424" y="146" text-anchor="middle">すべての接続を</text>
+    <text class="s" x="424" y="166" text-anchor="middle">多重化して監視</text>
+
+    <text class="g" x="700" y="66" text-anchor="middle">BINLOGREADER スレッド</text>
+    <text class="t" x="700" y="122" text-anchor="middle">MySQL binlog</text>
+    <text class="s" x="700" y="146" text-anchor="middle">行イベントを</text>
+    <text class="s" x="700" y="166" text-anchor="middle">キューへ積む</text>
+
+    <text class="g" x="974" y="66" text-anchor="middle">バックグラウンド</text>
+    <text class="t" x="974" y="122" text-anchor="middle">スナップショット</text>
+    <text class="s" x="974" y="146" text-anchor="middle">dump.interval_sec ごとに</text>
+    <text class="s" x="974" y="166" text-anchor="middle">定期ダンプ</text>
+
+    <text class="g" x="562" y="280" text-anchor="middle">ワーカースレッドプール</text>
+    <text class="t" x="396" y="330" text-anchor="middle">イベント適用</text>
+    <text class="s" x="396" y="356" text-anchor="middle">Index + DocStore</text>
+    <text class="s" x="396" y="376" text-anchor="middle">への書き込み</text>
+    <text class="t" x="564" y="330" text-anchor="middle">クエリ実行</text>
+    <text class="s" x="564" y="356" text-anchor="middle">並列に</text>
+    <text class="s" x="564" y="376" text-anchor="middle">読み取り</text>
+    <text class="t" x="732" y="330" text-anchor="middle">クエリ実行</text>
+    <text class="s" x="732" y="356" text-anchor="middle">並列に</text>
+    <text class="s" x="732" y="376" text-anchor="middle">読み取り</text>
+
+    <text class="t" x="562" y="497" text-anchor="middle">Index + DocStore</text>
+    <text class="m" x="562" y="519" text-anchor="middle">shared_mutex — 読み手は多数、書き手は1つ</text>
+
+    <text class="s" x="404" y="212" text-anchor="end">ディスパッチ</text>
+    <text class="s" x="720" y="212" text-anchor="start">イベントキュー</text>
+    <text class="m" x="424" y="446" text-anchor="middle">write lock</text>
+    <text class="m" x="700" y="446" text-anchor="middle">read lock</text>
+
+    <text class="s" x="560" y="562" text-anchor="middle">検索同士が互いをブロックすることはありません。書き込みロックを取るのはイベント適用ワーカーだけで、しかも適用中のみです。</text>
+  </g>
+</svg>

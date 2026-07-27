@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1080 430" role="img">
+  <title>Consistent snapshot to binlog handoff</title>
+  <defs>
+    <marker id="gs-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:17px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .l{font-size:calc(var(--fs)*1.06);font-weight:600;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.8);font-weight:600;fill:var(--txt)}
+      .dg .box{stroke-width:2}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .i-amber{fill:var(--dg-amber-br,#b45309);font-weight:700}
+      .dg .i-blue{fill:var(--dg-blue-br,#1d4ed8)}
+      .dg .i-green{fill:var(--dg-green-br,#15803d)}
+      .dg .axis{fill:none;stroke:var(--ln);stroke-width:2.5}
+      .dg .stream{fill:none;stroke:var(--ln);stroke-width:2.5;marker-end:url(#gs-a)}
+      .dg .tick{stroke:var(--ln);stroke-width:2}
+      .dg .guide{fill:none;stroke:var(--gd);stroke-width:1.5;stroke-dasharray:6 6}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- guides first: the opaque spans below hide the segments that would
+       otherwise run straight through a label -->
+  <line class="guide" x1="360" y1="92" x2="360" y2="372"/>
+  <line class="guide" x1="790" y1="72" x2="790" y2="372"/>
+
+  <!-- ============================ shapes ============================ -->
+  <rect class="box amber" x="24" y="24" width="560" height="64" rx="10"/>
+  <rect class="box green" x="800" y="24" width="256" height="44" rx="22"/>
+
+  <rect class="box sky" x="360" y="110" width="640" height="76" rx="10"/>
+  <rect class="box blue" x="360" y="296" width="430" height="76" rx="10"/>
+
+  <!-- ============================= timeline ============================= -->
+  <line class="axis" x1="60" y1="250" x2="790" y2="250"/>
+  <path class="stream" d="M790 250 L1032 250"/>
+
+  <line class="tick" x1="180" y1="243" x2="180" y2="257"/>
+  <line class="tick" x1="270" y1="243" x2="270" y2="257"/>
+  <line class="tick" x1="470" y1="243" x2="470" y2="257"/>
+  <line class="tick" x1="590" y1="243" x2="590" y2="257"/>
+  <line class="tick" x1="790" y1="243" x2="790" y2="257"/>
+
+  <polygon class="box amber" points="360,228 382,250 360,272 338,250"/>
+
+  <!-- ============================= text: en ============================= -->
+  <g data-i18n="en">
+    <text class="l" x="304" y="52" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
+    <text class="s" x="304" y="76" text-anchor="middle">gtid_executed captured = N — this instant is t0</text>
+    <text class="l i-green" x="928" y="52" text-anchor="middle">no gap, no double-apply</text>
+
+    <text class="l" x="680" y="142" text-anchor="middle">application writes continue</text>
+    <text class="s" x="680" y="168" text-anchor="middle">transactions N+1 … M pile up in the binlog</text>
+
+    <text class="m" x="180" y="232" text-anchor="middle">N-2</text>
+    <text class="m" x="270" y="232" text-anchor="middle">N-1</text>
+    <text class="m" x="470" y="232" text-anchor="middle">N+1</text>
+    <text class="m" x="590" y="232" text-anchor="middle">…</text>
+    <text class="m" x="790" y="232" text-anchor="middle">M</text>
+    <text class="s" x="920" y="232" text-anchor="middle">real time →</text>
+    <text class="s i-amber" x="360" y="292" text-anchor="middle">t0 = N</text>
+
+    <text class="l" x="575" y="328" text-anchor="middle">table data read inside the transaction</text>
+    <text class="s" x="575" y="354" text-anchor="middle">a frozen view of the data at N</text>
+
+    <text class="l i-blue" x="935" y="326" text-anchor="middle">binlog starts at N+1</text>
+    <text class="s" x="935" y="352" text-anchor="middle">catches up to M, then follows live</text>
+
+    <text class="s" x="540" y="406" text-anchor="middle">Every transaction ≤ N is in the snapshot; every transaction &gt; N arrives over the binlog.</text>
+  </g>
+
+  <!-- ============================= text: ja ============================= -->
+  <g data-i18n="ja">
+    <text class="l" x="304" y="52" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
+    <text class="s" x="304" y="76" text-anchor="middle">gtid_executed = N を取得 — この瞬間が t0</text>
+    <text class="l i-green" x="928" y="52" text-anchor="middle">欠落も二重適用もなし</text>
+
+    <text class="l" x="680" y="142" text-anchor="middle">アプリの書き込みは続く</text>
+    <text class="s" x="680" y="168" text-anchor="middle">トランザクション N+1 … M が binlog に溜まる</text>
+
+    <text class="m" x="180" y="232" text-anchor="middle">N-2</text>
+    <text class="m" x="270" y="232" text-anchor="middle">N-1</text>
+    <text class="m" x="470" y="232" text-anchor="middle">N+1</text>
+    <text class="m" x="590" y="232" text-anchor="middle">…</text>
+    <text class="m" x="790" y="232" text-anchor="middle">M</text>
+    <text class="s" x="920" y="232" text-anchor="middle">実時間 →</text>
+    <text class="s i-amber" x="360" y="292" text-anchor="middle">t0 = N</text>
+
+    <text class="l" x="575" y="328" text-anchor="middle">テーブルはこのトランザクション内で読む</text>
+    <text class="s" x="575" y="354" text-anchor="middle">N 時点で凍結されたビュー</text>
+
+    <text class="l i-blue" x="935" y="326" text-anchor="middle">binlog は N+1 から</text>
+    <text class="s" x="935" y="352" text-anchor="middle">M まで追いつき、以降は追従</text>
+
+    <text class="s" x="540" y="406" text-anchor="middle">N 以下のトランザクションはスナップショットに、N より後は binlog 経由で届きます。</text>
+  </g>
+</svg>

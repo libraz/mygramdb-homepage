@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 470" role="img">
+  <title>High availability topology</title>
+  <defs>
+    <marker id="ha-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.14);font-weight:700;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.8);fill:var(--mut)}
+      .dg .box{stroke-width:2}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .orange{fill:var(--dg-orange-bg,#fff7ed);stroke:var(--dg-orange-br,#c2410c)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#ha-a)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- primary -->
+  <rect class="box sky" x="404" y="30" width="312" height="76" rx="12"/>
+  <!-- replicas -->
+  <rect class="box blue" x="88" y="176" width="284" height="88" rx="12"/>
+  <rect class="box blue" x="418" y="176" width="284" height="88" rx="12"/>
+  <rect class="box blue" x="748" y="176" width="284" height="88" rx="12"/>
+  <!-- load balancer -->
+  <rect class="box slate" x="404" y="316" width="312" height="66" rx="12"/>
+  <!-- application -->
+  <rect class="box orange" x="838" y="316" width="194" height="66" rx="12"/>
+
+  <!-- edges -->
+  <path class="e" d="M470 110 L240 172"/>
+  <path class="e" d="M560 110 L560 172"/>
+  <path class="e" d="M650 110 L880 172"/>
+  <path class="e" d="M240 268 L490 312"/>
+  <path class="e" d="M560 268 L560 312"/>
+  <path class="e" d="M880 268 L648 312"/>
+  <path class="e" d="M720 349 L834 349"/>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="t" x="560" y="62" text-anchor="middle">MySQL primary</text>
+    <text class="s" x="560" y="88" text-anchor="middle">the only writable copy</text>
+
+    <text class="t" x="230" y="212" text-anchor="middle">MygramDB node 1</text>
+    <text class="t" x="560" y="212" text-anchor="middle">MygramDB node 2</text>
+    <text class="t" x="890" y="212" text-anchor="middle">MygramDB node 3</text>
+    <text class="m" x="230" y="242" text-anchor="middle">server_id 83917</text>
+    <text class="m" x="560" y="242" text-anchor="middle">server_id 83918</text>
+    <text class="m" x="890" y="242" text-anchor="middle">server_id 83919</text>
+
+    <text class="t" x="560" y="346" text-anchor="middle">Load balancer</text>
+    <text class="s" x="560" y="370" text-anchor="middle">route on /health/ready</text>
+
+    <text class="t" x="935" y="346" text-anchor="middle">Application</text>
+    <text class="s" x="935" y="370" text-anchor="middle">search traffic</text>
+
+    <text class="s" x="200" y="128" text-anchor="middle">binlog replication</text>
+
+    <text class="s" x="560" y="420" text-anchor="middle">Each node is a full independent replica, not a shard — every node can answer every query.</text>
+    <text class="s" x="560" y="448" text-anchor="middle">Give each one a distinct server_id, and gate the load balancer on /health/ready so a syncing node receives no traffic.</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="t" x="560" y="62" text-anchor="middle">MySQL プライマリ</text>
+    <text class="s" x="560" y="88" text-anchor="middle">書き込みができる唯一の正</text>
+
+    <text class="t" x="230" y="212" text-anchor="middle">MygramDB ノード1</text>
+    <text class="t" x="560" y="212" text-anchor="middle">MygramDB ノード2</text>
+    <text class="t" x="890" y="212" text-anchor="middle">MygramDB ノード3</text>
+    <text class="m" x="230" y="242" text-anchor="middle">server_id 83917</text>
+    <text class="m" x="560" y="242" text-anchor="middle">server_id 83918</text>
+    <text class="m" x="890" y="242" text-anchor="middle">server_id 83919</text>
+
+    <text class="t" x="560" y="346" text-anchor="middle">ロードバランサ</text>
+    <text class="s" x="560" y="370" text-anchor="middle">/health/ready で振り分け</text>
+
+    <text class="t" x="935" y="346" text-anchor="middle">アプリケーション</text>
+    <text class="s" x="935" y="370" text-anchor="middle">検索トラフィック</text>
+
+    <text class="s" x="200" y="128" text-anchor="middle">binlog レプリケーション</text>
+
+    <text class="s" x="560" y="420" text-anchor="middle">各ノードはシャードではなく独立した完全なレプリカで、どのノードでもすべてのクエリに応答できます。</text>
+    <text class="s" x="560" y="448" text-anchor="middle">server_id はノードごとに変え、ロードバランサは /health/ready で判定して同期中のノードへ流さないようにします。</text>
+  </g>
+</svg>

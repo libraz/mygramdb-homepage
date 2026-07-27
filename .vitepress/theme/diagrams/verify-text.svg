@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1040 350" role="img">
+  <title>verify_text post-filter</title>
+  <defs>
+    <marker id="vt-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);--rs:var(--dg-rose-br,#be123c)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.28);font-weight:700;fill:var(--ink)}
+      .dg .l{font-size:calc(var(--fs)*1.06);font-weight:600;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.82);font-weight:600;fill:var(--txt)}
+      .dg .box{stroke-width:2}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .rose{fill:var(--dg-rose-bg,#ffe4e6);stroke:var(--dg-rose-br,#be123c)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#vt-a)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- ============================ shapes ============================ -->
+  <rect class="box slate" x="24" y="64" width="190" height="186" rx="12"/>
+  <rect class="box slate" x="262" y="64" width="250" height="186" rx="12"/>
+  <rect class="box slate" x="300" y="202" width="174" height="32" rx="8" fill-opacity="0.9"/>
+  <rect class="box amber" x="560" y="64" width="210" height="186" rx="12"/>
+  <rect class="box green" x="828" y="76" width="188" height="76" rx="12"/>
+  <rect class="box rose" x="828" y="162" width="188" height="76" rx="12"/>
+
+  <!-- ============================= edges ============================= -->
+  <path class="e" d="M220 157 L256 157"/>
+  <path class="e" d="M518 157 L554 157"/>
+  <path class="e" d="M776 138 L822 116"/>
+  <path class="e" d="M776 178 L822 198"/>
+
+  <!-- ============================= text: en ============================= -->
+  <g data-i18n="en">
+    <text class="t" x="119" y="108" text-anchor="middle">Query</text>
+    <text x="119" y="148" text-anchor="middle">"quantum"</text>
+    <text class="s" x="119" y="186" text-anchor="middle">bi-grams</text>
+    <text class="m" x="119" y="214" text-anchor="middle">qu ua an nt tu um</text>
+
+    <text class="t" x="387" y="104" text-anchor="middle">N-gram intersection</text>
+    <text x="387" y="138" text-anchor="middle">fast candidate lookup</text>
+    <text class="s" x="387" y="168" text-anchor="middle">may include documents holding</text>
+    <text class="s" x="387" y="188" text-anchor="middle">every piece but not the phrase</text>
+    <text class="s" x="387" y="224" text-anchor="middle">candidate DocIDs</text>
+
+    <text class="t" x="665" y="104" text-anchor="middle">verify_text</text>
+    <text x="665" y="140" text-anchor="middle">check stored</text>
+    <text x="665" y="164" text-anchor="middle">normalized text</text>
+    <text class="s" x="665" y="200" text-anchor="middle">enabled by</text>
+    <text class="m" x="665" y="222" text-anchor="middle">memory.verify_text</text>
+
+    <text class="t" x="922" y="112" text-anchor="middle">Keep</text>
+    <text class="s" x="922" y="136" text-anchor="middle">actual match</text>
+    <text class="t" x="922" y="198" text-anchor="middle">Drop</text>
+    <text class="s" x="922" y="222" text-anchor="middle">false positive</text>
+
+    <text class="s" x="520" y="296" text-anchor="middle">Without verify_text, n-gram candidates are returned as they are.</text>
+    <text class="s" x="520" y="318" text-anchor="middle">With it, MygramDB trades extra memory for exact substring confirmation.</text>
+  </g>
+
+  <!-- ============================= text: ja ============================= -->
+  <g data-i18n="ja">
+    <text class="t" x="119" y="108" text-anchor="middle">クエリ</text>
+    <text x="119" y="148" text-anchor="middle">"quantum"</text>
+    <text class="s" x="119" y="186" text-anchor="middle">バイグラム</text>
+    <text class="m" x="119" y="214" text-anchor="middle">qu ua an nt tu um</text>
+
+    <text class="t" x="387" y="104" text-anchor="middle">N-gram 積集合</text>
+    <text x="387" y="138" text-anchor="middle">候補を高速に絞り込む</text>
+    <text class="s" x="387" y="168" text-anchor="middle">断片をすべて含むが</text>
+    <text class="s" x="387" y="188" text-anchor="middle">語順が違う文書も混ざる</text>
+    <text class="s" x="387" y="224" text-anchor="middle">候補 DocID</text>
+
+    <text class="t" x="665" y="104" text-anchor="middle">verify_text</text>
+    <text x="665" y="140" text-anchor="middle">保存済みの</text>
+    <text x="665" y="164" text-anchor="middle">正規化テキストと照合</text>
+    <text class="s" x="665" y="200" text-anchor="middle">有効化設定</text>
+    <text class="m" x="665" y="222" text-anchor="middle">memory.verify_text</text>
+
+    <text class="t" x="922" y="112" text-anchor="middle">残す</text>
+    <text class="s" x="922" y="136" text-anchor="middle">実際に一致</text>
+    <text class="t" x="922" y="198" text-anchor="middle">捨てる</text>
+    <text class="s" x="922" y="222" text-anchor="middle">偽陽性</text>
+
+    <text class="s" x="520" y="296" text-anchor="middle">verify_text なしなら、N-gram の候補はそのまま返されます。</text>
+    <text class="s" x="520" y="318" text-anchor="middle">有効にすると、メモリを追加で使う代わりに部分文字列の一致を厳密に確認します。</text>
+  </g>
+</svg>

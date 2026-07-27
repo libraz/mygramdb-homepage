@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 580" role="img">
+  <title>Reconnect validation and replication halts</title>
+  <defs>
+    <marker id="fv-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <marker id="fv-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--rs)"/>
+    </marker>
+    <style>
+      .dg{--fs:18px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);--rs:var(--dg-rose-br,#be123c)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.16);font-weight:700;fill:var(--ink)}
+      .dg .l{font-size:calc(var(--fs)*1.02);font-weight:600;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
+      .dg .box{stroke-width:2}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .rose{fill:var(--dg-rose-bg,#ffe4e6);stroke:var(--dg-rose-br,#be123c)}
+      .dg .i-rose{fill:var(--dg-rose-br,#be123c);font-weight:700}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#fv-a)}
+      .dg .ed{fill:none;stroke:var(--ln);stroke-width:2;stroke-dasharray:7 6;marker-end:url(#fv-a)}
+      .dg .er{fill:none;stroke:var(--rs);stroke-width:2;marker-end:url(#fv-r)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- ========================= left state chain ========================= -->
+  <rect class="box blue" x="24" y="60" width="220" height="84" rx="12"/>
+  <rect class="box slate" x="24" y="190" width="220" height="64" rx="12"/>
+  <rect class="box slate" x="24" y="300" width="220" height="100" rx="12"/>
+
+  <path class="er" d="M134 148 L134 186"/>
+  <path class="e" d="M134 258 L134 296"/>
+  <path class="ed" d="M76 404 C64 442 204 442 192 404"/>
+
+  <!-- =========================== gate column =========================== -->
+  <rect class="box amber" x="320" y="48" width="230" height="96" rx="12"/>
+  <rect class="box amber" x="320" y="196" width="230" height="96" rx="12"/>
+  <rect class="box amber" x="320" y="336" width="230" height="96" rx="12"/>
+
+  <path class="e" d="M248 350 L268 350 Q276 350 276 342 L276 104 Q276 96 284 96 L316 96"/>
+  <path class="e" d="M435 148 L435 192"/>
+  <path class="e" d="M435 296 L435 332"/>
+  <path class="e" d="M435 436 L435 470"/>
+
+  <!-- ============================ outcomes ============================ -->
+  <path class="er" d="M556 96 L636 96"/>
+  <rect class="box rose" x="640" y="52" width="456" height="92" rx="12"/>
+
+  <path class="er" d="M556 244 L636 244"/>
+  <rect class="box rose" x="640" y="200" width="456" height="92" rx="12"/>
+
+  <path class="e" d="M556 384 L636 384"/>
+  <rect class="box amber" x="640" y="340" width="456" height="88" rx="12"/>
+
+  <rect class="box green" x="320" y="474" width="456" height="68" rx="12"/>
+
+  <!-- ============================= text: en ============================= -->
+  <g data-i18n="en">
+    <text class="t" x="134" y="96" text-anchor="middle">streaming</text>
+    <text class="s" x="134" y="122" text-anchor="middle">from the saved GTID</text>
+
+    <text class="l" x="134" y="230" text-anchor="middle">connection lost</text>
+
+    <text class="l" x="134" y="338" text-anchor="middle">reconnect with</text>
+    <text class="l" x="134" y="362" text-anchor="middle">exponential backoff</text>
+    <text class="s" x="134" y="386" text-anchor="middle">500 ms – 10 s</text>
+    <text class="s" x="134" y="446" text-anchor="middle">retry</text>
+    <text class="s i-rose" x="152" y="174">network drop</text>
+
+    <text class="l" x="435" y="90" text-anchor="middle">GTID mode</text>
+    <text class="l" x="435" y="114" text-anchor="middle">enabled?</text>
+    <text class="l" x="435" y="238" text-anchor="middle">configured tables</text>
+    <text class="l" x="435" y="262" text-anchor="middle">exist?</text>
+    <text class="l" x="435" y="378" text-anchor="middle">same server</text>
+    <text class="l" x="435" y="402" text-anchor="middle">UUID?</text>
+
+    <text class="s" x="452" y="176">yes</text>
+    <text class="s" x="452" y="320">yes</text>
+    <text class="s" x="452" y="462">yes</text>
+    <text class="s i-rose" x="596" y="84" text-anchor="middle">no</text>
+    <text class="s i-rose" x="596" y="232" text-anchor="middle">no</text>
+    <text class="s" x="596" y="372" text-anchor="middle">no</text>
+
+    <text class="t i-rose" x="868" y="88" text-anchor="middle">replication STOPPED</text>
+    <text class="s" x="868" y="112" text-anchor="middle">GTID mode is off on the upstream server</text>
+    <text class="s" x="868" y="132" text-anchor="middle">manual intervention required</text>
+
+    <text class="t i-rose" x="868" y="236" text-anchor="middle">replication STOPPED</text>
+    <text class="s" x="868" y="260" text-anchor="middle">a configured table is missing</text>
+    <text class="s" x="868" y="280" text-anchor="middle">manual intervention required</text>
+
+    <text class="l" x="868" y="376" text-anchor="middle">continue with a failover warning</text>
+    <text class="s" x="868" y="404" text-anchor="middle">the server identity changed, but streaming resumes</text>
+
+    <text class="l" x="548" y="506" text-anchor="middle">resume streaming from the saved GTID</text>
+    <text class="s" x="548" y="530" text-anchor="middle">no transaction is lost and none is applied twice</text>
+
+    <text class="s" x="560" y="568" text-anchor="middle">A failure that risks data divergence halts replication; a changed server identity only warns.</text>
+  </g>
+
+  <!-- ============================= text: ja ============================= -->
+  <g data-i18n="ja">
+    <text class="t" x="134" y="96" text-anchor="middle">ストリーミング中</text>
+    <text class="s" x="134" y="122" text-anchor="middle">保存した GTID から</text>
+
+    <text class="l" x="134" y="230" text-anchor="middle">接続が切れる</text>
+
+    <text class="l" x="134" y="338" text-anchor="middle">指数バックオフで</text>
+    <text class="l" x="134" y="362" text-anchor="middle">再接続</text>
+    <text class="s" x="134" y="386" text-anchor="middle">500 ms 〜 10 s</text>
+    <text class="s" x="134" y="446" text-anchor="middle">再試行</text>
+    <text class="s i-rose" x="152" y="174">ネットワーク断</text>
+
+    <text class="l" x="435" y="90" text-anchor="middle">GTID モードが</text>
+    <text class="l" x="435" y="114" text-anchor="middle">有効か？</text>
+    <text class="l" x="435" y="238" text-anchor="middle">設定したテーブルが</text>
+    <text class="l" x="435" y="262" text-anchor="middle">存在するか？</text>
+    <text class="l" x="435" y="378" text-anchor="middle">サーバー UUID は</text>
+    <text class="l" x="435" y="402" text-anchor="middle">同じか？</text>
+
+    <text class="s" x="452" y="176">はい</text>
+    <text class="s" x="452" y="320">はい</text>
+    <text class="s" x="452" y="462">はい</text>
+    <text class="s i-rose" x="596" y="84" text-anchor="middle">いいえ</text>
+    <text class="s i-rose" x="596" y="232" text-anchor="middle">いいえ</text>
+    <text class="s" x="596" y="372" text-anchor="middle">いいえ</text>
+
+    <text class="t i-rose" x="868" y="88" text-anchor="middle">レプリケーション停止</text>
+    <text class="s" x="868" y="112" text-anchor="middle">上流サーバーで GTID モードが無効</text>
+    <text class="s" x="868" y="132" text-anchor="middle">手動での対応が必要</text>
+
+    <text class="t i-rose" x="868" y="236" text-anchor="middle">レプリケーション停止</text>
+    <text class="s" x="868" y="260" text-anchor="middle">設定したテーブルが見つからない</text>
+    <text class="s" x="868" y="280" text-anchor="middle">手動での対応が必要</text>
+
+    <text class="l" x="868" y="376" text-anchor="middle">フェイルオーバー警告を出して継続</text>
+    <text class="s" x="868" y="404" text-anchor="middle">サーバーの識別子は変わったが、ストリーミングは再開する</text>
+
+    <text class="l" x="548" y="506" text-anchor="middle">保存した GTID からストリーミングを再開</text>
+    <text class="s" x="548" y="530" text-anchor="middle">取りこぼしも二重適用も起きません</text>
+
+    <text class="s" x="560" y="568" text-anchor="middle">データ不整合の恐れがある失敗はレプリケーションを止め、サーバー識別子の変化は警告のみです。</text>
+  </g>
+</svg>

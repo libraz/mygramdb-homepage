@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 440" role="img">
+  <title>N-gram level cache invalidation</title>
+  <defs>
+    <marker id="ci-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <marker id="ci-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--rs)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);
+        --rs:var(--dg-rose-br,#be123c);--gr:var(--dg-green-br,#15803d)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.06);font-weight:700;fill:var(--ink)}
+      .dg .g{font-size:calc(var(--fs)*0.82);font-weight:700;fill:var(--mut);letter-spacing:.08em}
+      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.9);fill:var(--ink)}
+      .dg .drop{font-size:calc(var(--fs)*0.82);font-weight:700;fill:var(--rs)}
+      .dg .keep{font-size:calc(var(--fs)*0.82);font-weight:700;fill:var(--gr)}
+      .dg .box{stroke-width:2}
+      .dg .grp{fill:none;stroke:var(--gd);stroke-width:2;stroke-dasharray:5 5}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .rose{fill:var(--dg-rose-bg,#ffe4e6);stroke:var(--dg-rose-br,#be123c)}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#ci-a)}
+      .dg .er{fill:none;stroke:var(--rs);stroke-width:2.5;marker-end:url(#ci-r)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- source -->
+  <rect class="box sky" x="24" y="128" width="264" height="130" rx="12"/>
+  <!-- reverse index -->
+  <rect class="box slate" x="360" y="148" width="212" height="90" rx="11"/>
+  <!-- cache group -->
+  <rect class="grp" x="644" y="56" width="452" height="294" rx="14"/>
+  <rect class="box rose" x="672" y="102" width="396" height="66" rx="10"/>
+  <rect class="box green" x="672" y="188" width="396" height="66" rx="10"/>
+  <rect class="box green" x="672" y="274" width="396" height="66" rx="10"/>
+
+  <!-- edges -->
+  <path class="e" d="M292 193 L356 193"/>
+  <path class="er" d="M576 180 L668 138"/>
+
+  <!-- shared code labels -->
+  <text class="m" x="700" y="141">quantum</text>
+  <text class="m" x="700" y="227">algorithm</text>
+  <text class="m" x="700" y="313">database</text>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="t" x="156" y="168" text-anchor="middle">A row changed</text>
+    <text class="s" x="156" y="198" text-anchor="middle">its text is tokenized into</text>
+    <text class="m" x="156" y="226" text-anchor="middle">qu · ua · an</text>
+
+    <text class="t" x="466" y="184" text-anchor="middle">Reverse index</text>
+    <text class="s" x="466" y="212" text-anchor="middle">n-gram → cache entries</text>
+
+    <text class="g" x="870" y="82" text-anchor="middle">QUERY CACHE</text>
+    <text class="drop" x="1040" y="141" text-anchor="end">evicted — shares an n-gram</text>
+    <text class="keep" x="1040" y="227" text-anchor="end">kept</text>
+    <text class="keep" x="1040" y="313" text-anchor="end">kept</text>
+
+    <text class="s" x="560" y="392" text-anchor="middle">A table-level cache would drop all three entries. Matching on n-grams evicts only the queries the change can actually affect.</text>
+    <text class="s" x="560" y="422" text-anchor="middle">Set cache.invalidation_strategy to "table" for the cheaper but far more destructive behaviour.</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="t" x="156" y="168" text-anchor="middle">行が変更された</text>
+    <text class="s" x="156" y="198" text-anchor="middle">本文をトークン化すると</text>
+    <text class="m" x="156" y="226" text-anchor="middle">qu · ua · an</text>
+
+    <text class="t" x="466" y="184" text-anchor="middle">逆引きインデックス</text>
+    <text class="s" x="466" y="212" text-anchor="middle">N-gram → キャッシュ項目</text>
+
+    <text class="g" x="870" y="82" text-anchor="middle">クエリキャッシュ</text>
+    <text class="drop" x="1040" y="141" text-anchor="end">破棄 — N-gram が重なる</text>
+    <text class="keep" x="1040" y="227" text-anchor="end">保持</text>
+    <text class="keep" x="1040" y="313" text-anchor="end">保持</text>
+
+    <text class="s" x="560" y="392" text-anchor="middle">テーブル単位の無効化なら3件すべてを捨てます。N-gram で照合すれば、変更が実際に影響しうるクエリだけを破棄できます。</text>
+    <text class="s" x="560" y="422" text-anchor="middle">cache.invalidation_strategy を "table" にすると、判定は軽い代わりに破棄の範囲がはるかに広くなります。</text>
+  </g>
+</svg>

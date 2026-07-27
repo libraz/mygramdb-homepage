@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1000 526" role="img">
+  <title>Query execution pipeline</title>
+  <defs>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.28);font-weight:700;fill:var(--ink)}
+      .dg .l{font-size:calc(var(--fs)*1.06);font-weight:600;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.82);font-weight:600;fill:var(--txt)}
+      .dg .zebra{fill:var(--dg-slate-bg,#f1f5f9)}
+      .dg .track{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--gd);stroke-width:1}
+      .dg .bar{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8);stroke-width:1.5}
+      .dg .bar-end{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d);stroke-width:1.5}
+      .dg .rule{stroke:var(--gd);stroke-width:1.5}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- ============================ table frame ============================ -->
+  <line class="rule" x1="24" y1="76" x2="976" y2="76"/>
+
+  <rect class="zebra" x="24" y="130" width="952" height="40" rx="6"/>
+  <rect class="zebra" x="24" y="222" width="952" height="40" rx="6"/>
+  <rect class="zebra" x="24" y="314" width="952" height="40" rx="6"/>
+  <rect class="zebra" x="24" y="406" width="952" height="40" rx="6"/>
+
+  <!-- ======================= candidate-set bars ======================= -->
+  <rect class="track" x="490" y="143" width="486" height="14" rx="7"/>
+  <rect class="bar"   x="490" y="143" width="486" height="14" rx="7"/>
+
+  <rect class="track" x="490" y="189" width="486" height="14" rx="7"/>
+  <rect class="bar"   x="490" y="189" width="253" height="14" rx="7"/>
+
+  <rect class="track" x="490" y="235" width="486" height="14" rx="7"/>
+  <rect class="bar"   x="490" y="235" width="214" height="14" rx="7"/>
+
+  <rect class="track" x="490" y="281" width="486" height="14" rx="7"/>
+  <rect class="bar"   x="490" y="281" width="126" height="14" rx="7"/>
+
+  <rect class="track" x="490" y="327" width="486" height="14" rx="7"/>
+  <rect class="bar"   x="490" y="327" width="126" height="14" rx="7"/>
+
+  <rect class="track" x="490" y="373" width="486" height="14" rx="7"/>
+  <rect class="bar"   x="490" y="373" width="34" height="14" rx="7"/>
+
+  <rect class="track" x="490" y="419" width="486" height="14" rx="7"/>
+  <rect class="bar-end" x="490" y="419" width="34" height="14" rx="7"/>
+
+  <!-- ============================= text: en ============================= -->
+  <g data-i18n="en">
+    <text class="t" x="24" y="40">Query execution pipeline</text>
+
+    <text class="s" x="28" y="66">stage</text>
+    <text class="s" x="270" y="66">DEBUG field · note</text>
+    <text class="s" x="490" y="66">candidate set</text>
+
+    <text class="l" x="28" y="110">parse</text>
+    <text class="s" x="270" y="110">—</text>
+    <text class="s" x="490" y="110">query text becomes an AST</text>
+
+    <text class="l" x="28" y="156">n-gram lookup</text>
+    <text class="m" x="270" y="156">candidates</text>
+
+    <text class="l" x="28" y="202">AND intersection</text>
+    <text class="m" x="270" y="202">after_intersection</text>
+
+    <text class="l" x="28" y="248">NOT exclusion</text>
+    <text class="m" x="270" y="248">after_not</text>
+
+    <text class="l" x="28" y="294">FILTER application</text>
+    <text class="m" x="270" y="294">after_filters</text>
+
+    <text class="l" x="28" y="340">SORT</text>
+    <text class="s" x="270" y="340">partial_sort if K &lt; 50%</text>
+
+    <text class="l" x="28" y="386">OFFSET / LIMIT</text>
+    <text class="s" x="270" y="386">large OFFSET still scans</text>
+
+    <text class="l" x="28" y="432">results</text>
+    <text class="s" x="270" y="432">returned to the client</text>
+
+    <text class="s" x="24" y="482">DEBUG reports the candidate count after each stage — the field names above are what it prints.</text>
+    <text class="s" x="24" y="504">Put the most restrictive term first: filters narrow an existing candidate set, they cannot seed one.</text>
+  </g>
+
+  <!-- ============================= text: ja ============================= -->
+  <g data-i18n="ja">
+    <text class="t" x="24" y="40">クエリ実行パイプライン</text>
+
+    <text class="s" x="28" y="66">段階</text>
+    <text class="s" x="270" y="66">DEBUG のフィールド・補足</text>
+    <text class="s" x="490" y="66">候補集合の大きさ</text>
+
+    <text class="l" x="28" y="110">解析</text>
+    <text class="s" x="270" y="110">—</text>
+    <text class="s" x="490" y="110">クエリ文字列を AST に変換</text>
+
+    <text class="l" x="28" y="156">N-gram 参照</text>
+    <text class="m" x="270" y="156">candidates</text>
+
+    <text class="l" x="28" y="202">AND 積集合</text>
+    <text class="m" x="270" y="202">after_intersection</text>
+
+    <text class="l" x="28" y="248">NOT 除外</text>
+    <text class="m" x="270" y="248">after_not</text>
+
+    <text class="l" x="28" y="294">FILTER 適用</text>
+    <text class="m" x="270" y="294">after_filters</text>
+
+    <text class="l" x="28" y="340">ソート</text>
+    <text class="s" x="270" y="340">K &lt; 50% なら partial_sort</text>
+
+    <text class="l" x="28" y="386">OFFSET / LIMIT</text>
+    <text class="s" x="270" y="386">読み飛ばす分も走査する</text>
+
+    <text class="l" x="28" y="432">結果</text>
+    <text class="s" x="270" y="432">クライアントへ返却</text>
+
+    <text class="s" x="24" y="482">DEBUG は各段階の候補件数を出力します。上のフィールド名がそのまま出力されるキーです。</text>
+    <text class="s" x="24" y="504">最も絞り込みの効く語を先頭に置いてください。フィルタは既存の候補を狭めるだけで、候補を作り出すことはできません。</text>
+  </g>
+</svg>

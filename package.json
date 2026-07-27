@@ -12,6 +12,7 @@
     "dev": "vitepress dev",
     "build": "node scripts/generate-og-image.mjs && vitepress build",
     "build:og": "node scripts/generate-og-image.mjs",
+    "preview:diagrams": "node scripts/preview-diagrams.mjs",
     "preview": "vitepress preview"
   },
   "keywords": [],
@@ -30,8 +31,6 @@
     "vitepress": "^1.6.4"
   },
   "dependencies": {
-    "chart.js": "^4.5.1",
-    "mermaid": "^11.15.0",
-    "vitepress-plugin-mermaid": "^2.0.17"
+    "chart.js": "^4.5.1"
   }
 }

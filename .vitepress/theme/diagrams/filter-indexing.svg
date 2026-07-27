@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1040 390" role="img">
+  <title>Required filters versus search-time filters</title>
+  <defs>
+    <marker id="fi-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <marker id="fi-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--rs)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);--rs:var(--dg-rose-br,#be123c)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.28);font-weight:700;fill:var(--ink)}
+      .dg .l{font-size:calc(var(--fs)*1.06);font-weight:600;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.82);font-weight:600;fill:var(--txt)}
+      .dg .box{stroke-width:2}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .rose{fill:var(--dg-rose-bg,#ffe4e6);stroke:var(--dg-rose-br,#be123c)}
+      .dg .i-rose{fill:var(--dg-rose-br,#be123c)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#fi-a)}
+      .dg .er{fill:none;stroke:var(--rs);stroke-width:2;marker-end:url(#fi-r)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- ============================ shapes ============================ -->
+  <rect class="box slate" x="24" y="70" width="190" height="180" rx="12"/>
+  <rect class="box amber" x="262" y="70" width="256" height="180" rx="12"/>
+  <rect class="box green" x="566" y="70" width="210" height="180" rx="12"/>
+  <rect class="box blue" x="824" y="70" width="192" height="180" rx="12"/>
+  <rect class="box rose" x="254" y="290" width="520" height="72" rx="12"/>
+
+  <!-- ============================= edges ============================= -->
+  <path class="e" d="M220 160 L256 160"/>
+  <path class="e" d="M524 160 L560 160"/>
+  <path class="e" d="M782 160 L818 160"/>
+  <path class="er" d="M390 254 L390 286"/>
+
+  <!-- ============================= text: en ============================= -->
+  <g data-i18n="en">
+    <text class="t" x="119" y="108" text-anchor="middle">MySQL rows</text>
+    <text class="m" x="119" y="146" text-anchor="middle">id, text</text>
+    <text class="m" x="119" y="172" text-anchor="middle">enabled</text>
+    <text class="m" x="119" y="198" text-anchor="middle">deleted_at</text>
+    <text class="m" x="119" y="224" text-anchor="middle">status, category</text>
+
+    <text class="l" x="390" y="106" text-anchor="middle">required_filters</text>
+    <text class="s" x="390" y="136" text-anchor="middle">decide which rows</text>
+    <text class="s" x="390" y="156" text-anchor="middle">enter the index at all</text>
+    <text class="m" x="390" y="194" text-anchor="middle">deleted_at IS NULL</text>
+    <text class="m" x="390" y="218" text-anchor="middle">AND enabled = 1</text>
+
+    <text class="t" x="671" y="108" text-anchor="middle">Index</text>
+    <text x="671" y="146" text-anchor="middle">n-gram posting lists</text>
+    <text x="671" y="174" text-anchor="middle">DocStore</text>
+    <text x="671" y="202" text-anchor="middle">filter values</text>
+    <text class="s" x="671" y="232" text-anchor="middle">only eligible rows are here</text>
+
+    <text class="t" x="920" y="108" text-anchor="middle">Query</text>
+    <text class="m" x="920" y="146" text-anchor="middle">SEARCH ...</text>
+    <text class="m" x="920" y="172" text-anchor="middle">FILTER status=1</text>
+    <text class="m" x="920" y="198" text-anchor="middle">FILTER category=tech</text>
+    <text class="s" x="920" y="230" text-anchor="middle">narrows indexed rows</text>
+
+    <text class="s i-rose" x="404" y="278">no match</text>
+    <text class="l" x="514" y="322" text-anchor="middle">Rows that fail required_filters</text>
+    <text class="s" x="514" y="346" text-anchor="middle">never enter search results until an UPDATE makes them eligible</text>
+  </g>
+
+  <!-- ============================= text: ja ============================= -->
+  <g data-i18n="ja">
+    <text class="t" x="119" y="108" text-anchor="middle">MySQL の行</text>
+    <text class="m" x="119" y="146" text-anchor="middle">id, text</text>
+    <text class="m" x="119" y="172" text-anchor="middle">enabled</text>
+    <text class="m" x="119" y="198" text-anchor="middle">deleted_at</text>
+    <text class="m" x="119" y="224" text-anchor="middle">status, category</text>
+
+    <text class="l" x="390" y="106" text-anchor="middle">required_filters</text>
+    <text class="s" x="390" y="136" text-anchor="middle">そもそもインデックスに</text>
+    <text class="s" x="390" y="156" text-anchor="middle">入れる行を決める</text>
+    <text class="m" x="390" y="194" text-anchor="middle">deleted_at IS NULL</text>
+    <text class="m" x="390" y="218" text-anchor="middle">AND enabled = 1</text>
+
+    <text class="t" x="671" y="108" text-anchor="middle">インデックス</text>
+    <text x="671" y="146" text-anchor="middle">ポスティングリスト</text>
+    <text x="671" y="174" text-anchor="middle">DocStore</text>
+    <text x="671" y="202" text-anchor="middle">フィルタ値</text>
+    <text class="s" x="671" y="232" text-anchor="middle">対象行だけが存在する</text>
+
+    <text class="t" x="920" y="108" text-anchor="middle">クエリ</text>
+    <text class="m" x="920" y="146" text-anchor="middle">SEARCH ...</text>
+    <text class="m" x="920" y="172" text-anchor="middle">FILTER status=1</text>
+    <text class="m" x="920" y="198" text-anchor="middle">FILTER category=tech</text>
+    <text class="s" x="920" y="230" text-anchor="middle">索引済みの行を絞る</text>
+
+    <text class="s i-rose" x="404" y="278">不一致</text>
+    <text class="l" x="514" y="322" text-anchor="middle">required_filters を満たさない行</text>
+    <text class="s" x="514" y="346" text-anchor="middle">UPDATE で条件を満たすまで、検索結果には一切現れません</text>
+  </g>
+</svg>

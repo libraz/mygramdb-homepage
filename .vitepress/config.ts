@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
-import { withMermaid } from 'vitepress-plugin-mermaid'
 import mygramGrammar from './mygram.tmLanguage.mjs'
+import benchmark from '../src/data/benchmark-v1.9.0.json'
 
 const siteUrl = 'https://mygramdb.libraz.net'
 const githubUrl = 'https://github.com/libraz/mygram-db'
@@ -17,10 +17,10 @@ const softwareApplicationJsonLd = {
     price: '0',
     priceCurrency: 'USD'
   },
-  description: 'In-memory full-text search engine that replaces slow MySQL FULLTEXT. Tens to hundreds of times faster with real-time MySQL binlog replication.',
+  description: 'In-memory full-text search engine with real-time MySQL binlog replication.',
   url: siteUrl,
   downloadUrl: githubUrl,
-  softwareVersion: '1.8.0',
+  softwareVersion: benchmark.run.mygramdbVersion,
   author: {
     '@type': 'Person',
     name: 'libraz'
@@ -55,7 +55,7 @@ const faqJsonLd = {
       name: 'How much faster is MygramDB than MySQL FULLTEXT?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'On a 1.1M Wikipedia article dataset, MygramDB delivers sub-millisecond search latency compared to MySQL FULLTEXT at 500ms-2.5s. COUNT queries are thousands of times faster. With verify_text enabled (v1.5.0), results are exact match with MySQL. Benchmarks are reproducible via make bench-up.'
+        text: `The current reproducible benchmark compares MygramDB and MySQL FULLTEXT on ${benchmark.run.datasetRows.toLocaleString()} Wikipedia articles with MygramDB's query cache disabled. It includes search, COUNT, CJK, result-consistency, and concurrent-throughput results.`
       }
     },
     {
@@ -77,7 +77,7 @@ const faqJsonLd = {
   ]
 }
 
-export default withMermaid(defineConfig({
+export default defineConfig({
   srcDir: 'src',
   appearance: true,
   title: 'MygramDB',
@@ -151,9 +151,9 @@ export default withMermaid(defineConfig({
           { text: '比較', link: '/ja/comparison' },
           { text: 'FAQ', link: '/ja/faq' },
           {
-            text: 'v1.8.0',
+            text: 'v1.9.0',
             items: [
-              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.8.0.md' },
+              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.9.0.md' },
               { text: '変更履歴', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
             ]
           }
@@ -172,8 +172,6 @@ export default withMermaid(defineConfig({
               text: 'はじめに',
               items: [
                 { text: 'クイックスタート', link: '/ja/docs/getting-started' },
-                { text: 'v1.8アップグレードノート', link: '/ja/docs/upgrade-v1.8' },
-                { text: 'v1.7移行ガイド', link: '/ja/docs/migration-v1.7' },
                 { text: 'インストール', link: '/ja/docs/installation' },
                 { text: '設定', link: '/ja/docs/configuration' },
                 { text: 'クエリガイド', link: '/ja/docs/queries' }
@@ -202,6 +200,14 @@ export default withMermaid(defineConfig({
                 { text: '公式クライアント', link: '/ja/docs/client-libraries' },
                 { text: 'C/C++ libmygramclient', link: '/ja/docs/client-library' }
               ]
+            },
+            {
+              text: 'アップグレード',
+              items: [
+                { text: 'v1.9 へのアップグレード', link: '/ja/docs/upgrade-v1.9' },
+                { text: 'v1.8 へのアップグレード', link: '/ja/docs/upgrade-v1.8' },
+                { text: 'v1.7 へのアップグレード', link: '/ja/docs/migration-v1.7' }
+              ]
             }
           ]
         }
@@ -217,9 +223,9 @@ export default withMermaid(defineConfig({
       { text: 'Comparison', link: '/comparison' },
       { text: 'FAQ', link: '/faq' },
       {
-        text: 'v1.8.0',
+        text: 'v1.9.0',
         items: [
-          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.8.0.md' },
+          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.9.0.md' },
           { text: 'Changelog', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
         ]
       }
@@ -231,15 +237,14 @@ export default withMermaid(defineConfig({
           text: 'Overview',
           items: [
             { text: 'How it Works', link: '/docs/how-it-works' },
-            { text: 'Architecture', link: '/docs/architecture' }
+            { text: 'Architecture', link: '/docs/architecture' },
+            { text: 'Glossary', link: '/docs/glossary' }
           ]
         },
         {
           text: 'Getting Started',
           items: [
             { text: 'Quick Start', link: '/docs/getting-started' },
-            { text: 'v1.8 Upgrade Notes', link: '/docs/upgrade-v1.8' },
-            { text: 'v1.7 Migration', link: '/docs/migration-v1.7' },
             { text: 'Installation', link: '/docs/installation' },
             { text: 'Configuration', link: '/docs/configuration' },
             { text: 'Query Guide', link: '/docs/queries' }
@@ -268,6 +273,14 @@ export default withMermaid(defineConfig({
             { text: 'Official Clients', link: '/docs/client-libraries' },
             { text: 'C/C++ libmygramclient', link: '/docs/client-library' }
           ]
+        },
+        {
+          text: 'Upgrading',
+          items: [
+            { text: 'Upgrade to v1.9', link: '/docs/upgrade-v1.9' },
+            { text: 'Upgrade to v1.8', link: '/docs/upgrade-v1.8' },
+            { text: 'Upgrade to v1.7', link: '/docs/migration-v1.7' }
+          ]
         }
       ]
     },
@@ -280,4 +293,4 @@ export default withMermaid(defineConfig({
       message: 'a personal project by <a href="https://libraz.net" target="_blank" rel="noopener">libraz</a>'
     }
   }
-}))
+})

@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 470" role="img">
+  <title>Live replication sequence</title>
+  <defs>
+    <marker id="lr-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.14);font-weight:700;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.86);fill:var(--ink)}
+      .dg .box{stroke-width:2}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .life{stroke:var(--gd);stroke-width:2;stroke-dasharray:6 7}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#lr-a)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- lifelines -->
+  <rect class="box sky" x="46" y="24" width="220" height="52" rx="10"/>
+  <rect class="box slate" x="446" y="24" width="220" height="52" rx="10"/>
+  <rect class="box blue" x="846" y="24" width="220" height="52" rx="10"/>
+  <path class="life" d="M156 80 L156 400"/>
+  <path class="life" d="M556 80 L556 400"/>
+  <path class="life" d="M956 80 L956 400"/>
+
+  <!-- messages -->
+  <path class="e" d="M158 132 L552 132"/>
+  <path class="e" d="M558 246 L952 246"/>
+  <!-- worker self-calls -->
+  <path class="e" d="M958 292 L1046 292 L1046 320 L960 320"/>
+  <path class="e" d="M958 348 L1046 348 L1046 376 L960 376"/>
+
+  <!-- note over the queue -->
+  <rect class="box amber" x="404" y="164" width="304" height="44" rx="8"/>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="t" x="156" y="57" text-anchor="middle">MySQL</text>
+    <text class="t" x="556" y="57" text-anchor="middle">Event queue</text>
+    <text class="t" x="956" y="57" text-anchor="middle">Worker</text>
+
+    <text class="s" x="355" y="124" text-anchor="middle">row events (INSERT / UPDATE / DELETE)</text>
+    <text class="s" x="556" y="192" text-anchor="middle">bounded queue — replication.queue_size (default 10,000)</text>
+    <text class="s" x="755" y="238" text-anchor="middle">dequeue one event</text>
+
+    <text class="s" x="944" y="286" text-anchor="end">update Index + DocStore</text>
+    <text class="s" x="944" y="342" text-anchor="end">invalidate affected cache entries</text>
+
+    <text class="s" x="560" y="440" text-anchor="middle">The queue is bounded on purpose: if workers fall behind, the reader blocks instead of growing memory without limit.</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="t" x="156" y="57" text-anchor="middle">MySQL</text>
+    <text class="t" x="556" y="57" text-anchor="middle">イベントキュー</text>
+    <text class="t" x="956" y="57" text-anchor="middle">ワーカー</text>
+
+    <text class="s" x="355" y="124" text-anchor="middle">行イベント（INSERT / UPDATE / DELETE）</text>
+    <text class="s" x="556" y="192" text-anchor="middle">上限付きキュー — replication.queue_size（デフォルト 10,000）</text>
+    <text class="s" x="755" y="238" text-anchor="middle">イベントを1件取り出す</text>
+
+    <text class="s" x="944" y="286" text-anchor="end">Index + DocStore を更新</text>
+    <text class="s" x="944" y="342" text-anchor="end">影響するキャッシュを無効化</text>
+
+    <text class="s" x="560" y="440" text-anchor="middle">キューに上限があるのは意図的です。ワーカーが遅れた場合、メモリを際限なく増やす代わりにリーダー側が待機します。</text>
+  </g>
+</svg>

@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 490" role="img">
+  <title>SYNC lifecycle and table availability</title>
+  <defs>
+    <marker id="sl-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <marker id="sl-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--rs)"/>
+    </marker>
+    <style>
+      .dg{--fs:18px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);--rs:var(--dg-rose-br,#be123c)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*1.16);font-weight:700;fill:var(--ink)}
+      .dg .l{font-size:calc(var(--fs)*1.02);font-weight:600;fill:var(--ink)}
+      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
+      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.8);font-weight:600;fill:var(--txt)}
+      .dg .box{stroke-width:2}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .rose{fill:var(--dg-rose-bg,#ffe4e6);stroke:var(--dg-rose-br,#be123c)}
+      .dg .i-rose{fill:var(--dg-rose-br,#be123c)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#sl-a)}
+      .dg .ed{fill:none;stroke:var(--ln);stroke-width:2;stroke-dasharray:7 6;marker-end:url(#sl-a)}
+      .dg .er{fill:none;stroke:var(--rs);stroke-width:2;marker-end:url(#sl-r)}
+      .dg .conn{fill:none;stroke:var(--rs);stroke-width:2}
+      .dg .tick{fill:none;stroke:var(--ln);stroke-width:2}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- ===================== availability note (503) ===================== -->
+  <rect class="box rose" x="392" y="26" width="330" height="56" rx="12"/>
+  <path class="conn" d="M557 82 L557 100"/>
+
+  <!-- ============================ main row ============================ -->
+  <rect class="box green" x="24" y="104" width="150" height="92" rx="12"/>
+  <rect class="box amber" x="214" y="104" width="180" height="92" rx="12"/>
+  <rect class="box blue" x="434" y="104" width="240" height="92" rx="12"/>
+  <rect class="box slate" x="714" y="104" width="130" height="92" rx="12"/>
+  <rect class="box amber" x="884" y="104" width="212" height="92" rx="12"/>
+
+  <path class="e" d="M178 150 L210 150"/>
+  <path class="e" d="M398 150 L430 150"/>
+  <path class="e" d="M678 150 L710 150"/>
+  <path class="e" d="M848 150 L880 150"/>
+
+  <!-- ============================= branches ============================= -->
+  <path class="er" d="M304 200 L304 244"/>
+  <rect class="box rose" x="224" y="248" width="160" height="80" rx="12"/>
+
+  <path class="ed" d="M554 200 L554 244"/>
+  <rect class="box slate" x="454" y="248" width="200" height="80" rx="12"/>
+
+  <!-- ==================== replication start outcomes ==================== -->
+  <path class="tick" d="M990 200 L990 214"/>
+  <rect class="box green" x="884" y="214" width="212" height="28" rx="8"/>
+  <rect class="box slate" x="884" y="248" width="212" height="28" rx="8"/>
+  <rect class="box slate" x="884" y="282" width="212" height="28" rx="8"/>
+
+  <path class="e" d="M990 310 L990 330"/>
+  <rect class="box green" x="884" y="334" width="212" height="76" rx="12"/>
+
+  <!-- ======================== mutual exclusion ======================== -->
+  <rect class="box amber" x="24" y="356" width="660" height="76" rx="12"/>
+
+  <!-- ============================= text: en ============================= -->
+  <g data-i18n="en">
+    <text class="s" x="557" y="50" text-anchor="middle">HTTP search / count / facet / get</text>
+    <text class="s" x="557" y="72" text-anchor="middle">return 503 for this table</text>
+
+    <text class="s" x="194" y="86" text-anchor="middle">SYNC &lt;db.table&gt;</text>
+
+    <text class="t" x="99" y="146" text-anchor="middle">READY</text>
+    <text class="s" x="99" y="172" text-anchor="middle">serving queries</text>
+
+    <text class="l" x="304" y="146" text-anchor="middle">memory-health</text>
+    <text class="l" x="304" y="170" text-anchor="middle">check</text>
+
+    <text class="t" x="554" y="142" text-anchor="middle">IN_PROGRESS</text>
+    <text class="s" x="554" y="166" text-anchor="middle">snapshot built from</text>
+    <text class="s" x="554" y="186" text-anchor="middle">a MySQL SELECT</text>
+
+    <text class="l" x="779" y="145" text-anchor="middle">GTID</text>
+    <text class="l" x="779" y="169" text-anchor="middle">saved</text>
+
+    <text class="l" x="990" y="140" text-anchor="middle">replication starts</text>
+    <text class="s" x="990" y="164" text-anchor="middle">automatically, from</text>
+    <text class="s" x="990" y="184" text-anchor="middle">the saved GTID</text>
+
+    <text class="s i-rose" x="316" y="228">fail</text>
+    <text class="t" x="304" y="286" text-anchor="middle">FAILED</text>
+    <text class="s" x="304" y="310" text-anchor="middle">table stays READY</text>
+
+    <text class="s" x="566" y="228">SIGTERM</text>
+    <text class="t" x="554" y="286" text-anchor="middle">CANCELLED</text>
+    <text class="s" x="554" y="310" text-anchor="middle">graceful shutdown</text>
+
+    <text class="s" x="990" y="234" text-anchor="middle">STARTED</text>
+    <text class="s" x="990" y="268" text-anchor="middle">DISABLED</text>
+    <text class="s" x="990" y="302" text-anchor="middle">FAILED</text>
+
+    <text class="t" x="990" y="370" text-anchor="middle">COMPLETED</text>
+    <text class="s" x="990" y="394" text-anchor="middle">table returns to READY</text>
+
+    <text class="l" x="354" y="388" text-anchor="middle">Mutual exclusion</text>
+    <text class="s" x="354" y="414" text-anchor="middle">SYNC is rejected while OPTIMIZE or DUMP SAVE / LOAD runs, and vice versa</text>
+
+    <text class="s" x="560" y="466" text-anchor="middle">Treat a 503 during IN_PROGRESS as retry-after-readiness, not as an error.</text>
+  </g>
+
+  <!-- ============================= text: ja ============================= -->
+  <g data-i18n="ja">
+    <text class="s" x="557" y="50" text-anchor="middle">HTTP の search / count / facet / get が</text>
+    <text class="s" x="557" y="72" text-anchor="middle">このテーブルについて 503 を返す</text>
+
+    <text class="s" x="194" y="86" text-anchor="middle">SYNC &lt;db.table&gt;</text>
+
+    <text class="t" x="99" y="146" text-anchor="middle">READY</text>
+    <text class="s" x="99" y="172" text-anchor="middle">検索を受付中</text>
+
+    <text class="l" x="304" y="146" text-anchor="middle">メモリ健全性</text>
+    <text class="l" x="304" y="170" text-anchor="middle">チェック</text>
+
+    <text class="t" x="554" y="142" text-anchor="middle">IN_PROGRESS</text>
+    <text class="s" x="554" y="166" text-anchor="middle">MySQL の SELECT から</text>
+    <text class="s" x="554" y="186" text-anchor="middle">スナップショットを構築</text>
+
+    <text class="l" x="779" y="145" text-anchor="middle">GTID</text>
+    <text class="l" x="779" y="169" text-anchor="middle">を保存</text>
+
+    <text class="l" x="990" y="140" text-anchor="middle">レプリケーション開始</text>
+    <text class="s" x="990" y="164" text-anchor="middle">保存した GTID から</text>
+    <text class="s" x="990" y="184" text-anchor="middle">自動で再開</text>
+
+    <text class="s i-rose" x="316" y="228">失敗</text>
+    <text class="t" x="304" y="286" text-anchor="middle">FAILED</text>
+    <text class="s" x="304" y="310" text-anchor="middle">READY のまま</text>
+
+    <text class="s" x="566" y="228">SIGTERM</text>
+    <text class="t" x="554" y="286" text-anchor="middle">CANCELLED</text>
+    <text class="s" x="554" y="310" text-anchor="middle">正常なシャットダウン</text>
+
+    <text class="s" x="990" y="234" text-anchor="middle">STARTED</text>
+    <text class="s" x="990" y="268" text-anchor="middle">DISABLED</text>
+    <text class="s" x="990" y="302" text-anchor="middle">FAILED</text>
+
+    <text class="t" x="990" y="370" text-anchor="middle">COMPLETED</text>
+    <text class="s" x="990" y="394" text-anchor="middle">テーブルは READY へ戻る</text>
+
+    <text class="l" x="354" y="388" text-anchor="middle">相互排他</text>
+    <text class="s" x="354" y="414" text-anchor="middle">OPTIMIZE や DUMP SAVE / LOAD の実行中は SYNC を受け付けません（逆も同様）</text>
+
+    <text class="s" x="560" y="466" text-anchor="middle">IN_PROGRESS 中の 503 はエラーではなく、準備完了後に再試行する合図として扱ってください。</text>
+  </g>
+</svg>

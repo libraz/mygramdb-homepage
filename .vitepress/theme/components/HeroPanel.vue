@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useData } from 'vitepress'
+import benchmark from '../../../src/data/benchmark-v1.9.0.json'
 
 /**
  * Hero "instrument readout" — a quiet, static latency comparison panel.
@@ -8,11 +9,12 @@ import { useData } from 'vitepress'
  */
 const { lang } = useData()
 const isJa = computed(() => lang.value.startsWith('ja'))
+const featured = benchmark.search[0]
 
 const t = computed(() =>
   isJa.value
-    ? { label: '検索レイテンシ', tag: 'インメモリ', note: '27,600× 高速 · 110万件 p50' }
-    : { label: 'SEARCH LATENCY', tag: 'in-memory', note: '27,600× faster · p50 on 1.1M docs' }
+    ? { label: '検索レイテンシ', tag: 'インメモリ', note: `${Math.round(featured.mysqlP50Ms / featured.mygramdbP50Ms)}× 高速 · ${benchmark.run.datasetRows.toLocaleString()}件 p50` }
+    : { label: 'SEARCH LATENCY', tag: 'in-memory', note: `${Math.round(featured.mysqlP50Ms / featured.mygramdbP50Ms)}× faster · p50 on ${benchmark.run.datasetRows.toLocaleString()} docs` }
 )
 </script>
 
@@ -29,7 +31,7 @@ const t = computed(() =>
       <div class="mg-row">
         <div class="mg-row__top">
           <span class="mg-row__name">MySQL&nbsp;FULLTEXT</span>
-          <span class="mg-row__val mg-row__val--slow">2,566<small>ms</small></span>
+          <span class="mg-row__val mg-row__val--slow">{{ featured.mysqlP50Ms.toFixed(0) }}<small>ms</small></span>
         </div>
         <div class="mg-track"><div class="mg-bar mg-bar--slow"></div></div>
       </div>
@@ -37,7 +39,7 @@ const t = computed(() =>
       <div class="mg-row">
         <div class="mg-row__top">
           <span class="mg-row__name">MygramDB<span class="mg-row__tag">{{ t.tag }}</span></span>
-          <span class="mg-row__val mg-row__val--fast">0.08<small>ms</small></span>
+          <span class="mg-row__val mg-row__val--fast">{{ featured.mygramdbP50Ms.toFixed(2) }}<small>ms</small></span>
         </div>
         <div class="mg-track"><div class="mg-bar mg-bar--fast"></div></div>
       </div>

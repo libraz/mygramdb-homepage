@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 480" role="img">
+  <title>Search pipeline stages</title>
+  <defs>
+    <marker id="sp-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    </marker>
+    <style>
+      .dg{--fs:16px;
+        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
+        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
+        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
+        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
+      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
+      .dg .t{font-size:calc(var(--fs)*0.98);font-weight:700;fill:var(--ink)}
+      .dg .g{font-size:calc(var(--fs)*0.8);font-weight:700;fill:var(--mut);letter-spacing:.08em}
+      .dg .s{font-size:calc(var(--fs)*0.78);fill:var(--mut)}
+      .dg .n{font-family:var(--dgm);font-size:calc(var(--fs)*0.72);font-weight:700;fill:var(--mut)}
+      .dg .box{stroke-width:2}
+      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
+      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
+      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
+      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
+      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
+      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#sp-a)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- row 1 -->
+  <rect class="box sky" x="24" y="72" width="188" height="92" rx="11"/>
+  <rect class="box blue" x="248" y="72" width="188" height="92" rx="11"/>
+  <rect class="box blue" x="472" y="72" width="188" height="92" rx="11"/>
+  <rect class="box blue" x="696" y="72" width="188" height="92" rx="11"/>
+  <rect class="box slate" x="920" y="72" width="176" height="92" rx="11"/>
+
+  <!-- row 2 -->
+  <rect class="box slate" x="24" y="256" width="188" height="92" rx="11"/>
+  <rect class="box amber" x="248" y="256" width="188" height="92" rx="11"/>
+  <rect class="box blue" x="472" y="256" width="188" height="92" rx="11"/>
+  <rect class="box blue" x="696" y="256" width="188" height="92" rx="11"/>
+  <rect class="box green" x="920" y="256" width="176" height="92" rx="11"/>
+
+  <!-- edges row 1 -->
+  <path class="e" d="M216 118 L244 118"/>
+  <path class="e" d="M440 118 L468 118"/>
+  <path class="e" d="M664 118 L692 118"/>
+  <path class="e" d="M888 118 L916 118"/>
+  <!-- wrap -->
+  <path class="e" d="M1008 168 L1008 200 Q1008 210 998 210 L128 210 Q118 210 118 220 L118 252"/>
+  <!-- edges row 2 -->
+  <path class="e" d="M216 302 L244 302"/>
+  <path class="e" d="M440 302 L468 302"/>
+  <path class="e" d="M664 302 L692 302"/>
+  <path class="e" d="M888 302 L916 302"/>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="n" x="40" y="64">01</text>
+    <text class="t" x="118" y="108" text-anchor="middle">Client query</text>
+    <text class="s" x="118" y="134" text-anchor="middle">"quantum physics"</text>
+
+    <text class="n" x="264" y="64">02</text>
+    <text class="t" x="342" y="108" text-anchor="middle">Parse</text>
+    <text class="s" x="342" y="134" text-anchor="middle">terms, clauses, AST</text>
+
+    <text class="n" x="488" y="64">03</text>
+    <text class="t" x="566" y="108" text-anchor="middle">Generate n-grams</text>
+    <text class="s" x="566" y="132" text-anchor="middle">rarest term first,</text>
+    <text class="s" x="566" y="150" text-anchor="middle">after NFKC normalization</text>
+
+    <text class="n" x="712" y="64">04</text>
+    <text class="t" x="790" y="108" text-anchor="middle">Intersect postings</text>
+    <text class="s" x="790" y="134" text-anchor="middle">AND across n-grams</text>
+
+    <text class="n" x="936" y="64">05</text>
+    <text class="t" x="1008" y="108" text-anchor="middle">NOT filter</text>
+    <text class="s" x="1008" y="134" text-anchor="middle">remove excluded</text>
+
+    <text class="n" x="40" y="248">06</text>
+    <text class="t" x="118" y="292" text-anchor="middle">Column filters</text>
+    <text class="s" x="118" y="318" text-anchor="middle">FILTER clauses</text>
+
+    <text class="n" x="264" y="248">07</text>
+    <text class="t" x="342" y="292" text-anchor="middle">verify_text</text>
+    <text class="s" x="342" y="316" text-anchor="middle">drop false positives</text>
+    <text class="s" x="342" y="334" text-anchor="middle">— only when enabled</text>
+
+    <text class="n" x="488" y="248">08</text>
+    <text class="t" x="566" y="292" text-anchor="middle">Sort</text>
+    <text class="s" x="566" y="318" text-anchor="middle">primary key or _score</text>
+
+    <text class="n" x="712" y="248">09</text>
+    <text class="t" x="790" y="292" text-anchor="middle">OFFSET / LIMIT</text>
+    <text class="s" x="790" y="318" text-anchor="middle">applied last</text>
+
+    <text class="n" x="936" y="248">10</text>
+    <text class="t" x="1008" y="292" text-anchor="middle">Return DocIDs</text>
+    <text class="s" x="1008" y="318" text-anchor="middle">+ optional snippets</text>
+
+    <text class="s" x="560" y="410" text-anchor="middle">The candidate set only ever shrinks from step 4 onward, so the cheapest filters run before the expensive ones.</text>
+    <text class="s" x="560" y="442" text-anchor="middle">Step 7 is the only stage that reads document text; with verify_text off it is skipped entirely.</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="n" x="40" y="64">01</text>
+    <text class="t" x="118" y="108" text-anchor="middle">クライアントクエリ</text>
+    <text class="s" x="118" y="134" text-anchor="middle">"quantum physics"</text>
+
+    <text class="n" x="264" y="64">02</text>
+    <text class="t" x="342" y="108" text-anchor="middle">解析</text>
+    <text class="s" x="342" y="134" text-anchor="middle">検索語・句・AST</text>
+
+    <text class="n" x="488" y="64">03</text>
+    <text class="t" x="566" y="108" text-anchor="middle">N-gram 生成</text>
+    <text class="s" x="566" y="132" text-anchor="middle">NFKC 正規化のうえ</text>
+    <text class="s" x="566" y="150" text-anchor="middle">希少な語から順に</text>
+
+    <text class="n" x="712" y="64">04</text>
+    <text class="t" x="790" y="108" text-anchor="middle">ポスティング積集合</text>
+    <text class="s" x="790" y="134" text-anchor="middle">N-gram 間で AND</text>
+
+    <text class="n" x="936" y="64">05</text>
+    <text class="t" x="1008" y="108" text-anchor="middle">NOT 除外</text>
+    <text class="s" x="1008" y="134" text-anchor="middle">対象を取り除く</text>
+
+    <text class="n" x="40" y="248">06</text>
+    <text class="t" x="118" y="292" text-anchor="middle">カラムフィルタ</text>
+    <text class="s" x="118" y="318" text-anchor="middle">FILTER 句</text>
+
+    <text class="n" x="264" y="248">07</text>
+    <text class="t" x="342" y="292" text-anchor="middle">verify_text</text>
+    <text class="s" x="342" y="316" text-anchor="middle">偽陽性を除去</text>
+    <text class="s" x="342" y="334" text-anchor="middle">— 有効時のみ</text>
+
+    <text class="n" x="488" y="248">08</text>
+    <text class="t" x="566" y="292" text-anchor="middle">ソート</text>
+    <text class="s" x="566" y="318" text-anchor="middle">主キー または _score</text>
+
+    <text class="n" x="712" y="248">09</text>
+    <text class="t" x="790" y="292" text-anchor="middle">OFFSET / LIMIT</text>
+    <text class="s" x="790" y="318" text-anchor="middle">最後に適用</text>
+
+    <text class="n" x="936" y="248">10</text>
+    <text class="t" x="1008" y="292" text-anchor="middle">DocID を返却</text>
+    <text class="s" x="1008" y="318" text-anchor="middle">+ 任意でスニペット</text>
+
+    <text class="s" x="560" y="410" text-anchor="middle">4番以降、候補集合は縮む一方です。そのため、安価なフィルタほど先に実行されます。</text>
+    <text class="s" x="560" y="442" text-anchor="middle">本文テキストを読むのは7番だけで、verify_text が off の場合はこの段階自体がスキップされます。</text>
+  </g>
+</svg>

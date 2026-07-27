@@ -2,7 +2,10 @@ import DefaultTheme from 'vitepress/theme'
 import { h } from 'vue'
 import { useData } from 'vitepress'
 import BenchChart from './components/BenchChart.vue'
+import BenchmarkResults from './components/BenchmarkResults.vue'
+import DocDiagram from './components/DocDiagram.vue'
 import HeroPanel from './components/HeroPanel.vue'
+import benchmark from '../../src/data/benchmark-v1.9.0.json'
 import './custom.css'
 
 /** Locale-aware copy for the hero kicker + meta line. */
@@ -10,11 +13,11 @@ function heroCopy(isJa: boolean) {
   return isJa
     ? {
         kicker: 'インメモリ検索エンジン',
-        meta: ['MITライセンス', '単一バイナリ', 'MySQL & MariaDB', 'v1.8'],
+        meta: ['MITライセンス', '単一バイナリ', 'MySQL & MariaDB', `v${benchmark.run.mygramdbVersion}`],
       }
     : {
         kicker: 'In-memory search engine',
-        meta: ['MIT licensed', 'Single binary', 'MySQL & MariaDB', 'v1.8'],
+        meta: ['MIT licensed', 'Single binary', 'MySQL & MariaDB', `v${benchmark.run.mygramdbVersion}`],
       }
 }
 
@@ -43,5 +46,7 @@ export default {
   Layout,
   enhanceApp({ app }) {
     app.component('BenchChart', BenchChart)
+    app.component('BenchmarkResults', BenchmarkResults)
+    app.component('DocDiagram', DocDiagram)
   },
 }
