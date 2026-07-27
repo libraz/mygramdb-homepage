@@ -19,8 +19,8 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 
 | 言語 | パッケージ | 要件 | 特徴 |
 |------|------------|------|------|
-| Node.js | `mygramdb-client` v1.3.0 | Node.js 22+ | TypeScript型定義、純JavaScript実装、任意のネイティブバインディング |
-| Python | `mygramdb-client` v1.2.0 | Python 3.9+ | asyncio、外部依存なし、dataclass型 |
+| Node.js | `mygramdb-client` v1.4.0 | Node.js 22+ | TypeScript型定義、純JavaScript実装、任意のネイティブバインディング |
+| Python | `mygramdb-client` v1.3.0 | Python 3.9+ | asyncio、外部依存なし、dataclass型 |
 | Go | `github.com/libraz/go-mygram-client` | Go 1.23+ | 標準ライブラリのみ、`context.Context` 対応、並行利用可能 |
 
 ::: warning 検索対象データは先に同期してください
@@ -171,49 +171,61 @@ asyncio.run(main())
 ### 複数DBとRaw Boolean検索
 
 ```python
+import asyncio
 from mygramdb_client import (
+    ClientConfig,
+    MygramClient,
     SearchRawOptions,
     convert_search_expression,
     parse_table_identity,
     qualify_table_identity,
 )
 
-table = qualify_table_identity('articles', 'app_db')  # app_db.articles
-print(parse_table_identity(table))                    # ('app_db', 'articles')
+async def main():
+    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+        table = qualify_table_identity('articles', 'app_db')  # app_db.articles
+        print(parse_table_identity(table))                    # ('app_db', 'articles')
 
-raw = convert_search_expression('python OR (ruby AND rails)')
-res = await client.search_raw(table, raw, SearchRawOptions(limit=50))
+        raw = convert_search_expression('python OR (ruby AND rails)')
+        res = await client.search_raw(table, raw, SearchRawOptions(limit=50))
 
-highlighted = await client.search_raw_with_highlights(
-    table,
-    raw,
-    SearchRawOptions(limit=10),
-)
+        highlighted = await client.search_raw_with_highlights(
+            table,
+            raw,
+            SearchRawOptions(limit=10),
+        )
+
+asyncio.run(main())
 ```
 
 ### HIGHLIGHT / FACET / SYNC
 
 ```python
-from mygramdb_client import FacetOptions, SearchOptions
+import asyncio
+from mygramdb_client import ClientConfig, FacetOptions, MygramClient, SearchOptions
 
-res = await client.search_with_highlights(
-    'articles',
-    'golang',
-    SearchOptions(limit=10, sort_column='_score', sort_desc=True),
-)
+async def main():
+    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+        res = await client.search_with_highlights(
+            'articles',
+            'golang',
+            SearchOptions(limit=10, sort_column='_score', sort_desc=True),
+        )
 
-facets = await client.facet(
-    'articles',
-    'category',
-    FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
-)
+        facets = await client.facet(
+            'articles',
+            'category',
+            FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
+        )
 
-await client.set_variable('logging.level', 'info')
-print(await client.show_variables('logging%'))
+        await client.set_variable('logging.level', 'info')
+        print(await client.show_variables('logging%'))
 
-await client.sync('app_db.articles')
-print(await client.sync_status())
-await client.sync_stop('app_db.articles')
+        await client.sync('app_db.articles')
+        print(await client.sync_status())
+        await client.sync_stop('app_db.articles')
+
+asyncio.run(main())
 ```
 
 ## Go

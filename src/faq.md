@@ -5,17 +5,25 @@ description: Frequently asked questions about MygramDB. Architecture, benchmarks
 
 # Frequently Asked Questions
 
+::: info Unfamiliar with a term?
+GTID, binlog, N-gram, BM25, and Roaring Bitmap are all defined in the [Glossary](/docs/glossary). Keep it open alongside this page on a first read.
+:::
+
 ## MySQL FULLTEXT Problems
 
 ### Why is my MySQL FULLTEXT search so slow?
 
 Disk I/O, uncompressed posting lists, cache dependency, and concurrency collapse. See [Why MySQL FULLTEXT is Slow](/why) for a detailed breakdown.
 
-**Solution**: MygramDB keeps everything in memory, delivering consistent sub-millisecond latency. See [Benchmarks](/benchmarks) for numbers.
+**Solution**: MygramDB keeps its search index in memory. See [Benchmarks](/benchmarks) for the current cache-off measurements.
+
+::: tip What you do have to change
+Writes to MySQL stay exactly as they are. What changes is where search requests go: they must be pointed at MygramDB's TCP or HTTP API.
+:::
 
 ### My MySQL FULLTEXT queries keep timing out under load. How do I fix it?
 
-Add MygramDB as a search replica. In benchmarks on 1.1M Wikipedia articles, MygramDB delivers 2,634-11,766 QPS under concurrent load, while MySQL FULLTEXT drops to 2-8 QPS.
+Add MygramDB as a search replica. The [reproducible benchmark](/benchmarks) compares its cache-off throughput with MySQL FULLTEXT on the same dataset.
 
 ### Is there a way to speed up MySQL FULLTEXT without changing my application?
 
@@ -51,6 +59,10 @@ The key difference is data flow. RediSearch requires you to push documents into 
 
 Depends on `verify_text` mode. With `verify_text: off` (default): **~813MB per million documents** (index only). With `verify_text: all` (text verification enabled): **~2.3GB per million documents** (includes stored normalized text for post-filtering). For 10M documents, plan for ~8GB (`off`) or ~23GB (`all`).
 
+::: warning What happens when memory runs out
+MygramDB is an in-memory engine. If the dataset outgrows available RAM, the OS or container platform can kill the process with an OOM. In production, budget index RAM plus headroom, separately from the disk space used for dumps.
+:::
+
 ### Does MygramDB handle multibyte / non-ASCII text?
 
 Yes. MygramDB is fully Unicode-aware: text goes through ICU-based NFKC normalization and is then tokenized by a language-agnostic N-gram tokenizer. 3-byte UTF-8 (most ideographic scripts, e.g. Chinese, Japanese, Korean) and 4-byte UTF-8 (emoji, supplementary planes) are handled out of the box with no language-specific plugins, dictionaries, or morphological analyzers to configure.
@@ -65,7 +77,7 @@ Yes (v1.6.0+). Add the `HIGHLIGHT` clause to receive snippet fragments with conf
 
 ### Does MygramDB support relevance ranking?
 
-Yes (v1.6.0+). Use `SORT _score DESC` to rank results by BM25 relevance (`k1=1.2`, `b=0.75`). IDF and TF are computed at query time; requires `verify_text` to be `"ascii"` or `"all"`.
+Yes (v1.6.0+). Use `SORT _score DESC` to rank results by BM25 relevance. IDF and TF are computed at query time; `k1` and `b` are tunable via `bm25.k1` (default `1.2`) and `bm25.b` (default `0.75`). It requires `bm25.enable: true` and `verify_text` set to `"ascii"` or `"all"`.
 
 ### Can MygramDB scale horizontally?
 
@@ -91,7 +103,7 @@ No. MygramDB relies on MySQL's binary log replication protocol, which is MySQL-s
 
 ### Does MygramDB work with MariaDB?
 
-Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTIDs (`domain-server-sequence`). The server flavor is auto-detected from `SELECT VERSION()`, so the same `mysql` config section works for both MySQL 8.4/9.x and MariaDB. E2E tested against MariaDB 10.11 and 11.4.
+Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTIDs (`domain-server-sequence`). A capability probe detects the server flavor, so the same `mysql` config section works for both MySQL 8.4/9.x and MariaDB. E2E tested against MariaDB 10.11 and 11.4.
 
 ## Indexing and Search
 
@@ -99,13 +111,13 @@ Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTI
 
 N-gram tokenization is language-agnostic. Morphological analyzers (MeCab, kuromoji, jieba) require dictionaries, language detection, and version management. N-gram works uniformly across Latin, multibyte ideographic scripts, and mixed-script content without any per-language configuration.
 
-MygramDB uses a hybrid approach: bigrams (size 2) for ASCII/alphanumeric text and unigrams (size 1) for multibyte ideographic characters (e.g. CJK). Both sizes are configurable per table via `ngram_size` and `kanji_ngram_size`. Since v1.8.0, the omitted `ngram_size` default is `2`.
+MygramDB uses bigrams (size 2) by default for ASCII/alphanumeric text and CJK ideographs. Set `kanji_ngram_size` when CJK ideographs need a different size. Both sizes are configurable per table, and the omitted `ngram_size` default is `2`.
 
 ### How are Roaring bitmaps used?
 
 Posting lists use a hybrid storage strategy based on density:
 
-- **Sparse postings** (below 18% of total documents): Delta-encoded arrays. DocIDs are stored as deltas from the previous value, reducing 4-byte integers to 1-2 bytes each.
+- **Sparse postings** (below 18% of total documents): Delta-encoded arrays. DocIDs are stored as fixed-width deltas from the previous value.
 - **Dense postings** (18% or above): Roaring bitmaps via CRoaring. Roaring automatically selects the best container type (array, bitmap, or run-length) per 65,536-ID chunk.
 
 The threshold is configurable (`roaring_threshold`). A hysteresis factor (0.5x) prevents oscillation between formats.
@@ -116,9 +128,9 @@ MygramDB links against [CRoaring](https://github.com/RoaringBitmap/CRoaring), wh
 
 ### How does compression achieve 60-80% reduction?
 
-The baseline is uncompressed uint32 arrays (4 bytes per DocID). Two mechanisms reduce this:
+The baseline is uncompressed uint32 arrays (4 bytes per DocID). Delta encoding makes sparse IDs easier to represent, while Roaring compression reduces memory for dense postings:
 
-1. **Delta encoding**: Monotonically increasing DocIDs become small deltas. For example, `[1000, 1002, 1005]` becomes `[1000, 2, 3]`, which encodes in fewer bytes.
+1. **Delta encoding**: Monotonically increasing DocIDs become small deltas. For example, `[1000, 1002, 1005]` becomes `[1000, 2, 3]`; the current representation stores each delta as a `uint32_t`.
 2. **Roaring bitmap compression**: Dense postings use Roaring's container optimization — run-length encoding for consecutive ranges, bitmap containers for scattered dense regions.
 
 The 60-80% figure is typical for real-world posting lists with mixed sparse and dense terms.
@@ -151,7 +163,7 @@ During reconnection, search queries are blocked briefly (typically 1-5 seconds).
 
 ### How does MygramDB handle ALTER TABLE?
 
-MygramDB catches DDL events via binlog. TRUNCATE TABLE clears the index immediately. ALTER TABLE and DROP TABLE are logged as warnings. If you change the schema of a search target column (rename, type change), a manual rebuild is required — stop MygramDB, drop the dump, and restart to trigger a fresh initial snapshot from MySQL.
+MygramDB catches DDL events via binlog. TRUNCATE TABLE and DROP TABLE clear the affected index immediately. An incompatible rename, drop, or semantic change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. Fix the schema or configuration, then run `SYNC` to rebuild the table.
 
 ### How are deletes handled in the index?
 
@@ -233,7 +245,7 @@ MygramDB is simple *to add*. It assumes MySQL already exists — which it does i
 
 ### What hardware were the benchmarks run on?
 
-Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4 in Docker. MygramDB ran with `verify_text: all` (post-filter enabled for accurate match counts) and query cache disabled. Both ran on the same Apple M4 Max (128GB unified memory). Note: M4 Max's unified memory bandwidth is significantly higher than DDR4, which benefits in-memory MygramDB disproportionately. On a typical DDR4 server, expect MygramDB latencies to be somewhat higher.
+Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4 in Docker. MygramDB ran with `verify_text: all` (post-filter enabled for accurate match counts) and query cache disabled. The Apple M4 Max host allocated 32 GiB to Docker Desktop (31.29 GiB visible to the containers). On other hardware and memory limits, absolute latency will differ.
 
 ### Were MySQL settings tuned for the benchmark?
 
@@ -255,7 +267,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.8.0 (released July 3, 2026). The 1.6 line added BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, V2 dumps, and MariaDB binlog replication. The 1.7 line added database-qualified table identity, multi-database indexing, HTTP `/tables/{identity}/...` routes, HTTP FACET, boolean search parity, multi-table consistent snapshots, and GTID-coordinated dumps. The 1.8 line focuses on replication correctness, HTTP/query parity, and reliability hardening. The project has been used in production on a high-traffic service (details under NDA).
+Development started in November 2025. The current version is 1.9.0. The 1.6 line added BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, V2 dumps, and MariaDB binlog replication. The 1.7 line added database-qualified table identity, multi-database indexing, HTTP `/tables/{identity}/...` routes, HTTP FACET, boolean search parity, multi-table consistent snapshots, and GTID-coordinated dumps. The 1.9 line adds typed C/C++ search options, stronger replication-value fidelity, and fail-closed schema validation. The project has been used in production on a high-traffic service (details under NDA).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 

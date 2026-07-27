@@ -1,8 +1,13 @@
-# v1.8 Upgrade Notes
+---
+title: Upgrade to MygramDB v1.8
+description: "Prepare a MygramDB deployment for the v1.8 line: the ngram_size default change, HTTP boolean search, SYNC conflict handling, and dump compatibility."
+---
 
-MygramDB v1.8.0 is a correctness and reliability release. It has no breaking API changes, but one default changed: if `ngram_size` is omitted, the default is now `2` instead of `1`.
+# Upgrade to v1.8
 
-Most upgrades are straightforward. The items worth checking are configuration assumptions, HTTP clients that used to embed control clauses in `q`, and operational automation that starts `SYNC` while another maintenance task is running.
+MygramDB v1.8.1 is a correctness and reliability release in the v1.8 line. It has no breaking API changes, but one default changed in v1.8.0: if `ngram_size` is omitted, the default is now `2` instead of `1`.
+
+Most upgrades are straightforward. Check configuration assumptions, HTTP clients that need boolean expressions, and operational automation that starts `SYNC` while another maintenance task is running.
 
 ## What Changed
 
@@ -39,20 +44,25 @@ v1.8.0 fixes several replication edge cases, including filter-only `UPDATE` even
 
 ### Query and HTTP behavior
 
-HTTP `q` is now treated as literal search text and request options are taken from JSON fields such as `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`. During table synchronization, HTTP search/count/facet/get requests return `503` instead of racing the in-flight rebuild.
+HTTP `q` is literal search text by default. Request options use JSON fields such as `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`. Set `"mode": "boolean"` when `q` is an intentional boolean expression. During table synchronization, HTTP search/count/facet/get requests return `503` instead of racing the in-flight rebuild.
 
 This means clients should send intent as structured JSON rather than as a command string:
 
 ```json
 {
   "q": "quantum physics",
+  "mode": "literal",
   "limit": 20,
-  "sort": { "field": "created_at", "order": "desc" },
-  "filters": [{ "field": "status", "op": "=", "value": 1 }]
+  "sort": { "column": "created_at", "order": "DESC" },
+  "filters": { "status": 1 }
 }
 ```
 
-Boolean queries also gained fixes for short terms under bigram indexing, quoted phrases containing `AND`/`OR`/`NOT`, the `<>` not-equal filter operator, and raw boolean query parsing in client libraries.
+Boolean queries gained fixes for short terms under bigram indexing, quoted phrases containing `AND`/`OR`/`NOT`, the `<>` not-equal filter operator, and raw boolean query parsing in client libraries.
+
+### v1.8.1 reliability changes
+
+v1.8.1 adds boolean filter columns, bounded V2 dump restore settings, and a size/versioned C client configuration with Unix-socket and asynchronous `DUMP SAVE` timeout settings. It also makes the HTTP allow list fail closed: only `/health/live` and `/health/ready` bypass the CIDR check.
 
 Date/time parsing now accepts date-only strings such as `2024-01-15` and truncates fractional epoch seconds to whole seconds.
 
@@ -60,14 +70,17 @@ Date/time parsing now accepts date-only strings such as `2024-01-15` and truncat
 
 CLI `DOC` output now decodes escaped values such as `\n`, `\t`, `\\`, `\"`, and `\xHH` instead of passing them through verbatim.
 
+An incompatible `DROP`, `RENAME`, or semantic change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. Fix the schema or configuration, then run `SYNC` to rebuild the affected table.
+
 ## Upgrade Checklist
 
 1. Review table configs that omit `ngram_size`.
 2. Set `ngram_size: 1` explicitly only if you require the old unigram behavior.
 3. Check that no configured filter uses `ENUM` or `SET`.
 4. If `auto_initial_snapshot: true` is enabled, make sure `start_from: "snapshot"` is set.
-5. Keep HTTP search options in JSON fields rather than embedding control clauses in `q`.
+5. Keep HTTP search options in JSON fields. Add `"mode": "boolean"` only for intentional boolean expressions.
 6. Expect temporary `503` responses from table read endpoints during `SYNC`; retry after readiness returns healthy.
-7. Run your usual search and replication smoke tests after upgrade.
+7. After changing configured columns, confirm replication remains healthy; if it stopped for an incompatible DDL change, fix it and run `SYNC`.
+8. Run your usual search and replication smoke tests after upgrade.
 
-Full release notes are available in the [v1.8.0 release document](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.8.0.md).
+Full release notes are available in the [v1.8.1 release document](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.8.1.md).

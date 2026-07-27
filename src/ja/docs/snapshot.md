@@ -44,12 +44,12 @@ MygramDBのダンプは、MygramDBを速く復旧するためのファイルで�
 
 **構文:**
 ```mygram
-DUMP SAVE <filepath> [WITH STATISTICS]
+DUMP SAVE [<filepath>] [--with-stats]
 ```
 
 **パラメータ:**
-- `<filepath>`: スナップショットファイルの保存先パス
-- `WITH STATISTICS`（オプション）: パフォーマンス統計情報をスナップショットに含める
+- `<filepath>`（オプション）: スナップショットファイルの保存先パス
+- `--with-stats`（オプション）: パフォーマンス統計情報をスナップショットに含める
 
 **例:**
 ```mygram
@@ -57,15 +57,12 @@ DUMP SAVE <filepath> [WITH STATISTICS]
 DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
 
 -- 統計情報付きスナップショット
-DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp WITH STATISTICS
+DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp --with-stats
 ```
 
 **レスポンス:**
 ```mygram
-OK SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
-tables: 2
-size: 1234567 bytes
-gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
+OK DUMP_STARTED /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 ### DUMP LOAD - スナップショット復元
@@ -87,10 +84,7 @@ DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
 
 **レスポンス:**
 ```mygram
-OK LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
-tables: 2
-documents: 10000
-gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
+OK LOADED /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 ::: warning DUMP LOAD の重要事項
@@ -100,6 +94,7 @@ gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 - すべてのテーブルが現在の設定ファイルに定義されている必要があります。
 - 複数DB構成では、設定済みテーブル識別子がダンプメタデータ（`<database>.<table>`）と一致している必要があります。
 - MygramDBは起動時にダンプファイルを自動読み込みしません。再起動後にダンプから復旧する場合は、MygramDBを起動してから手動で `DUMP LOAD` を実行してください。
+- v1.9 が書き出すダンプ形式は format v2 で、format v1/v2 を引き続き読み込めます。埋め込みのドキュメントストア形式は v3 になり、正確なハイライトに使う正規化前テキストを保持します。
 :::
 
 ### DUMP VERIFY - 整合性チェック
@@ -121,10 +116,7 @@ DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
 
 **レスポンス（成功）:**
 ```mygram
-OK VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
-status: valid
-crc: verified
-size: verified
+OK DUMP_VERIFIED /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **レスポンス（失敗）:**
@@ -153,14 +145,15 @@ DUMP INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 
 **レスポンス:**
 ```mygram
-OK INFO /var/lib/mygramdb/dumps/mygramdb.dmp
-version: 1
+OK DUMP_INFO /var/lib/mygramdb/dumps/mygramdb.dmp
+version: 2
 gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 tables: 2
-flags: 0x18
-  statistics: yes
-size: 1234567 bytes
-timestamp: 1672531200 (2023-01-01 00:00:00 UTC)
+flags: 24
+file_size: 1234567
+timestamp: 1672531200
+has_statistics: true
+END
 ```
 
 ## 整合性保護
@@ -230,7 +223,7 @@ ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be
 スナップショットのバージョンが新しすぎる場合：
 
 ```mygram
-ERROR Snapshot file version 2 is newer than supported version 1
+ERROR Snapshot file version 3 is newer than supported version 2
 ```
 
 **対処方法:**
@@ -266,7 +259,7 @@ dump:
 # 例: 日次バックアップスクリプト
 #!/bin/bash
 DATE=$(date +%Y%m%d)
-echo "DUMP SAVE /var/lib/mygramdb/dumps/manual_${DATE}.dmp WITH STATISTICS" | mygram-cli
+echo "DUMP SAVE /var/lib/mygramdb/dumps/manual_${DATE}.dmp --with-stats" | mygram-cli
 ```
 
 ### 保持ポリシー
@@ -371,7 +364,7 @@ dump:
 `dump.dir`をスキャンしたり、最新ダンプを読み込んだりしません。まずサーバーを
 起動し、対象ダンプを検証してから`DUMP LOAD`を実行してください。
 
-`DUMP LOAD`が完了すると、MygramDBは自動的にレプリケーションを再開します：
+`DUMP LOAD`が完了すると、ロード前にレプリケーションが実行中だった場合だけMygramDBは自動的に再開します：
 
 1. **GTID抽出**: スナップショットからレプリケーション位置を読み取り
 2. **BinlogReader再開**: 保存されたGTIDから継続
@@ -387,8 +380,8 @@ dump:
 DUMP VERIFY mygramdb.dmp
 DUMP LOAD mygramdb.dmp
 
-# 4. MygramDBは自動的にトランザクション81-100を処理
-# 5. 101+からbinlogレプリケーションを再開
+# 4. ロード前にレプリケーションが実行中なら、MygramDBはトランザクション81-100を処理
+# 5. 実行中でなかった場合は、ロードした状態を確認してから明示的に開始
 ```
 
 ## トラブルシューティング

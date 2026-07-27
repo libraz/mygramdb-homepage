@@ -9,11 +9,19 @@ head:
 
 # How It Works
 
+::: info Reading this the first time
+This page describes internals. On a first pass, three steps are enough: split text into n-grams, find candidate documents from those n-grams, and — if configured — verify candidates against the original text.
+:::
+
 MygramDB is an in-memory full-text search engine built around n-gram indexing. This page covers the core mechanisms: how text is indexed, how searches execute, and how the cache stays consistent.
 
 ## N-gram Indexing
 
-MygramDB tokenizes text into overlapping character sequences called n-grams. The default strategy is hybrid: **bi-grams (2 characters)** for ASCII text and **unigrams (1 character)** for multibyte ideographic characters (CJK and related scripts that use 3-byte UTF-8 sequences).
+MygramDB tokenizes text into overlapping character sequences called n-grams. By default, it uses **bi-grams (2 characters)** for both ASCII text and CJK ideographs. Set `kanji_ngram_size` to use a different size for CJK ideographs.
+
+::: info What is tokenization?
+**Tokenization** splits text into smaller units that can be indexed and searched. MygramDB uses no dictionary — it treats the character sequences themselves as n-grams, which is why it works the same across languages.
+:::
 
 For example, the word `search` produces these bi-grams:
 
@@ -21,24 +29,15 @@ For example, the word `search` produces these bi-grams:
 "search" → ["se", "ea", "ar", "rc", "ch"]
 ```
 
-A multibyte string like `東京都` (3-byte UTF-8 characters) produces unigrams:
+A multibyte string like `東京都` produces bi-grams with the default settings:
 
 ```
-"東京都" → ["東", "京", "都"]
+"東京都" → ["東京", "京都"]
 ```
 
 Each n-gram maps to a **posting list** -- a sorted list of document IDs containing that n-gram. When a document is inserted, its text is tokenized and the document ID is added to each n-gram's posting list.
 
-```mermaid
-graph LR
-    subgraph "N-gram Index"
-        se["'se' → [1, 5, 42, 108, ...]"]
-        ea["'ea' → [1, 5, 23, 42, ...]"]
-        ar["'ar' → [1, 9, 42, 77, ...]"]
-        rc["'rc' → [1, 42, 55, ...]"]
-        ch["'ch' → [1, 3, 42, 61, ...]"]
-    end
-```
+<DocDiagram name="ngram-index" alt="The term “search” is split into the bi-grams se, ea, ar, rc and ch, each mapping to a sorted posting list of DocIDs; documents 1 and 42 appear in every list and survive the intersection." />
 
 Document IDs are `uint32_t`, supporting up to 4 billion documents per table.
 
@@ -48,31 +47,24 @@ Not all n-grams appear with the same frequency. MygramDB uses two storage strate
 
 | Strategy | When Used | Representation |
 |----------|-----------|----------------|
-| **Delta encoding** | Sparse terms (density < 18%) | Sorted IDs stored as varint-encoded deltas |
+| **Delta encoding** | Sparse terms (density < 18%) | Sorted IDs stored as fixed-width deltas |
 | **Roaring bitmap** | Dense terms (density >= 18%) | Compressed bitmap via CRoaring library |
 
 **Density** is defined as: `(number of documents containing the n-gram) / (total documents in table)`.
 
 The 18% threshold includes **0.5x hysteresis** to avoid thrashing. A posting list that switched to Roaring at 18% density will only switch back to delta encoding when density drops below 9%.
 
-Delta encoding is compact for rare terms -- storing `[100, 105, 200]` as `[100, 5, 95]` allows varint compression. Roaring bitmaps are more efficient for common terms and enable SIMD-accelerated set operations (intersection, union) during search.
+::: info What is hysteresis?
+**Hysteresis** means the threshold for switching back differs from the threshold for switching over, so a value hovering near the boundary does not flip state repeatedly. Here, converting at 18% but reverting only below 9% keeps the encoding stable as documents are added and removed.
+:::
+
+Delta encoding is compact for rare terms: it stores `[100, 105, 200]` as `[100, 5, 95]`. Roaring bitmaps are more efficient for common terms and enable SIMD-accelerated set operations (intersection, union) during search.
 
 ## Search Pipeline
 
 A search query flows through a series of stages:
 
-```mermaid
-flowchart TD
-    A["Client query: 'quantum physics'"] --> B["Parse query"]
-    B --> C["Generate n-grams per term"]
-    C --> D["Fetch & intersect posting lists"]
-    D --> E["Apply NOT filter"]
-    E --> F["Apply column filters"]
-    F --> G["verify_text post-filter"]
-    G --> H["Sort results"]
-    H --> I["Apply OFFSET / LIMIT"]
-    I --> J["Return DocIDs"]
-```
+<DocDiagram name="search-pipeline" alt="Ten pipeline stages: client query, parse, generate n-grams, intersect posting lists, NOT filter, column filters, verify_text post-filter, sort, OFFSET and LIMIT, return DocIDs." />
 
 **Step by step:**
 
@@ -94,7 +86,11 @@ flowchart TD
 
 N-gram indexing is inherently approximate. A query for `"quantum"` generates bi-grams `["qu", "ua", "an", "nt", "tu", "um"]`. Any document containing all six bi-grams is a candidate -- but some candidates are false positives:
 
-<img src="/diagrams/verify-text.svg" alt="verify_text checks candidate documents from n-gram intersection against stored normalized text and removes false positives before results are returned." class="doc-diagram" />
+::: info What is a false positive?
+A **false positive** is a document that survived the n-gram intersection but does not actually contain the search term. N-gram search deliberately collects a slightly wider candidate set for speed, then narrows it with `verify_text` when exactness matters.
+:::
+
+<DocDiagram name="verify-text" alt="verify_text checks candidate documents from n-gram intersection against stored normalized text and removes false positives before results are returned." />
 
 | Document text | Contains all bi-grams? | Actually contains "quantum"? |
 |---------------|----------------------|----------------------------|
@@ -111,13 +107,17 @@ The tradeoff is memory: storing text for 1.1M documents adds approximately 1.5 G
 - `ascii` -- Verifies only ASCII-only queries against stored text. Moderate memory.
 - `all` -- All candidates are verified. Exact results.
 
-::: tip
-For most applications, `verify_text: all` is recommended. The memory cost is modest compared to the index itself, and the latency overhead is negligible (sub-millisecond even with verification).
+::: tip Choosing a verify_text mode
+Use `verify_text: all` when exact matching, highlighting, or BM25 `_score` matters. Choose `off` when minimizing memory use matters more than eliminating n-gram false positives.
 :::
 
 ## Cache and Invalidation
 
 MygramDB caches search results at the query level. The key difference from MySQL's query cache is **invalidation granularity**: MygramDB invalidates at the n-gram level, not the table level.
+
+::: tip What is cache invalidation?
+**Invalidation** is discarding cached results when the underlying data changes, so a stale answer is never served. MygramDB looks at which n-grams a changed row touches and drops only the cached queries that involve them.
+:::
 
 When a document is inserted, updated, or deleted via binlog replication:
 
@@ -125,20 +125,7 @@ When a document is inserted, updated, or deleted via binlog replication:
 2. Only cached queries whose n-gram sets overlap with the changed n-grams are invalidated.
 3. Unrelated queries remain cached.
 
-```mermaid
-flowchart TD
-    D[Changed n-grams: qu, ua, an] -->|invalidate| Q1
-
-    subgraph Cache[Query cache]
-        Q1[quantum]
-        Q2[algorithm]
-        Q3[database]
-    end
-
-    style Q1 fill:#fee,stroke:#d63031,color:#333
-    style Q2 fill:#efe,stroke:#00b894,color:#333
-    style Q3 fill:#efe,stroke:#00b894,color:#333
-```
+<DocDiagram name="cache-invalidation" alt="A changed row is tokenized into the n-grams qu, ua and an; the reverse index maps them to the cached “quantum” query, which is evicted, while the “algorithm” and “database” entries are kept." />
 
 - 🔴 `quantum` — overlapping n-grams, invalidated
 - 🟢 `algorithm`, `database` — unaffected, cache retained

@@ -15,7 +15,7 @@ MySQL FULLTEXT search becomes painfully slow as your data grows. Here's why, and
 
 The two architectures answer the same query through completely different data paths: one round-trips through disk-resident structures, the other stays entirely in RAM.
 
-<img src="/diagrams/query-path-comparison.svg" alt="A MySQL FULLTEXT query passes through B-tree pages on disk, uncompressed posting lists, and an external sort to answer in 100 to 3000 milliseconds, while the same query in MygramDB runs against delta and Roaring compressed posting lists in RAM with SIMD intersection and answers in under one millisecond." class="doc-diagram" />
+<DocDiagram name="query-path-comparison" alt="A MySQL FULLTEXT query passes through disk-resident B-tree pages, posting lists, and a sort, while MygramDB searches compressed posting lists in RAM with SIMD intersection." />
 
 ### Disk I/O Bottleneck
 
@@ -24,7 +24,11 @@ MySQL FULLTEXT stores indexes on disk using B-tree pages. Every search query req
 2. Loading posting lists into memory
 3. Sorting results (often with external sort)
 
-Even with SSDs, this I/O overhead adds 100-3000ms per query.
+Even with SSDs, this I/O overhead can add milliseconds or seconds per query.
+
+::: info What is a posting list?
+A **posting list** is the list of document IDs that contain a given term. Full-text search finds candidates by combining these lists with AND/OR. See the [Glossary](/docs/glossary#posting-list) for more.
+:::
 
 ### Uncompressed Posting Lists
 
@@ -35,20 +39,13 @@ MySQL stores posting lists without compression. For common terms matching millio
 
 ### Cache Dependency
 
-Performance varies significantly between cold and warm cache. In benchmarks on 1.1M Wikipedia articles, MySQL FULLTEXT latency ranged from 300ms to 2,566ms depending on query and cache state.
+Performance varies significantly between cold and warm cache. The [published benchmark](/benchmarks) disables MygramDB's query cache so that search-engine work, rather than cache hits, is measured.
 
 In production, cache is often cold after restarts, deployments, or buffer pool contention.
 
 ### Concurrency Collapse
 
-Under concurrent load, MySQL FULLTEXT throughput drops dramatically:
-
-| Solution | Concurrent Connections | QPS |
-|----------|----------------------|-----|
-| MySQL FULLTEXT | 1-4 | 2-8 |
-| MygramDB | 1-4 | 2,634-11,766 |
-
-MySQL FULLTEXT delivers only single-digit QPS even at low concurrency, while MygramDB sustains thousands of queries per second.
+Under concurrent load, MySQL FULLTEXT throughput can drop dramatically. The cache-off results for 1 and 4 connections are maintained on the [benchmark page](/benchmarks), together with the test configuration.
 
 ## The Solution: MygramDB
 
@@ -68,11 +65,15 @@ Bitmap intersections use CPU SIMD instructions for maximum throughput.
 
 ### Consistent Performance
 
-No cache warmup needed. Sub-millisecond response time (0.08-0.42ms), always. See [Benchmarks](/benchmarks) for full results.
+The index stays in memory, so a search does not need to read MySQL's FULLTEXT index. See [Benchmarks](/benchmarks) for cache-off measurements.
 
 ### Real-time MySQL / MariaDB Sync
 
 GTID-based binlog replication keeps MygramDB in sync with MySQL 8.4/9.x or MariaDB 10.6+/11.x. No ETL pipelines, no data staleness.
+
+::: info What is ETL?
+**ETL** stands for extract, transform, load — the pipeline that copies data from one system into another. MygramDB reads the MySQL binlog directly, so there is no separate sync job to build and operate.
+:::
 
 ## When to Use
 

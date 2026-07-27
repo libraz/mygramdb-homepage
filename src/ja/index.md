@@ -2,7 +2,7 @@
 layout: home
 title: MygramDB - MySQLレプリケーション対応インメモリ全文検索
 titleTemplate: false
-description: MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジン。100万行規模でサブミリ秒のクエリ応答。
+description: MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジン。110万件の再現可能なベンチマークを公開しています。
 head:
   - - meta
     - name: keywords
@@ -10,7 +10,7 @@ head:
 
 hero:
   name: "MygramDB"
-  text: "サブミリ秒の全文検索"
+  text: "インメモリ全文検索"
   tagline: MySQL / MariaDB binlogレプリケーションで同期するインメモリ検索エンジン
   actions:
     - theme: brand
@@ -49,7 +49,7 @@ features:
 
 MygramDBはMySQL/MariaDBのサイドカーとして動作します。アプリケーションは従来どおりDBへ書き込み、MygramDBがbinlogを追従して独自のインメモリ検索インデックスを構築し、検索の読み取りだけがMygramDBへルーティングされます。
 
-<img src="/diagrams/deployment-topology.svg" alt="アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBがGTID binlogストリームを追従してインメモリ検索インデックスを維持し、検索クエリのみをTCP 11016またはHTTP 8080でMygramDBに送る構成図" class="doc-diagram" />
+<DocDiagram name="deployment-topology" alt="アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBがGTID binlogストリームを追従してインメモリ検索インデックスを維持し、検索クエリのみをTCP 11016またはHTTP 8080でMygramDBに送る構成図" />
 
 ## クイックスタート
 

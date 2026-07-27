@@ -1,3 +1,12 @@
+---
+title: MygramDB インストール - RPM / DEB / Docker / ソースビルド
+description: MygramDBをRPMまたはDEBパッケージ、Docker、ソースビルドで導入する手順。systemdサービスの設定、インストール確認、セキュリティ上の注意も説明します。
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB インストール, RPM パッケージ, DEB パッケージ, Docker イメージ, ソースビルド, systemd サービス, インストール確認
+---
+
 # インストール
 
 ::: info どの方法を選ぶべきか
@@ -19,12 +28,14 @@ sudo rpm -i mygramdb-*.el10.x86_64.rpm
 インストールされるファイル：
 - `/usr/bin/mygramdb` - サーバーバイナリ
 - `/usr/bin/mygram-cli` - CLIクライアント
-- `/etc/mygramdb/config.yaml` - サンプル設定
+- `/etc/mygramdb/config.yaml.example` - 設定テンプレート
 - systemdサービスファイル
 
-サービスを開始：
+サービスを開始する前に設定ファイルを作成・編集します。
 
 ```bash
+sudo cp /etc/mygramdb/config.yaml.example /etc/mygramdb/config.yaml
+sudoedit /etc/mygramdb/config.yaml
 sudo systemctl enable --now mygramdb
 ```
 
@@ -41,7 +52,7 @@ docker run -d \
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.8.0`
+- `ghcr.io/libraz/mygram-db:1.9.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
@@ -160,5 +171,5 @@ MygramDBはセキュリティのため**root権限での実行を拒否**しま�
 
 - [Dockerデプロイ](/ja/docs/docker-deployment)
 - [運用ガイド](/ja/docs/operations)
-- [v1.8アップグレードノート](/ja/docs/upgrade-v1.8)
-- [v1.7移行ガイド](/ja/docs/migration-v1.7)
+- [v1.8 へのアップグレード](/ja/docs/upgrade-v1.8)
+- [v1.7 へのアップグレード](/ja/docs/migration-v1.7)

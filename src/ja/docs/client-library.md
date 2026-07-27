@@ -49,17 +49,14 @@ make
 sudo make install
 ```
 
-これにより以下がインストールされます：
-
-- ヘッダーファイル：`/usr/local/include/mygramdb/`
-- ライブラリ：`/usr/local/lib/`
+ヘッダーファイルは `/usr/local/include/mygramdb/` に、ライブラリは `/usr/local/lib/` にインストールされます。現在のC++ヘッダーはMygramDBコアのヘッダーにも依存するため、単独のSDKとしては使えません。C++アプリケーションはMygramDBのソースチェックアウトからビルドしてください。
 
 ## C++ API
 
 ### 基本的な使い方
 
 ```cpp
-#include <mygramdb/mygramclient.h>
+#include "client/mygramclient.h"
 #include <iostream>
 
 using namespace mygramdb::client;
@@ -75,19 +72,19 @@ int main() {
     MygramClient client(config);
 
     // 接続
-    if (auto err = client.Connect()) {
-        std::cerr << "接続失敗: " << *err << std::endl;
+    if (auto connected = client.Connect(); !connected) {
+        std::cerr << "接続失敗: " << connected.error().message() << std::endl;
         return 1;
     }
 
     // 検索。複数DB構成では DB 修飾形式 <database>.<table> を使います。
     auto result = client.Search("app_db.articles", "hello world", 100);
-    if (auto* err = std::get_if<Error>(&result)) {
-        std::cerr << "検索失敗: " << err->message << std::endl;
+    if (!result) {
+        std::cerr << "検索失敗: " << result.error().message() << std::endl;
         return 1;
     }
 
-    auto resp = std::get<SearchResponse>(result);
+    const auto& resp = *result;
     std::cout << resp.total_count << "件の結果を発見\n";
     for (const auto& doc : resp.results) {
         std::cout << "  - " << doc.primary_key << "\n";
@@ -100,7 +97,7 @@ int main() {
 ### libmygramclientを使ってコンパイル
 
 ```bash
-g++ -std=c++17 -o myapp myapp.cpp -lmygramclient
+g++ -std=c++17 -I./src -L./build/lib -o myapp myapp.cpp -lmygramclient
 ```
 
 ::: tip リンクで失敗する場合
@@ -131,8 +128,27 @@ auto result = client.Search(
 );
 ```
 
-::: warning スレッドごとのクライアント
-`MygramClient` インスタンスは単一のTCP接続を持ち、スレッドセーフではありません。複数スレッドから検索する場合は、スレッドごとにクライアントを作るか、呼び出し側で排他制御してください。
+### 型付き検索オプション
+
+比較フィルタ、ファジー検索、ハイライト、ソート、ページネーションが必要な場合は `SearchOptions` を使います。`SearchRaw` はアプリケーションが意図して組み立てたBoolean式だけに使ってください。
+
+```cpp
+SearchOptions options;
+options.limit = 50;
+options.sort_column = "created_at";
+options.sort_desc = true;
+options.filters = {{"status", FilterOp::kEqual, "active"}};
+options.fuzzy_distance = 1;
+options.highlight = HighlightOptions{"<strong>", "</strong>", 200, 3};
+
+auto result = client.Search("app_db.articles", "technology", options);
+if (!result) {
+    std::cerr << result.error().message() << "\n";
+}
+```
+
+::: warning 1接続あたりの並行性
+`MygramClient` は単一TCP接続上の同時コマンドを内部で直列化するため、安全に共有できます。ただし1インスタンスでは1件ずつ実行されます。スループットが必要な場合は複数インスタンスを使ってください。リクエスト実行中に `Disconnect()` を呼ばないでください。
 :::
 
 ::: info 接続の考え方
@@ -143,8 +159,10 @@ auto result = client.Search(
 
 ```cpp
 auto result = client.Count("app_db.articles", "hello");
-if (auto* resp = std::get_if<CountResponse>(&result)) {
-    std::cout << "合計マッチ数: " << resp->count << "\n";
+if (result) {
+    std::cout << "合計マッチ数: " << result->count << "\n";
+} else {
+    std::cerr << "Count失敗: " << result.error().message() << "\n";
 }
 ```
 
@@ -152,9 +170,9 @@ if (auto* resp = std::get_if<CountResponse>(&result)) {
 
 ```cpp
 auto result = client.Get("app_db.articles", "12345");
-if (auto* doc = std::get_if<Document>(&result)) {
-    std::cout << "プライマリキー: " << doc->primary_key << "\n";
-    for (const auto& [key, value] : doc->fields) {
+if (result) {
+    std::cout << "プライマリキー: " << result->primary_key << "\n";
+    for (const auto& [key, value] : result->fields) {
         std::cout << "  " << key << " = " << value << "\n";
     }
 }
@@ -164,10 +182,10 @@ if (auto* doc = std::get_if<Document>(&result)) {
 
 ```cpp
 auto result = client.Info();
-if (auto* info = std::get_if<ServerInfo>(&result)) {
-    std::cout << "バージョン: " << info->version << "\n";
-    std::cout << "ドキュメント数: " << info->doc_count << "\n";
-    std::cout << "稼働時間: " << info->uptime_seconds << "秒\n";
+if (result) {
+    std::cout << "バージョン: " << result->version << "\n";
+    std::cout << "ドキュメント数: " << result->doc_count << "\n";
+    std::cout << "稼働時間: " << result->uptime_seconds << "秒\n";
 }
 ```
 
@@ -178,11 +196,9 @@ if (auto* info = std::get_if<ServerInfo>(&result)) {
 client.EnableDebug();
 
 auto result = client.Search("app_db.articles", "hello", 10);
-if (auto* resp = std::get_if<SearchResponse>(&result)) {
-    if (resp->debug) {
-        std::cout << "クエリ時間: " << resp->debug->query_time_ms << "ms\n";
-        std::cout << "候補数: " << resp->debug->candidates << "\n";
-    }
+if (result && result->debug) {
+    std::cout << "クエリ時間: " << result->debug->query_time_ms << "ms\n";
+    std::cout << "候補数: " << result->debug->candidates << "\n";
 }
 
 // デバッグモード無効化
@@ -210,43 +226,15 @@ client.DisableDebug();
 
 using namespace mygramdb::client;
 
-// 暗黙的AND（スペース区切り）
-auto result = ParseSearchExpression("golang tutorial");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["golang", "tutorial"]
+auto parsed = ParseSearchExpression("\"ディープラーニング\" +(チュートリアル OR ガイド) -古い");
+if (!parsed) {
+    std::cerr << parsed.error().message() << "\n";
+    return 1;
+}
 
-// フレーズ検索（ダブルクォート）
-auto result = ParseSearchExpression("\"機械学習\" チュートリアル");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["\"機械学習\"", "チュートリアル"]
-
-// 除外語句
-auto result = ParseSearchExpression("golang -old -deprecated");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["golang"]
-// expr.excluded_terms = ["old", "deprecated"]
-
-// OR式
-auto result = ParseSearchExpression("python OR ruby");
-auto expr = std::get<SearchExpression>(result);
-// expr.raw_expression = "python OR ruby"
-
-// ダブルクォート付き複雑な式
-auto result = ParseSearchExpression("\"ディープラーニング\" +(チュートリアル OR ガイド) -古い");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["\"ディープラーニング\"", "(チュートリアル OR ガイド)"]
-// expr.excluded_terms = ["古い"]
-
-// 全角スペース
-auto result = ParseSearchExpression("機械学習　チュートリアル");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["機械学習", "チュートリアル"]
-
-// 絵文字検索（4バイトUTF-8文字）
-auto result = ParseSearchExpression("😀 tutorial -😢");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["😀", "tutorial"]
-// expr.excluded_terms = ["😢"]
+const auto& expr = *parsed;
+// expr.required_terms には必須語句が入ります。
+// expr.excluded_terms には "古い" が入ります。
 ```
 
 #### クエリ文字列への変換
@@ -254,12 +242,14 @@ auto expr = std::get<SearchExpression>(result);
 ```cpp
 // QueryAST互換の文字列に直接変換
 auto result = ConvertSearchExpression("+golang -old");
-if (result.index() == 0) {
-    std::string query = std::get<0>(result);
+if (result) {
+    std::string query = *result;
     // query = "golang AND NOT old"
 
     // MygramClientで使用
-    auto search_result = client.Search("app_db.articles", query, 100);
+    auto search_result = client.SearchRaw("app_db.articles", query, 100);
+} else {
+    std::cerr << result.error().message() << "\n";
 }
 ```
 
@@ -282,21 +272,11 @@ if (result.index() == 0) {
 OR/グループ化を使わない単純なユースケース向け：
 
 ```cpp
-std::string main_term;
-std::vector<std::string> and_terms;
-std::vector<std::string> not_terms;
-
-bool success = SimplifySearchExpression(
-    "+golang +tutorial -old",
-    main_term,
-    and_terms,
-    not_terms
-);
-
-if (success) {
-    // main_term = "golang"
-    // and_terms = ["tutorial"]
-    // not_terms = ["old"]
+auto simplified = SimplifySearchExpression("+golang +tutorial -old");
+if (simplified) {
+    // simplified->main_term == "golang"
+    // simplified->and_terms には "tutorial" が入る
+    // simplified->not_terms には "old" が入る
 }
 ```
 
@@ -312,15 +292,19 @@ if (success) {
 
 int main() {
     // クライアント設定
-    MygramClientConfig_C config = {
+    MygramClientConfigV2_C config = {
+        .struct_size = sizeof(config),
+        .version = MYGRAMCLIENT_CONFIG_V2_VERSION,
         .host = "localhost",
         .port = 11016,
         .timeout_ms = 5000,
-        .recv_buffer_size = 65536
+        .recv_buffer_size = 65536,
+        .unix_socket_path = NULL,
+        .dump_save_timeout_ms = 600000
     };
 
     // クライアント作成
-    MygramClient_C* client = mygramclient_create(&config);
+    MygramClient_C* client = mygramclient_create_v2(&config);
     if (!client) {
         fprintf(stderr, "クライアント作成失敗\n");
         return 1;
@@ -363,6 +347,10 @@ gcc -o myapp myapp.c -lmygramclient
 ```
 
 ### 高度な検索（C API）
+
+新しいコードでは `MygramSearchOptions_C` と `mygramclient_search_with_options` を使ってください。構造体はゼロ初期化し、`struct_size` を設定します。型付きフィルタは `=`、`!=`、`>`、`>=`、`<`、`<=`、`fuzzy_distance` は `1` または `2` を使えます。
+
+新しいCプログラムでは `MygramClientConfigV2_C` を使います。`unix_socket_path` を設定するとUnixソケットを使い、TCPのhost/portより優先されます。`dump_save_timeout_ms` は非同期 `DUMP SAVE` を待つ合計期限です。従来の `MygramClientConfig_C` と `mygramclient_create()` はABI互換のままです。
 
 ```c
 const char* and_terms[] = {"AI"};
@@ -430,12 +418,11 @@ Napi::Value Search(const Napi::CallbackInfo& info) {
     uint32_t limit = info[2].As<Napi::Number>().Uint32Value();
 
     // クライアント作成と接続
-    MygramClientConfig_C config = {
-        .host = "localhost",
-        .port = 11016,
-        .timeout_ms = 5000,
-        .recv_buffer_size = 65536
-    };
+    MygramClientConfig_C config{};
+    config.host = "localhost";
+    config.port = 11016;
+    config.timeout_ms = 5000;
+    config.recv_buffer_size = 65536;
 
     MygramClient_C* client = mygramclient_create(&config);
     if (mygramclient_connect(client) != 0) {
@@ -484,6 +471,8 @@ NODE_API_MODULE(mygramdb, Init)
 - `port` - サーバーポート（デフォルト: 11016）
 - `timeout_ms` - 接続タイムアウト（デフォルト: 5000）
 - `recv_buffer_size` - 受信バッファサイズ（デフォルト: 65536）
+- `unix_socket_path` - Unixソケットのパス。設定時はTCPより優先
+- `dump_save_timeout_ms` - 非同期 `DUMP SAVE` のポーリング期限
 
 #### SearchResponse
 
@@ -501,35 +490,31 @@ NODE_API_MODULE(mygramdb, Init)
 
 主な関数：
 
-- `mygramclient_create()` - クライアント作成
+- `mygramclient_create_v2()` - size/version付き設定でクライアントを作成
 - `mygramclient_connect()` - サーバーに接続
 - `mygramclient_search()` - シンプル検索
 - `mygramclient_search_advanced()` - フィルター付き高度な検索
+- `mygramclient_search_with_options()` - 型付きフィルタ、ファジー、ハイライト、ソート、ページネーション検索
 - `mygramclient_count()` - マッチ数カウント
 - `mygramclient_get()` - キーでドキュメント取得
 - `mygramclient_free_*()` - 結果構造体の解放
 
 ## スレッド安全性
 
-MygramClientクラスは単一のTCP接続を管理し、**スレッドセーフではありません**。マルチスレッドアプリケーションでは、スレッドごとに1つのクライアントインスタンスを作成するか、適切な同期を使用してください。
+`MygramClient` は単一のTCP接続で同時コマンドを直列化します。そのため正しさのためには共有できますが、1インスタンスが実行できるのは1件ずつです。スループットが必要な場合は複数インスタンスを使ってください。リクエスト実行中に `Disconnect()` を呼ばないでください。
 
 ## エラー処理
 
 ### C++ API
 
-関数は `std::variant<T, Error>` を返します：
-
-- 成功: 結果型Tを含む
-- 失敗: メッセージ付きのErrorを含む
-
-エラーチェックには `std::get_if<Error>` を使用：
+関数は `mygram::utils::Expected<T, Error>` を返します。値を使う前に成功を確認してください。
 
 ```cpp
 auto result = client.Search(...);
-if (auto* err = std::get_if<Error>(&result)) {
-    // エラー処理: err->message
+if (!result) {
+    // エラー処理: result.error().message()
 } else {
-    auto resp = std::get<SearchResponse>(result);
+    const auto& resp = *result;
     // respを使用
 }
 ```

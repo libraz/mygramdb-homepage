@@ -11,7 +11,7 @@ head:
 
 MygramDBはMySQL（8.4/9.x）またはMariaDB（10.6+/11.x）の横に置くサイドカープロセスとして動作します。接続先サーバーのバイナリログを読み取り、インメモリ全文インデックスを構築・維持し、TCPおよびHTTP経由で検索クエリに応答します。サーバー種別は `SELECT VERSION()` から自動判定されるため、同じバイナリと設定でどちらでも動作します。
 
-<img src="/diagrams/system-flow.svg" alt="MySQLを正本として残し、MygramDBがスナップショットとbinlogを読み取ってインメモリ検索インデックスを維持し、TCPまたはHTTPで検索に応答する構成図" class="doc-diagram" />
+<DocDiagram name="system-flow" alt="MySQLを正本として残し、MygramDBがスナップショットとbinlogを読み取ってインメモリ検索インデックスを維持し、TCPまたはHTTPで検索に応答する構成図" />
 
 重要なのは責務の境界です。MySQL/MariaDBは書き込みと通常のSQLを扱う永続データの正本であり、MygramDBはスナップショットとbinlog再生から再構築できる検索用インデックスを保持します。
 
@@ -21,16 +21,7 @@ MygramDBはMySQL（8.4/9.x）またはMariaDB（10.6+/11.x）の横に置くサ�
 
 ## システム概要
 
-```mermaid
-flowchart LR
-    MySQL[(MySQL)] -->|binlogストリーム| BR["BinlogReader"]
-    BR -->|行イベント| IDX["Index + DocStore"]
-    IDX -->|検索結果| SH["SearchHandler"]
-    SH -->|レスポンス| TCP["TCPクライアント\nポート 11016"]
-    SH -->|レスポンス| HTTP["HTTPクライアント\nポート 8080"]
-    IDX -->|定期ダンプ| SNAP["スナップショットファイル"]
-    SNAP -->|起動時に読み込み| IDX
-```
+<DocDiagram name="component-flow" alt="MySQL が BinlogReader へ、BinlogReader がインメモリの Index と DocStore へ、SearchHandler が TCP・HTTP クライアントへ応答し、スナップショットファイルを定期ダンプ・起動時読み込みする内部構成図" />
 
 **コンポーネント：**
 
@@ -52,18 +43,7 @@ MygramDBは大きく3つのフェーズで動作します。
 
 `SYNC` 実行時、または `replication.auto_initial_snapshot: true` が設定されている場合、MygramDBはソーステーブルの一貫性のあるスナップショットを取得します。デフォルトは `auto_initial_snapshot: false` なので、本番運用では初回MySQL読み取りのタイミングを明示的に選びます。
 
-```mermaid
-sequenceDiagram
-    participant M as MySQL
-    participant B as MygramDB
-    B->>M: START TRANSACTION WITH CONSISTENT SNAPSHOT
-    B->>M: SELECT @@global.gtid_executed
-    Note over B: GTIDポジションを記録
-    B->>M: SELECT id, text_col, filter_cols FROM table
-    Note over B: 行をストリーム処理しインデックスを構築
-    B->>M: COMMIT
-    Note over B: 記録したGTIDからbinlog開始
-```
+<DocDiagram name="initial-snapshot-sequence" alt="MygramDB が整合スナップショットのトランザクションを開き、gtid_executed を記録し、行をストリーム処理してインデックスを構築し、COMMIT 後に記録した GTID から binlog を開始するシーケンス図" />
 
 これにより、スナップショット取得時点と、その後に読むbinlogイベントの境界を揃えます。
 
@@ -71,17 +51,7 @@ sequenceDiagram
 
 初期スナップショット後、MygramDBはbinlogストリーミングに切り替わります：
 
-```mermaid
-sequenceDiagram
-    participant M as MySQL
-    participant Q as イベントキュー
-    participant W as ワーカー
-    M->>Q: 行イベント (INSERT/UPDATE/DELETE)
-    Note over Q: 上限付きキュー（デフォルト10,000）
-    Q->>W: イベントをデキュー
-    W->>W: Index + DocStoreを更新
-    W->>W: 影響を受けるキャッシュエントリを無効化
-```
+<DocDiagram name="live-replication-sequence" alt="MySQL が行イベントを上限付きキューへ送り、ワーカーが1件ずつ取り出して Index と DocStore を更新し、影響するキャッシュを無効化するシーケンス図" />
 
 BinlogReaderスレッドがイベントを上限付きキューに読み込み、ワーカースレッドがイベントを取り出してインデックスとドキュメントストアに適用します。この分離により、短いバースト時でもbinlogリーダーがMySQLの変更を読み進めやすくなります。
 
@@ -99,34 +69,7 @@ v1.5.3以降、MygramDBはTCP接続に**イベント駆動Reactor I/Oモデル**
 **Reactor I/Oモデル**は、多数の接続を少数のスレッドで監視し、実際に処理が必要になったときだけワーカーへ渡す方式です。接続ごとにスレッドを作らないため、アイドル接続が多い環境でもスレッドを浪費しません。
 :::
 
-```mermaid
-flowchart TD
-    subgraph "メインスレッド"
-        INIT["初期化\n設定、スナップショット読み込み"]
-        ORCH["サーバーオーケストレータ\nライフサイクル管理"]
-    end
-    subgraph "Reactorスレッド"
-        EV["epoll/kqueueイベントループ\nコネクション多重化"]
-    end
-    subgraph "BinlogReaderスレッド"
-        BL["MySQL binlogストリーム\n→ イベントキュー"]
-    end
-    subgraph "ワーカースレッドプール"
-        W1["ワーカー: イベント処理\n(Index + DocStore書き込み)"]
-        W2["ワーカー: クエリ実行\n(並列読み取り)"]
-        W3["ワーカー: クエリ実行\n(並列読み取り)"]
-    end
-    subgraph "バックグラウンドスレッド"
-        SS["スナップショットスケジューラ\n(定期ダンプ)"]
-    end
-    INIT --> ORCH
-    EV -->|"ディスパッチ"| W2
-    EV -->|"ディスパッチ"| W3
-    BL -->|"イベントキュー"| W1
-    W2 -->|"shared_mutex\n(読み取りロック)"| IDX["Index\n+ DocStore"]
-    W3 -->|"shared_mutex\n(読み取りロック)"| IDX
-    W1 -->|"shared_mutex\n(書き込みロック)"| IDX
-```
+<DocDiagram name="thread-model" alt="メインスレッドが初期化と統括、Reactor スレッドが接続を多重化、BinlogReader スレッドがイベントキューへ供給し、ワーカープールが共有の Index と DocStore に対して読み取りロックと書き込みロックを取るスレッド構成図" />
 
 **並行性モデル：**
 
@@ -152,19 +95,7 @@ MygramDBは**スナップショットベースの永続化**を採用してお�
 **WAL** は変更を逐次ログに書く方式です。MygramDBはMySQLを正本として扱うため、独自WALではなく「定期ダンプ + MySQL binlogからの追いつき」で復旧します。
 :::
 
-```mermaid
-flowchart LR
-    subgraph "ランタイム"
-        IDX["Index + DocStore\n(メモリ上)"]
-        GTID["現在のGTIDポジション"]
-    end
-    subgraph "ディスク"
-        DUMP["スナップショットファイル\n(インデックス + GTID)"]
-    end
-    IDX -->|"定期ダンプ"| DUMP
-    DUMP -->|"起動時に読み込み"| IDX
-    GTID -->|"スナップショットと共に保存"| DUMP
-```
+<DocDiagram name="persistence-cycle" alt="メモリ上のインデックスと現在の GTID 位置をディスクのスナップショットファイルへ定期ダンプし、復旧時はそのダンプを読み込んでから保存済み GTID 以降の binlog を再適用する図" />
 
 **仕組み：**
 
@@ -182,26 +113,7 @@ MygramDBのスナップショットは検索インデックスを復旧するた
 
 ## メモリレイアウト
 
-```mermaid
-flowchart TD
-    subgraph "テーブルごとのメモリ"
-        subgraph "Index"
-            NG["N-gramマップ\nstring → PostingList"]
-            PL["PostingList\nデルタエンコード or Roaringビットマップ"]
-        end
-        subgraph "DocumentStore"
-            DM["DocID → 主キー マップ"]
-            FM["フィルタカラム\n(category, statusなど)"]
-        end
-        subgraph "テキストストア（オプション）"
-            TS["DocID → 原文テキスト\n(verify_text用)"]
-        end
-    end
-    subgraph "キャッシュ"
-        QC["クエリキャッシュ\nクエリハッシュ → 結果セット"]
-        RI["逆引きインデックス\nN-gram → キャッシュエントリ集合"]
-    end
-```
+<DocDiagram name="memory-layout" alt="テーブルごとに、インデックスが N-gram マップとポスティングリストを、ドキュメントストアが主キーとフィルタカラムを、任意のテキストストアが正規化テキストを保持し、共有キャッシュがクエリ結果と N-gram 逆引きインデックスを持つメモリ構成図" />
 
 **サイジングの参考値**（110万件のWikipedia記事、平均666文字）：
 

@@ -11,9 +11,17 @@ head:
 
 MygramDB supports real-time replication from MySQL using GTID-based binlog streaming with guaranteed data consistency.
 
+::: info What is replication?
+**Replication** continuously propagates changes from MySQL to another process. To replace MySQL full-text search, MygramDB keeps reading the MySQL binlog and updating its search index.
+:::
+
 ## Prerequisites
 
 ### MySQL Server Requirements
+
+::: info Why ROW-format binlog
+**ROW format** records which rows changed and how. MygramDB updates its index from the post-change row data, so STATEMENT format is not sufficient.
+:::
 
 MygramDB requires:
 - **MySQL Version**: 8.4+ / 9.x, or MariaDB 10.6+/11.x
@@ -41,6 +49,14 @@ SET GLOBAL gtid_mode = ON;
 
 MariaDB does not use MySQL's `gtid_mode` and `enforce_gtid_consistency` variables. Set a unique `server_id`, enable binary logging, and use `binlog_format=ROW`.
 
+::: warning Persist the setting too
+`SET GLOBAL` applies to the running MySQL but can revert after a restart. In production, also put `gtid_mode=ON` and `enforce_gtid_consistency=ON` into `my.cnf` or whatever manages your MySQL configuration.
+:::
+
+::: tip On MariaDB
+MariaDB is similar to MySQL but expresses GTIDs differently. MygramDB detects the server flavor automatically, so the same `mysql` config section works for both.
+:::
+
 ### Configure Binary Log
 
 Ensure binary logging is enabled with ROW format:
@@ -54,6 +70,10 @@ SET GLOBAL binlog_format = ROW;
 ```
 
 ### Create Replication User
+
+::: info Why binlog_row_image=FULL is required
+To update text columns, primary keys, and filter columns correctly on `UPDATE` and `DELETE`, MygramDB needs enough of the row in the binlog. `MINIMAL` can omit columns it depends on.
+:::
 
 Create a user with replication privileges:
 
@@ -156,7 +176,7 @@ replication:
 
 The diagram below traces that guarantee across the transaction boundary: the snapshot transaction opens and `gtid_executed` is captured in the same instant, table reads happen entirely inside that frozen view while new writes keep accumulating in the binlog, and streaming then resumes from precisely that captured GTID once the snapshot completes.
 
-<img src="/diagrams/gtid-snapshot-handoff.svg" alt="A timeline showing that MygramDB captures gtid_executed the instant the consistent snapshot transaction opens, reads all table data inside that frozen view while new writes accumulate in the binlog, and then starts binlog streaming from exactly the captured GTID so no transaction is lost or applied twice." class="doc-diagram" />
+<DocDiagram name="gtid-snapshot-handoff" alt="A timeline showing that MygramDB captures gtid_executed the instant the consistent snapshot transaction opens, reads all table data inside that frozen view while new writes accumulate in the binlog, and then starts binlog streaming from exactly the captured GTID so no transaction is lost or applied twice." />
 
 **How it works:**
 - Uses `START TRANSACTION WITH CONSISTENT SNAPSHOT` for data consistency
@@ -178,7 +198,7 @@ replication:
 ```
 
 **How it works:**
-- Uses `SHOW BINARY LOG STATUS` to get latest GTID
+- MySQL uses `SHOW BINARY LOG STATUS`; MariaDB uses `SELECT @@GLOBAL.gtid_binlog_pos`
 - Only captures changes after MygramDB starts
 
 **When to use:**
@@ -214,6 +234,10 @@ MygramDB automatically handles:
 
 ### DDL Operations
 
+::: warning Consider a resync after a schema change
+If you change a column referenced by `text_source`, `primary_key`, `filters`, or `required_filters`, fix the schema or the configuration and then rebuild with `SYNC`. A restart alone does not resume replication.
+:::
+
 MygramDB handles these DDL operations:
 
 #### TRUNCATE TABLE
@@ -237,24 +261,18 @@ Clears all data and logs an error:
 DROP TABLE articles;
 ```
 
-MygramDB will:
-- Clear all data
-- Log error message
-- **Require manual restart/reconfiguration**
+If the dropped table provides a configured primary key, text source, or filter column, MygramDB stops replication before advancing the GTID. Restore a compatible schema or update the configuration, then run `SYNC` to rebuild the table.
 
 #### ALTER TABLE
 
-Logs a warning about potential schema inconsistency:
+Changes unrelated to configured columns can continue after a warning. An incompatible change to a configured primary key, text source, or filter column stops replication before advancing the GTID:
 
 ```sql
 ALTER TABLE articles ADD COLUMN new_col VARCHAR(100);
 ALTER TABLE articles MODIFY COLUMN content TEXT;
 ```
 
-**Important notes:**
-- Type changes (e.g., VARCHAR to TEXT) may cause replication issues
-- Column additions/removals affecting `text_source` or `filters` require MygramDB restart
-- **Recommendation**: Rebuild MygramDB snapshot after schema changes
+**Recovery:** Fix the schema or configuration, then run `SYNC` to rebuild the table. Do not assume that a restart alone resumes replication after an incompatible DDL change.
 
 ## Supported Column Types
 
@@ -264,7 +282,9 @@ MygramDB can replicate these MySQL column types:
 - TINYINT, SMALLINT, INT, MEDIUMINT, BIGINT (signed/unsigned)
 
 ### String Types
-- VARCHAR, CHAR, TEXT, BLOB, ENUM, SET
+- VARCHAR, CHAR, TEXT, ENUM, SET
+
+Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VARBINARY`, or `BLOB`. Character columns used by the configuration must have an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation.
 
 ### Date/Time Types
 - DATE, TIME, DATETIME, TIMESTAMP (with fractional seconds)
@@ -320,7 +340,12 @@ echo "REPLICATION STATUS" | nc localhost 11016
 
 Response:
 ```
-OK REPLICATION status=running gtid=3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
+OK REPLICATION
+status: running
+current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
+processed_events: 12345
+queue_size: 0
+END
 ```
 
 ### Stop Replication
@@ -429,7 +454,7 @@ mysql:
 
 replication:
   enable: true
-  server_id: 0                    # 0 = auto-generate
+  server_id: 83917                # Unique value from 1 to 4294967295
   start_from: "snapshot"          # snapshot|latest|gtid=<UUID:txn>
   queue_size: 10000
   reconnect_backoff_min_ms: 500   # Reserved / not yet enforced

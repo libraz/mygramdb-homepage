@@ -1,3 +1,12 @@
+---
+title: MygramDB Quick Start - Install, Configure, and Search in 5 Minutes
+description: Get MygramDB running in five minutes. Prerequisites, package install, a minimal config.yaml, starting the service, and running your first SYNC and SEARCH.
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB quick start, getting started, install MygramDB, minimal config, first search, SYNC command, MySQL full-text search setup
+---
+
 # Getting Started
 
 Get MygramDB up and running in 5 minutes.
@@ -9,7 +18,15 @@ Get MygramDB up and running in 5 minutes.
 
 MygramDB deploys next to your existing database as a sidecar: your application keeps writing to MySQL/MariaDB unchanged, MygramDB follows the binlog to build its own search index, and only search queries go to MygramDB.
 
-<img src="/diagrams/deployment-topology.svg" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." class="doc-diagram" />
+::: info What is a GTID?
+A **GTID** is a unique identifier attached to each change in MySQL. MygramDB uses it to know exactly how far it has read, so it picks up from the right place after a restart.
+:::
+
+::: warning MySQL needs preparation too
+MygramDB reads the MySQL/MariaDB binlog, so the upstream server needs GTID enabled, ROW-format binlog, `binlog_row_image=FULL`, a replication user, and `SELECT` on the target tables. See [MySQL Replication](/docs/replication) for the full setup.
+:::
+
+<DocDiagram name="deployment-topology" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." />
 
 ## Quick Install
 
@@ -61,8 +78,13 @@ network:
     - "127.0.0.1/32"
 ```
 
-> [!IMPORTANT]
-> The `allow_cidrs` setting is required. Without it, all connections are denied. Add your client IPs to this list.
+::: warning
+The `allow_cidrs` setting is required. Without it, all connections are denied. Add your client IPs to this list.
+:::
+
+::: info What is CIDR?
+**CIDR** is a notation for a range of IP addresses. `127.0.0.1/32` means localhost only; `10.0.0.0/8` means the whole private network starting with `10.`.
+:::
 
 ## Start the Service
 
@@ -72,17 +94,33 @@ sudo systemctl enable --now mygramdb
 
 ## Test Your Setup
 
+Load the existing MySQL rows before searching:
+
 ```bash
 # Connect via CLI
 mygram-cli -h localhost -p 11016
 ```
 
-Once connected, run a search query:
+Once connected, start `SYNC` and wait for it to complete:
+
+```mygram
+mygram> SYNC articles
+OK SYNC STARTED table=articles
+
+mygram> SYNC STATUS
+...
+```
+
+Then run a search query:
 
 ```mygram
 mygram> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
+
+::: tip If you get zero results
+Check synchronization with `SYNC STATUS`, confirm MySQL actually has rows containing the search term, and verify `text_source.column` in the config. In a multi-database configuration, qualify the table as `SEARCH app_db.articles hello world`.
+:::
 
 ## Next Steps
 
@@ -95,5 +133,5 @@ OK RESULTS 3 101 205 387
 - [Full Configuration Reference](/docs/configuration)
 - [MySQL Replication](/docs/replication)
 - [Operations Guide](/docs/operations)
-- [v1.8 Upgrade Notes](/docs/upgrade-v1.8)
-- [v1.7 Migration Guide](/docs/migration-v1.7)
+- [Upgrade to v1.9](/docs/upgrade-v1.9)
+- [Upgrade to v1.7](/docs/migration-v1.7)

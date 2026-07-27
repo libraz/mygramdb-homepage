@@ -38,18 +38,18 @@ MygramDBは、サーバー再起動なしにランタイム設定を変更する
 
 ```sql
 -- すべての変数を表示
-SHOW VARIABLES;
+SHOW VARIABLES
 
 -- 特定のパターンを表示
-SHOW VARIABLES LIKE 'mysql%';
-SHOW VARIABLES LIKE 'cache%';
+SHOW VARIABLES LIKE 'mysql%'
+SHOW VARIABLES LIKE 'cache%'
 
 -- 単一の変数を設定
-SET logging.level = 'debug';
-SET mysql.host = '192.168.1.100';
+SET logging.level = 'debug'
+SET mysql.host = '192.168.1.100'
 
 -- 複数の変数を設定
-SET api.default_limit = 200, cache.enabled = true;
+SET api.default_limit = 200, cache.enabled = true
 ```
 
 ### 可変変数 vs 不変変数
@@ -71,8 +71,9 @@ SET api.default_limit = 200, cache.enabled = true;
 | `cache.ttl_seconds` | キャッシュTTL秒数 | `SET cache.ttl_seconds = 7200` |
 | `api.default_limit` | デフォルトLIMIT値 | `SET api.default_limit = 200` |
 | `api.max_query_length` | 最大クエリ式長 | `SET api.max_query_length = 256` |
-| `rate_limiting.capacity` | トークンバケット容量 | `SET rate_limiting.capacity = 200` |
-| `rate_limiting.refill_rate` | 秒あたりトークン数 | `SET rate_limiting.refill_rate = 20` |
+| `api.rate_limiting.enable` | レート制限の有効化 | `SET api.rate_limiting.enable = true` |
+| `api.rate_limiting.capacity` | トークンバケット容量 | `SET api.rate_limiting.capacity = 200` |
+| `api.rate_limiting.refill_rate` | 秒あたりトークン数 | `SET api.rate_limiting.refill_rate = 20` |
 
 #### 不変（再起動が必要）
 
@@ -89,36 +90,36 @@ SET api.default_limit = 200, cache.enabled = true;
 
 ```sql
 -- デバッグ用に詳細度を上げる
-SET logging.level = 'debug';
+SET logging.level = 'debug'
 
 -- 変更を確認
-SHOW VARIABLES LIKE 'logging%';
+SHOW VARIABLES LIKE 'logging%'
 
 -- 通常に戻す
-SET logging.level = 'info';
+SET logging.level = 'info'
 ```
 
 #### メンテナンス中のキャッシュ無効化
 
 ```sql
 -- メンテナンス前にキャッシュを無効化
-SET cache.enabled = false;
+SET cache.enabled = false
 
 -- メンテナンス作業を実行...
 
 -- キャッシュを再有効化
-SET cache.enabled = true;
+SET cache.enabled = true
 ```
 
 #### API制限の調整
 
 ```sql
 -- 一時的にバルク操作用に制限を増やす
-SET api.default_limit = 1000;
-SET api.max_query_length = 512;
+SET api.default_limit = 1000
+SET api.max_query_length = 512
 
 -- 現在の値を確認
-SHOW VARIABLES LIKE 'api%';
+SHOW VARIABLES LIKE 'api%'
 ```
 
 ### 検証とエラーハンドリング
@@ -127,19 +128,19 @@ SETコマンドは適用前に値を検証します：
 
 ```sql
 -- 型不一致エラー
-SET api.default_limit = 'invalid';
+SET api.default_limit = 'invalid'
 ERROR: Invalid value for api.default_limit: must be integer
 
 -- 範囲外エラー
-SET api.default_limit = 99999;
+SET api.default_limit = 99999
 ERROR: Invalid value for api.default_limit: must be between 5 and 1000
 
 -- 未知の変数エラー
-SET unknown.variable = 'value';
+SET unknown.variable = 'value'
 ERROR: Unknown variable: unknown.variable
 
 -- 不変変数エラー
-SET mysql.database = 'newdb';
+SET mysql.database = 'newdb'
 ERROR: Variable mysql.database is immutable (requires restart)
 ```
 
@@ -154,7 +155,7 @@ ERROR: Variable mysql.database is immutable (requires restart)
 tail -f /var/log/mygramdb/server.log | grep -i "variable"
 
 # 現在の設定を確認
-mygram-cli -c "SHOW VARIABLES;"
+mygram-cli "SHOW VARIABLES"
 ```
 
 ## 2. ランタイム変数を使用したMySQLフェイルオーバー
@@ -169,13 +170,13 @@ MygramDBは、SETコマンドを使用したMySQLフェイルオーバーをサ�
 
 ```sql
 -- 1. 現在のMySQL接続を確認
-SHOW VARIABLES LIKE 'mysql%';
+SHOW VARIABLES LIKE 'mysql%'
 
 -- 2. 新しいMySQLサーバーに切り替え（レプリカをプライマリに昇格）
-SET mysql.host = '192.168.1.101', mysql.port = 3306;
+SET mysql.host = '192.168.1.101', mysql.port = 3306
 
 -- 3. 再接続が成功したことを確認
-SHOW VARIABLES LIKE 'mysql%';
+SHOW VARIABLES LIKE 'mysql%'
 ```
 
 ### 仕組み
@@ -201,17 +202,17 @@ SHOW VARIABLES LIKE 'mysql%';
 
 ```sql
 -- フェイルオーバー前：mysql-primary-1に接続
-SHOW VARIABLES LIKE 'mysql.host';
+SHOW VARIABLES LIKE 'mysql.host'
 -- 出力: mysql-primary-1.example.com
 
 -- レプリカを新プライマリに昇格
 -- （MySQLレプリケーション管理で外部的に実行）
 
 -- MygramDBを新プライマリに切り替え
-SET mysql.host = 'mysql-primary-2.example.com';
+SET mysql.host = 'mysql-primary-2.example.com'
 
 -- フェイルオーバーを確認
-SHOW VARIABLES LIKE 'mysql.host';
+SHOW VARIABLES LIKE 'mysql.host'
 -- 出力: mysql-primary-2.example.com
 ```
 
@@ -228,18 +229,7 @@ SHOW VARIABLES LIKE 'mysql.host';
 
 ### エラーハンドリング
 
-フェイルオーバーが失敗した場合、サーバーはレプリケーションを停止し、詳細なエラーをログに記録します：
-
-```log
-[error] Failed to reconnect to new MySQL server: Connection refused
-[error] Binlog replication stopped. Manual intervention required.
-```
-
-この場合：
-1. 新MySQLサーバーがアクセス可能か確認
-2. ネットワーク接続を確認
-3. MySQL認証情報を確認
-4. SETコマンドを再試行するか、サーバーを再起動
+MygramDBは、現在のリーダーを止める前に候補サーバーへ接続して検証します。接続または検証に失敗しても、本番接続とレプリケーションは動作を続けます。切り替え途中で失敗した場合も、古い接続とリーダーを復元します。候補の設定を修正してから `SET` コマンドを再実行してください。
 
 ## 3. MySQL フェイルオーバー検出
 
@@ -264,7 +254,7 @@ MySQL への接続または再接続時に、サーバーは以下を実行し�
 
 接続が失われると、サーバーは指数バックオフで再接続し、レプリケーション再開前に上記の検証チェックを再実行します。この検証結果によって、ストリーミングが自動的に再開されるか、手動対応が必要な形でレプリケーションが停止されるかが決まります。
 
-<img src="/diagrams/failover-validation-flow.svg" alt="接続断の後にMygramDBが指数バックオフで再接続してサーバーを検証し、GTID無効やテーブル欠落ではレプリケーションを停止して手動対応を要求し、サーバーUUIDの変化はフェイルオーバー警告のみで継続し、検証を通過すれば保存済みGTIDからストリーミングを再開する判定フロー図" class="doc-diagram" />
+<DocDiagram name="failover-validation-flow" alt="接続断の後にMygramDBが指数バックオフで再接続してサーバーを検証し、GTID無効やテーブル欠落ではレプリケーションを停止して手動対応を要求し、サーバーUUIDの変化はフェイルオーバー警告のみで継続し、検証を通過すれば保存済みGTIDからストリーミングを再開する判定フロー図" />
 
 #### シナリオ 1: 通常の再接続（同じサーバー）
 
@@ -390,7 +380,7 @@ grep 'Server UUID changed' /var/log/mygramdb/server.log
 3. **復旧**:
    ```bash
    # 誤ったサーバーの場合、SETコマンドで修正
-   mygram-cli -c "SET mysql.host = 'correct-host.example.com', mysql.port = 3306;"
+   mygram-cli "SET mysql.host = 'correct-host.example.com', mysql.port = 3306"
 
    # 正しいサーバーだが検証失敗の場合、mygramdb を再起動
    systemctl restart mygramdb
@@ -421,16 +411,18 @@ curl http://localhost:8080/health/detail
 ```json
 {
   "status": "healthy",
+  "timestamp": 1730000000,
   "uptime_seconds": 3600,
-  "binlog_reader": {
-    "running": true,
-    "current_gtid": "a1b2c3d4-e5f6-1234-5678-90abcdef1234:1-12345",
-    "processed_events": 12345,
-    "queue_size": 42
-  },
-  "mysql_connection": {
-    "connected": true,
-    "server_uuid": "a1b2c3d4-e5f6-1234-5678-90abcdef1234"
+  "components": {
+    "server": { "status": "ready", "loading": false },
+    "index": { "status": "ok", "total_terms": 1234, "total_documents": 567 },
+    "binlog": {
+      "status": "connected",
+      "running": true,
+      "current_gtid": "a1b2c3d4-e5f6-1234-5678-90abcdef1234:1-12345",
+      "processed_events": 12345,
+      "queue_size": 42
+    }
   }
 }
 ```
@@ -464,10 +456,10 @@ curl http://localhost:8080/health/detail
 ./bin/mygramdb --config config.yaml
 
 # 2. 現在の変数を確認
-mygram-cli -c "SHOW VARIABLES LIKE 'logging%';"
+mygram-cli "SHOW VARIABLES LIKE 'logging%'"
 
 # 3. 変数を変更
-mygram-cli -c "SET logging.level = 'debug';"
+mygram-cli "SET logging.level = 'debug'"
 
 # 4. ログを確認
 tail -f /var/log/mygramdb/server.log
@@ -505,10 +497,10 @@ ctest -R ConnectionValidatorIntegrationTest -V
 ./bin/mygramdb --config config.yaml
 
 # 2. 現在の接続を確認
-mygram-cli -c "SHOW VARIABLES LIKE 'mysql.host';"
+mygram-cli "SHOW VARIABLES LIKE 'mysql.host'"
 
 # 3. 新しいMySQLサーバーに切り替え
-mygram-cli -c "SET mysql.host = 'mysql-server-2.example.com';"
+mygram-cli "SET mysql.host = 'mysql-server-2.example.com'"
 
 # 4. ログでフェイルオーバー検出を確認
 tail -100 /var/log/mygramdb/server.log | grep -E "(failover|UUID changed)"
@@ -671,13 +663,13 @@ cache:
 
 ```bash
 # すべての変数を表示
-mygram-cli -c "SHOW VARIABLES;"
+mygram-cli "SHOW VARIABLES"
 
 # 変数を設定
-mygram-cli -c "SET logging.level = 'debug';"
+mygram-cli "SET logging.level = 'debug'"
 
 # MySQLサーバーを切り替え（フェイルオーバー）
-mygram-cli -c "SET mysql.host = 'new-host.example.com';"
+mygram-cli "SET mysql.host = 'new-host.example.com'"
 
 # プロセスステータスをチェック
 ps aux | grep mygramdb

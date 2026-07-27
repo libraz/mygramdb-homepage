@@ -19,8 +19,8 @@ This page covers the application clients for Node.js, Python, and Go. For the C/
 
 | Language | Package | Requirement | Notes |
 |----------|---------|-------------|-------|
-| Node.js | `mygramdb-client` v1.3.0 | Node.js 22+ | TypeScript types, pure JavaScript implementation, optional native binding |
-| Python | `mygramdb-client` v1.2.0 | Python 3.9+ | asyncio, zero external dependencies, dataclass types |
+| Node.js | `mygramdb-client` v1.4.0 | Node.js 22+ | TypeScript types, pure JavaScript implementation, optional native binding |
+| Python | `mygramdb-client` v1.3.0 | Python 3.9+ | asyncio, zero external dependencies, dataclass types |
 | Go | `github.com/libraz/go-mygram-client` | Go 1.23+ | standard library only, `context.Context` variants, safe for concurrent use |
 
 ::: warning Load data before querying
@@ -28,6 +28,10 @@ The clients are thin wrappers around MygramDB server commands. If existing rows 
 :::
 
 ## Shared Concepts
+
+::: info What is raw boolean search?
+**Raw boolean search** passes a full search expression — with `AND`, `OR`, `NOT`, and parentheses — straight to the server's query parser. Use it for conditions such as `python OR (ruby AND rails)` that the simple `search()` builder cannot express.
+:::
 
 - Use `articles` on a single-database server, or `app_db.articles` when the instance indexes tables from multiple databases.
 - `search()` / `Search()` is best for simple terms and AND/NOT-style searches.
@@ -163,43 +167,55 @@ asyncio.run(main())
 ### v1.7 Table Identities and Raw Boolean Search
 
 ```python
+import asyncio
 from mygramdb_client import (
+    ClientConfig,
+    MygramClient,
     SearchRawOptions,
     convert_search_expression,
     parse_table_identity,
     qualify_table_identity,
 )
 
-table = qualify_table_identity('articles', 'app_db')  # app_db.articles
-print(parse_table_identity(table))                    # ('app_db', 'articles')
+async def main():
+    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+        table = qualify_table_identity('articles', 'app_db')  # app_db.articles
+        print(parse_table_identity(table))                    # ('app_db', 'articles')
 
-raw = convert_search_expression('python OR (ruby AND rails)')
-res = await client.search_raw(table, raw, SearchRawOptions(limit=50))
+        raw = convert_search_expression('python OR (ruby AND rails)')
+        res = await client.search_raw(table, raw, SearchRawOptions(limit=50))
+
+asyncio.run(main())
 ```
 
 ### HIGHLIGHT / FACET / SYNC
 
 ```python
-from mygramdb_client import FacetOptions, SearchOptions
+import asyncio
+from mygramdb_client import ClientConfig, FacetOptions, MygramClient, SearchOptions
 
-res = await client.search_with_highlights(
-    'articles',
-    'golang',
-    SearchOptions(limit=10, sort_column='_score', sort_desc=True),
-)
+async def main():
+    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+        res = await client.search_with_highlights(
+            'articles',
+            'golang',
+            SearchOptions(limit=10, sort_column='_score', sort_desc=True),
+        )
 
-facets = await client.facet(
-    'articles',
-    'category',
-    FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
-)
+        facets = await client.facet(
+            'articles',
+            'category',
+            FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
+        )
 
-await client.set_variable('logging.level', 'info')
-print(await client.show_variables('logging%'))
+        await client.set_variable('logging.level', 'info')
+        print(await client.show_variables('logging%'))
 
-await client.sync('app_db.articles')
-print(await client.sync_status())
-await client.sync_stop('app_db.articles')
+        await client.sync('app_db.articles')
+        print(await client.sync_status())
+        await client.sync_stop('app_db.articles')
+
+asyncio.run(main())
 ```
 
 ## Go

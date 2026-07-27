@@ -18,6 +18,10 @@ This guide covers two critical operational resilience features:
 
 These features enable zero-downtime configuration updates and safe handling of MySQL master failover scenarios.
 
+::: info What is a runtime variable?
+**Runtime variables** are settings that can be changed after MygramDB has started. Instead of editing the config file and restarting, you change selected values with a TCP command. The set is deliberately limited — table definitions and credentials still require a restart.
+:::
+
 ## 1. Runtime Variables (SET/SHOW VARIABLES)
 
 MygramDB supports MySQL-compatible SET and SHOW VARIABLES commands for runtime configuration changes without server restart.
@@ -34,21 +38,25 @@ Runtime variables allow you to:
 
 ```sql
 -- Show all variables
-SHOW VARIABLES;
+SHOW VARIABLES
 
 -- Show specific pattern
-SHOW VARIABLES LIKE 'mysql%';
-SHOW VARIABLES LIKE 'cache%';
+SHOW VARIABLES LIKE 'mysql%'
+SHOW VARIABLES LIKE 'cache%'
 
 -- Set single variable
-SET logging.level = 'debug';
-SET mysql.host = '192.168.1.100';
+SET logging.level = 'debug'
+SET mysql.host = '192.168.1.100'
 
 -- Set multiple variables
-SET api.default_limit = 200, cache.enabled = true;
+SET api.default_limit = 200, cache.enabled = true
 ```
 
 ### Mutable vs Immutable Variables
+
+::: warning What SET is and is not for
+`SET` exists for tuning a running server. Anything that changes the meaning of search results or the connection boundary — indexed tables, primary keys, text columns, allowed CIDRs — requires a restart by design.
+:::
 
 #### Mutable (Runtime Changeable)
 
@@ -63,8 +71,9 @@ SET api.default_limit = 200, cache.enabled = true;
 | `cache.ttl_seconds` | Cache TTL in seconds | `SET cache.ttl_seconds = 7200` |
 | `api.default_limit` | Default LIMIT value | `SET api.default_limit = 200` |
 | `api.max_query_length` | Max query expression length | `SET api.max_query_length = 256` |
-| `rate_limiting.capacity` | Token bucket capacity | `SET rate_limiting.capacity = 200` |
-| `rate_limiting.refill_rate` | Tokens per second | `SET rate_limiting.refill_rate = 20` |
+| `api.rate_limiting.enable` | Enable rate limiting | `SET api.rate_limiting.enable = true` |
+| `api.rate_limiting.capacity` | Token bucket capacity | `SET api.rate_limiting.capacity = 200` |
+| `api.rate_limiting.refill_rate` | Tokens per second | `SET api.rate_limiting.refill_rate = 20` |
 
 #### Immutable (Requires Restart)
 
@@ -81,36 +90,36 @@ SET api.default_limit = 200, cache.enabled = true;
 
 ```sql
 -- Increase verbosity for debugging
-SET logging.level = 'debug';
+SET logging.level = 'debug'
 
 -- Verify change
-SHOW VARIABLES LIKE 'logging%';
+SHOW VARIABLES LIKE 'logging%'
 
 -- Return to normal
-SET logging.level = 'info';
+SET logging.level = 'info'
 ```
 
 #### Disable Cache During Maintenance
 
 ```sql
 -- Disable cache before maintenance
-SET cache.enabled = false;
+SET cache.enabled = false
 
 -- Perform maintenance operations...
 
 -- Re-enable cache
-SET cache.enabled = true;
+SET cache.enabled = true
 ```
 
 #### Adjust API Limits
 
 ```sql
 -- Temporarily increase limits for bulk operations
-SET api.default_limit = 1000;
-SET api.max_query_length = 512;
+SET api.default_limit = 1000
+SET api.max_query_length = 512
 
 -- Check current values
-SHOW VARIABLES LIKE 'api%';
+SHOW VARIABLES LIKE 'api%'
 ```
 
 ### Validation and Error Handling
@@ -119,19 +128,19 @@ SET commands validate values before applying:
 
 ```sql
 -- Type mismatch error
-SET api.default_limit = 'invalid';
+SET api.default_limit = 'invalid'
 ERROR: Invalid value for api.default_limit: must be integer
 
 -- Out of range error
-SET api.default_limit = 99999;
+SET api.default_limit = 99999
 ERROR: Invalid value for api.default_limit: must be between 5 and 1000
 
 -- Unknown variable error
-SET unknown.variable = 'value';
+SET unknown.variable = 'value'
 ERROR: Unknown variable: unknown.variable
 
 -- Immutable variable error
-SET mysql.database = 'newdb';
+SET mysql.database = 'newdb'
 ERROR: Variable mysql.database is immutable (requires restart)
 ```
 
@@ -146,10 +155,14 @@ Monitor variable changes using server logs:
 tail -f /var/log/mygramdb/server.log | grep -i "variable"
 
 # Check current configuration
-mygram-cli -c "SHOW VARIABLES;"
+mygram-cli "SHOW VARIABLES"
 ```
 
 ## 2. MySQL Failover with Runtime Variables
+
+::: info What is failover?
+**Failover** is switching to a different MySQL server, either after a fault or for planned maintenance. MygramDB resumes binlog reading from its saved GTID, so the server you switch to must still have that GTID history.
+:::
 
 MygramDB supports zero-downtime MySQL failover using SET commands. When switching to a new MySQL server, the GTID position is preserved.
 
@@ -157,13 +170,13 @@ MygramDB supports zero-downtime MySQL failover using SET commands. When switchin
 
 ```sql
 -- 1. Check current MySQL connection
-SHOW VARIABLES LIKE 'mysql%';
+SHOW VARIABLES LIKE 'mysql%'
 
 -- 2. Switch to new MySQL server (replica promoted to primary)
-SET mysql.host = '192.168.1.101', mysql.port = 3306;
+SET mysql.host = '192.168.1.101', mysql.port = 3306
 
 -- 3. Verify reconnection succeeded
-SHOW VARIABLES LIKE 'mysql%';
+SHOW VARIABLES LIKE 'mysql%'
 ```
 
 ### How It Works
@@ -189,17 +202,17 @@ The new MySQL server must:
 
 ```sql
 -- Before failover: connected to mysql-primary-1
-SHOW VARIABLES LIKE 'mysql.host';
+SHOW VARIABLES LIKE 'mysql.host'
 -- Output: mysql-primary-1.example.com
 
 -- Promote replica to new primary
 -- (Done externally via MySQL replication management)
 
 -- Switch MygramDB to new primary
-SET mysql.host = 'mysql-primary-2.example.com';
+SET mysql.host = 'mysql-primary-2.example.com'
 
 -- Verify failover
-SHOW VARIABLES LIKE 'mysql.host';
+SHOW VARIABLES LIKE 'mysql.host'
 -- Output: mysql-primary-2.example.com
 ```
 
@@ -216,18 +229,7 @@ Server logs will show:
 
 ### Error Handling
 
-If failover fails, the server stops replication and logs detailed errors:
-
-```log
-[error] Failed to reconnect to new MySQL server: Connection refused
-[error] Binlog replication stopped. Manual intervention required.
-```
-
-In this case:
-1. Check new MySQL server is accessible
-2. Verify network connectivity
-3. Check MySQL credentials
-4. Retry SET command or restart server
+MygramDB connects to and validates the candidate before it stops the current reader. A connection or validation failure leaves the production connection and replication running. If a later handoff step fails, it restores the old connection and restarts its reader. Correct the candidate settings, then retry the `SET` command.
 
 ## 3. MySQL Failover Detection
 
@@ -252,7 +254,7 @@ When connecting or reconnecting to MySQL, the server performs:
 
 After a connection loss, the server reconnects with exponential backoff and re-runs the validation checks above before resuming replication. The outcome of that validation determines whether streaming resumes automatically or replication halts for manual intervention.
 
-<img src="/diagrams/failover-validation-flow.svg" alt="After a lost connection MygramDB reconnects with exponential backoff and validates the server: disabled GTID mode or missing tables stop replication and require manual intervention, a changed server UUID logs a failover warning and continues, and a passing validation resumes streaming from the saved GTID." class="doc-diagram" />
+<DocDiagram name="failover-validation-flow" alt="After a lost connection MygramDB reconnects with exponential backoff and validates the server: disabled GTID mode or missing tables stop replication and require manual intervention, a changed server UUID logs a failover warning and continues, and a passing validation resumes streaming from the saved GTID." />
 
 #### Scenario 1: Normal Reconnection (Same Server)
 
@@ -378,10 +380,10 @@ grep 'Server UUID changed' /var/log/mygramdb/server.log
 3. **Recover**:
    ```sql
    -- If wrong server, use SET to switch to correct server
-   SET mysql.host = 'correct-server.example.com';
+   SET mysql.host = 'correct-server.example.com'
 
    -- Verify connection
-   SHOW VARIABLES LIKE 'mysql%';
+   SHOW VARIABLES LIKE 'mysql%'
    ```
 
    ```bash
@@ -414,16 +416,18 @@ curl http://localhost:8080/health/detail
 ```json
 {
   "status": "healthy",
+  "timestamp": 1730000000,
   "uptime_seconds": 3600,
-  "binlog_reader": {
-    "running": true,
-    "current_gtid": "a1b2c3d4-e5f6-1234-5678-90abcdef1234:1-12345",
-    "processed_events": 12345,
-    "queue_size": 42
-  },
-  "mysql_connection": {
-    "connected": true,
-    "server_uuid": "a1b2c3d4-e5f6-1234-5678-90abcdef1234"
+  "components": {
+    "server": { "status": "ready", "loading": false },
+    "index": { "status": "ok", "total_terms": 1234, "total_documents": 567 },
+    "binlog": {
+      "status": "connected",
+      "running": true,
+      "current_gtid": "a1b2c3d4-e5f6-1234-5678-90abcdef1234:1-12345",
+      "processed_events": 12345,
+      "queue_size": 42
+    }
   }
 }
 ```
@@ -456,10 +460,10 @@ Recommended monitoring alerts:
 mygram-cli
 
 # 3. Test variable changes
-SET logging.level = 'debug';
+SET logging.level = 'debug'
 
 # 4. Verify change applied
-SHOW VARIABLES LIKE 'logging%';
+SHOW VARIABLES LIKE 'logging%'
 
 # 5. Check logs
 tail -f /var/log/mygramdb/server.log
@@ -499,7 +503,7 @@ ctest -R ConnectionValidatorIntegrationTest -V
 mygram-cli
 
 # 3. Switch to mysql-server-2
-SET mysql.host = 'mysql-server-2.example.com';
+SET mysql.host = 'mysql-server-2.example.com'
 
 # 4. Check logs for failover detection
 tail -100 /var/log/mygramdb/server.log | grep -E "(failover|UUID changed|Reconnecting)"
@@ -511,7 +515,7 @@ tail -100 /var/log/mygramdb/server.log | grep -E "(failover|UUID changed|Reconne
 
 **Symptoms:**
 ```sql
-SET mysql.host = 'new-host';
+SET mysql.host = 'new-host'
 ERROR: Failed to reconnect to MySQL server
 ```
 
@@ -658,29 +662,29 @@ cache:
 api:
   default_limit: 100           # Mutable via SET
   max_query_length: 128        # Mutable via SET
-
-rate_limiting:
-  capacity: 100                # Mutable via SET
-  refill_rate: 10              # Mutable via SET
+  rate_limiting:
+    enable: true               # Mutable via SET
+    capacity: 100              # Mutable via SET
+    refill_rate: 10            # Mutable via SET
 ```
 
 ### Quick Reference: Commands
 
 ```sql
 -- Change logging level
-SET logging.level = 'debug';
+SET logging.level = 'debug'
 
 -- Switch MySQL server
-SET mysql.host = 'new-primary.example.com';
+SET mysql.host = 'new-primary.example.com'
 
 -- Disable cache
-SET cache.enabled = false;
+SET cache.enabled = false
 
 -- Show all variables
-SHOW VARIABLES;
+SHOW VARIABLES
 
 -- Show specific variables
-SHOW VARIABLES LIKE 'mysql%';
+SHOW VARIABLES LIKE 'mysql%'
 ```
 
 ```bash

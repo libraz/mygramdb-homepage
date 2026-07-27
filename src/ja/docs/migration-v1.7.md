@@ -1,4 +1,9 @@
-# v1.7 移行ガイド
+---
+title: MygramDB v1.7 へのアップグレード
+description: v1.7へ移行する手順。DB修飾のテーブル識別子、新しい /tables/{identity} HTTPルート、複数DBのインデックス化、一貫スナップショットを説明します。
+---
+
+# v1.7 へのアップグレード
 
 MygramDB v1.7.0 では、DB修飾テーブル識別子、複数DBのインデックス化、HTTP/TCP の主要検索APIの機能差分解消、複数テーブルの一貫スナップショットが追加されました。単一DB構成でTCP/CLIだけを使っている場合、多くのコマンドはそのまま動きます。一方、HTTPクライアントはテーブルルートの変更が必要です。
 
@@ -21,7 +26,7 @@ v1.7.0ではHTTPのテーブルルートが変更されています。TCP/CLI中
 
 `{identity}` は、単一DB構成では修飾なしのテーブル名、複数DB構成では `app_db.articles` のようなDB修飾テーブル名です。
 
-旧ルートの `/{table}/search`、`/{table}/count`、`/{table}/{primary_key}` は削除されています。
+旧ルートの `/{table}/search`、`/{table}/count`、`/{table}/{primary_key}` と、暫定的な2セグメント形式の `/tables/{database}/{table}/...` は削除されています。
 
 ::: info 用語補足
 **テーブル識別子**は、MygramDBが検索対象テーブルを一意に指すための名前です。複数DBを扱う場合、同じ `articles` というテーブル名が複数存在できるため、`app_db.articles` のようにDB名も含めて指定します。

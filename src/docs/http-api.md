@@ -11,6 +11,10 @@ head:
 
 MygramDB provides a RESTful JSON API for easy integration with web applications and HTTP clients.
 
+::: info How this differs from the TCP API
+The HTTP API is the JSON entry point for search, count, facet, and document lookup. Operational commands such as `SYNC`, `DUMP`, and `SET` are run over TCP/CLI.
+:::
+
 ## Configuration
 
 Enable the HTTP server in your `config.yaml`:
@@ -28,8 +32,13 @@ api:
     cors_allow_origin: "" # Optional origin allowed when CORS is enabled
 ```
 
-> [!WARNING]
-> TCP/HTTP servers bind to loopback by default. If you must expose them publicly, explicitly set `api.tcp.bind`/`api.http.bind`, configure `network.allow_cidrs` to the exact IP ranges that should connect, and keep TLS/API authentication in front of MygramDB (e.g., reverse proxy). CORS is disabled by default and should only be enabled with a trusted origin.
+::: warning
+TCP/HTTP servers bind to loopback by default. If you must expose them publicly, explicitly set `api.tcp.bind`/`api.http.bind`, configure `network.allow_cidrs` to the exact IP ranges that should connect, and keep TLS/API authentication in front of MygramDB (e.g., reverse proxy). CORS is disabled by default and should only be enabled with a trusted origin.
+:::
+
+::: info What is CORS?
+**CORS** is the browser mechanism that permits a page to call an API on another domain. Server-to-server traffic does not need it. Enable it only when a browser calls MygramDB directly, and restrict it to a trusted origin.
+:::
 
 ## API Endpoints
 
@@ -39,6 +48,10 @@ identity segment `/tables/{identity}`, where `{identity}` is the database-qualif
 single-database deployment (only one distinct database is configured), a bare `table` name also works
 and resolves to that database — for example `/tables/articles`. A qualifier is required only when the
 configuration spans two or more databases; a bare name is then rejected as ambiguous.
+
+::: tip Thinking about identity
+`identity` is the name that uniquely designates the table to search. With one database it is `articles`; with several it is `app_db.articles`.
+:::
 
 The legacy `/{table}/search`, `/{table}/count`, and `/{table}/{primary_key}` routes were removed in v1.7.0. Use `/tables/{identity}/...` for all table operations.
 
@@ -53,7 +66,8 @@ POST /tables/app_db.threads/search HTTP/1.1
 Content-Type: application/json
 
 {
-  "q": "breaking news AND tech NOT old",
+  "q": "breaking news AND tech",
+  "mode": "boolean",
   "filters": {
     "status": 1,
     "category": "tech"
@@ -67,7 +81,8 @@ Content-Type: application/json
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `q` | string | Yes | Literal search query text with boolean operators; request options must use JSON fields |
+| `q` | string | Yes | Search text; treated literally unless `mode` is `"boolean"` |
+| `mode` | string | No | `"literal"` (default) or `"boolean"` |
 | `filters` | object | No | Filter conditions (column: value pairs) |
 | `limit` | integer | No | Maximum results to return (default: 100, max: 1000) |
 | `offset` | integer | No | Number of results to skip (default: 0) |
@@ -75,7 +90,19 @@ Content-Type: application/json
 | `highlight` | object | No | Highlight configuration (see below) |
 | `fuzzy` | integer | No | Fuzzy search edit distance (`1` or `2`) |
 
-**Query Syntax:**
+### Literal and Boolean Search
+
+HTTP treats `q` as literal text by default. For example, `"AND"` and `"LIMIT"` are ordinary search terms, not operators or control clauses. To send a boolean expression, set `"mode": "boolean"` explicitly:
+
+```json
+{
+  "q": "tech AND (AI OR machine learning) NOT old",
+  "mode": "boolean",
+  "limit": 50
+}
+```
+
+**Boolean Query Syntax (`mode: "boolean"`):**
 
 - **Simple search**: `"keyword"`
 - **Quoted phrases**: `"\"breaking news\""` (searches for exact phrase)
@@ -84,7 +111,7 @@ Content-Type: application/json
 - **NOT operator**: `"news NOT sports"`
 - **Combined**: `"tech AND AI NOT old"`
 
-`q` is never used to smuggle control clauses. Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`; text that looks like `LIMIT` or `SORT` inside `q` is treated as search text or a boolean-query token.
+Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`. `q` never accepts those control clauses; in literal mode, text such as `LIMIT` or `SORT` remains part of the search text.
 
 **Response (200 OK):**
 
@@ -95,7 +122,6 @@ Content-Type: application/json
   "offset": 0,
   "results": [
     {
-      "doc_id": 101,
       "primary_key": "article_101",
       "filters": {
         "status": 1,
@@ -103,7 +129,6 @@ Content-Type: application/json
       }
     },
     {
-      "doc_id": 205,
       "primary_key": "article_205",
       "filters": {
         "status": 1,
@@ -171,6 +196,7 @@ Content-Type: application/json
 
 {
   "q": "breaking news AND tech",
+  "mode": "boolean",
   "filters": {
     "status": 1
   }
@@ -195,10 +221,12 @@ Return facet buckets for a column, optionally scoped by a query and filters.
 |-------|------|----------|-------------|
 | `column` | string | Yes | Filter column to aggregate |
 | `q` | string | No | Search query used to scope the facet |
+| `mode` | string | No | `"literal"` (default) or `"boolean"` for `q` |
 | `filters` | object | No | Additional filter conditions |
 | `limit` | integer | No | Maximum number of facet buckets (1-1000) |
+| `offset` | integer | No | Number of facet buckets to skip (default: 0) |
 
-`offset`, `sort`, `highlight`, and `fuzzy` are not supported by FACET and are rejected.
+`sort`, `highlight`, and `fuzzy` are not supported by FACET and are rejected.
 
 **Request:**
 
@@ -209,6 +237,7 @@ Content-Type: application/json
 {
   "column": "category",
   "q": "database OR mysql",
+  "mode": "boolean",
   "filters": {
     "status": 1
   },
@@ -237,7 +266,7 @@ TCP/CLI protocol and are not exposed as HTTP routes.
 
 ### GET /tables/{identity}/{primary_key}
 
-Get a single document by its primary key. The response includes the internal `doc_id`.
+Get a single document by its primary key.
 
 **Request:**
 
@@ -249,7 +278,6 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 
 ```json
 {
-  "doc_id": 12345,
   "primary_key": "thread_12345",
   "filters": {
     "status": 1,
@@ -269,6 +297,10 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 ### GET /info
 
 Server information and detailed statistics (Redis-style monitoring).
+
+::: info When to use /info
+`/info` suits human reading and simple monitoring scripts that parse JSON. For continuous time-series monitoring with Prometheus and Grafana, use `/metrics`.
+:::
 
 **Request:**
 
@@ -388,6 +420,10 @@ This endpoint is suitable for integration with monitoring tools that support JSO
 
 Prometheus metrics endpoint in Prometheus Exposition Format for monitoring and alerting.
 
+::: info What is the Prometheus Exposition Format?
+It is the text format Prometheus scrapes. Beyond values it carries types such as Counter and Gauge plus labels, which is what makes the data usable as time series in tools like Grafana.
+:::
+
 **Request:**
 
 ```http
@@ -504,9 +540,13 @@ Liveness probe. Returns `200 OK` while the HTTP server process is running, even 
 
 Readiness probe for traffic gating. Returns `200 OK` only when the node can accept search traffic. Returns `503 Service Unavailable` while a dump load or table synchronization is in progress, or when configured replication is unavailable. In v1.8.0 and later, table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
 
+::: tip Choosing between live and ready
+On Kubernetes, wire `/health/live` to the liveness probe and `/health/ready` to the readiness probe. `live` answers "should this process be restarted"; `ready` answers "may search traffic be sent here".
+:::
+
 ### GET /health/detail
 
-Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions.
+Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions. Unlike `/health/live` and `/health/ready`, this endpoint is subject to the CIDR allow list.
 
 ### GET /config
 
@@ -560,7 +600,10 @@ GET /replication/status HTTP/1.1
 ```json
 {
   "enabled": true,
-  "current_gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+  "status": "running",
+  "current_gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+  "processed_events": 12345,
+  "queue_size": 0
 }
 ```
 
@@ -574,7 +617,7 @@ GET /replication/status HTTP/1.1
 
 ## CORS Support
 
-Set `api.http.enable_cors: true` to turn on CORS (Cross-Origin Resource Sharing) headers for browser clients, then specify the trusted origin via `api.http.cors_allow_origin`. Keep CORS disabled when the API is not accessed directly from browsers.
+Set `api.http.enable_cors: true` to turn on CORS (Cross-Origin Resource Sharing) headers for browser clients, then specify the trusted origin via `api.http.cors_allow_origin`. An empty configured origin becomes `*`, so do not enable CORS without setting a trusted origin. Keep CORS disabled when the API is not accessed directly from browsers.
 
 **CORS Headers:**
 
@@ -647,7 +690,7 @@ const response = await fetch('http://localhost:8080/tables/threads/search', {
 const data = await response.json();
 console.log(`Found ${data.count} results`);
 data.results.forEach(doc => {
-  console.log(`Document ${doc.doc_id}: ${doc.primary_key}`);
+  console.log(`Document ${doc.primary_key}`);
 });
 ```
 
@@ -666,7 +709,7 @@ response = requests.post('http://localhost:8080/tables/threads/search', json={
 data = response.json()
 print(f"Found {data['count']} results")
 for doc in data['results']:
-    print(f"Document {doc['doc_id']}: {doc['primary_key']}")
+    print(f"Document {doc['primary_key']}")
 ```
 
 ## Performance Considerations
@@ -692,7 +735,9 @@ All error responses follow this format:
 |------|-------------|
 | 200 | Success |
 | 400 | Bad Request (invalid input) |
+| 403 | Forbidden (source IP is not allowed) |
 | 404 | Not Found (document doesn't exist) |
+| 429 | Too Many Requests (rate limit exceeded) |
 | 500 | Internal Server Error |
 | 503 | Service unavailable, feature not enabled, replication unavailable, or table synchronization in progress |
 

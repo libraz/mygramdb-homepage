@@ -11,6 +11,10 @@ head:
 
 ## Overview
 
+::: info What is snapshot synchronization?
+**Snapshot synchronization** reads the target MySQL table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication starts from the captured GTID and follows subsequent changes.
+:::
+
 The `SYNC` command allows manual control over snapshot synchronization from MySQL to MygramDB. This prevents unexpected load on the MySQL master server during startup.
 
 ## Configuration
@@ -45,6 +49,10 @@ In v1.8.0 and later, `auto_initial_snapshot: true` requires `start_from: "snapsh
 
 ### SYNC - Trigger Snapshot Synchronization
 
+::: warning Check before running
+`SYNC` reads the whole target table from MySQL, so large tables put real read load on the server. In production, confirm the time window, the replication user's privileges, `network.allow_cidrs`, and available memory before starting one.
+:::
+
 Manually trigger snapshot synchronization for a specific table.
 
 **Syntax:**
@@ -68,7 +76,7 @@ echo "SYNC articles" | nc localhost 11016
 
 **Response (Success):**
 ```mygram
-OK SYNC STARTED table=articles job_id=1
+OK SYNC STARTED table=articles
 ```
 
 **Response (Error):**
@@ -83,9 +91,21 @@ ERROR Table 'products' not found in configuration
 - Returns immediately after starting
 - Builds snapshot from MySQL SELECT query
 - Captures GTID at snapshot time
-- Automatically starts binlog replication with captured GTID when complete
+- Drains replication and restarts it from the saved GTID when complete, so commits for other tables are not skipped
+
+### SYNC STOP - Cancel Synchronization
+
+```mygram
+SYNC STOP [<table_name>]
+```
+
+Cancellation is asynchronous. Continue checking `SYNC STATUS` until the operation reaches `CANCELLED` or another terminal state.
 
 ### SYNC STATUS - Check Synchronization Progress
+
+::: tip Reading the progress output
+`progress` is an approximate count of rows read from MySQL. Once the status is `COMPLETED` and `replication=STARTED` is reported, binlog follow-up after the snapshot has also started.
+:::
 
 Check the progress and status of SYNC operations.
 
@@ -136,19 +156,18 @@ status=IDLE message="No sync operation performed"
 | `rows` | Total rows processed | `25000` |
 | `time` | Total processing time | `5.2s` |
 | `gtid` | Captured snapshot GTID | `uuid:123` |
-| `replication` | Replication status | `STARTED`, `ALREADY_RUNNING`, `DISABLED`, `FAILED` |
+| `replication` | Replication status | `STARTED`, `DISABLED`, `FAILED` |
 | `error` | Error message (if failed) | `MySQL connection lost` |
 
 ### Replication Status Values
 
-- **STARTED**: Binlog replication started from snapshot GTID (success)
-- **ALREADY_RUNNING**: Replication was already running (GTID not updated)
+- **STARTED**: Binlog replication restarted from the saved GTID (success)
 - **DISABLED**: Replication is disabled in configuration
 - **FAILED**: Snapshot succeeded but replication failed to start (check logs)
 
-The diagram below traces a SYNC through its full lifecycle: the initial memory-health check, the snapshot build during which HTTP reads for that table return `503`, the automatic replication handoff, and the terminal states, alongside the operations it mutually excludes.
+The diagram below traces a SYNC through its full lifecycle: the initial memory-health check, the snapshot build during which table reads are rejected, the automatic replication handoff, and the terminal states, alongside the operations it mutually excludes.
 
-<img src="/diagrams/sync-lifecycle.svg" alt="A SYNC passes a memory-health check, builds a snapshot from a MySQL SELECT while HTTP reads for that table return 503, captures the GTID, automatically starts replication with outcomes started, already running, disabled, or failed, and ends in completed, failed, or cancelled — while OPTIMIZE and DUMP operations are mutually excluded with a running SYNC." class="doc-diagram" />
+<DocDiagram name="sync-lifecycle" alt="A SYNC passes a memory-health check, builds a snapshot from a MySQL SELECT while table reads are rejected, then restarts replication from the saved GTID with outcomes started, disabled, or failed. It ends in completed, failed, or cancelled while OPTIMIZE and DUMP operations are mutually excluded." />
 
 ## Command Conflicts
 
@@ -156,27 +175,29 @@ The diagram below traces a SYNC through its full lifecycle: the initial memory-h
 
 | Command | Behavior | Reason |
 |---------|----------|--------|
-| `DUMP LOAD` | **Blocked** | Cannot load dump while SYNC is in progress (prevents data corruption) |
+| `DUMP SAVE` / `DUMP LOAD` | **Blocked** | Long-running maintenance operations are mutually exclusive |
+| `OPTIMIZE` | **Blocked** | Long-running maintenance operations are mutually exclusive |
+| Automatic snapshot | **Blocked** | Long-running maintenance operations are mutually exclusive |
 | `REPLICATION START` | **Blocked** | SYNC automatically starts replication when complete |
 | `SYNC` (same table) | **Blocked** | SYNC already in progress for this table |
 
 ### Operations That Block Starting SYNC
 
-In v1.8.0 and later, a new `SYNC` request is rejected while `OPTIMIZE`, `DUMP SAVE`, or `DUMP LOAD` is in progress. Retry after the current operation completes.
+In v1.8.1 and later, `SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and automatic snapshots share one operation slot. A new `SYNC` request is rejected while any of those operations is in progress; retry after it completes.
 
 ### Operations Allowed During SYNC
 
 | Command | Behavior | Notes |
 |---------|----------|-------|
-| `SEARCH` | Allowed over TCP/CLI | Returns partial results (data loaded so far) |
-| `COUNT` | Allowed over TCP/CLI | Returns current count (increases as sync progresses) |
-| `GET` | Allowed over TCP/CLI | Returns document if loaded, error if not yet loaded |
+| `SEARCH` | **Rejected** | The target table is synchronizing |
+| `COUNT` | **Rejected** | The target table is synchronizing |
+| `GET` | **Rejected** | The target table is synchronizing |
 | `INFO` | Allowed | Shows current server state including sync progress |
-| `DUMP SAVE` | **Warning** | Allowed but logs warning (saving incomplete snapshot) |
-| `SYNC` (different table) | Allowed | Multi-table support, independent operations |
+| `DUMP SAVE` / `DUMP LOAD` / `OPTIMIZE` | **Blocked** | Retry after SYNC completes |
+| `SYNC` (different table) | **Blocked** | Only one long-running operation can run at a time |
 | `REPLICATION STOP` | Allowed | Independent operation |
 
-HTTP table reads (`search`, `count`, `facet`, and document `GET`) return `503` while the target table is synchronizing.
+TCP/CLI and HTTP table reads (`search`, `count`, `facet`, and document `GET`) are rejected while the target table is synchronizing. HTTP returns `503`.
 
 ## Usage Scenarios
 
@@ -219,9 +240,11 @@ replication:
 ```
 
 ```bash
-# Sync all tables independently
+# Synchronize one table, then wait until it completes before starting the next.
 mygram-cli SYNC articles
+# Wait for articles to report COMPLETED in SYNC STATUS.
 mygram-cli SYNC products
+# Wait for products to report COMPLETED in SYNC STATUS.
 mygram-cli SYNC users
 
 # Multi-database table identity
@@ -229,10 +252,8 @@ mygram-cli SYNC app_db.articles
 
 # Check all sync statuses
 mygram-cli SYNC STATUS
-# Output:
-# table=articles status=COMPLETED rows=10000 time=5.0s gtid=uuid:123 replication=STARTED
-# table=products status=IN_PROGRESS progress=5000/20000 rows (25.0%) rate=3000 rows/s
-# table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=ALREADY_RUNNING
+# Output after the final SYNC completes:
+# table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=STARTED
 ```
 
 ### Scenario 3: Scheduled Maintenance

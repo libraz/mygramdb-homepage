@@ -13,7 +13,15 @@ head:
 
 libmygramclient is a C/C++ client library for connecting to and querying MygramDB servers. It provides both a modern C++ API and a C API suitable for bindings (e.g., node-gyp).
 
+::: info Before you start
+This library is a thin client for the MygramDB TCP protocol. Query grammar and result semantics are identical to the server side, so read the [Query Syntax Guide](/docs/query-syntax) alongside this page.
+:::
+
 ## Features
+
+::: info What is RAII?
+**RAII** is a C++ pattern where a resource — a connection, memory — is acquired when an object is constructed and released automatically when it is destroyed. It makes cleanup hard to forget, even with exceptions or early returns.
+:::
 
 - Full support for all MygramDB protocol commands
 - Modern C++17 API with RAII and type safety
@@ -40,16 +48,14 @@ This creates:
 sudo make install
 ```
 
-This installs:
-- Headers to `/usr/local/include/mygramdb/`
-- Libraries to `/usr/local/lib/`
+This installs headers to `/usr/local/include/mygramdb/` and libraries to `/usr/local/lib/`. The C++ header currently depends on MygramDB core headers, so build C++ applications from a MygramDB source checkout rather than treating the installed header as a standalone SDK.
 
 ## C++ API
 
 ### Basic Usage
 
 ```cpp
-#include <mygramdb/mygramclient.h>
+#include "client/mygramclient.h"
 #include <iostream>
 
 using namespace mygramdb::client;
@@ -65,19 +71,19 @@ int main() {
     MygramClient client(config);
 
     // Connect
-    if (auto err = client.Connect()) {
-        std::cerr << "Connection failed: " << *err << std::endl;
+    if (auto connected = client.Connect(); !connected) {
+        std::cerr << "Connection failed: " << connected.error().message() << std::endl;
         return 1;
     }
 
-    // Search. Table names are database-qualified: <database>.<table>.
+    // Use a bare table name on a single-database server; otherwise qualify it.
     auto result = client.Search("app_db.articles", "hello world", 100);
-    if (auto* err = std::get_if<Error>(&result)) {
-        std::cerr << "Search failed: " << err->message << std::endl;
+    if (!result) {
+        std::cerr << "Search failed: " << result.error().message() << std::endl;
         return 1;
     }
 
-    auto resp = std::get<SearchResponse>(result);
+    const auto& resp = *result;
     std::cout << "Found " << resp.total_count << " results\n";
     for (const auto& doc : resp.results) {
         std::cout << "  - " << doc.primary_key << "\n";
@@ -89,8 +95,12 @@ int main() {
 
 ### Compiling with libmygramclient
 
+::: tip If linking fails
+When `libmygramclient` is installed outside the standard prefixes, you may need `-I` and `-L` at compile time and `LD_LIBRARY_PATH` (Linux) or `DYLD_LIBRARY_PATH` (macOS) at run time.
+:::
+
 ```bash
-g++ -std=c++17 -o myapp myapp.cpp -lmygramclient
+g++ -std=c++17 -I./src -L./build/lib -o myapp myapp.cpp -lmygramclient
 ```
 
 ### Advanced Search
@@ -117,12 +127,41 @@ auto result = client.Search(
 );
 ```
 
+### Typed Search Options
+
+Use `SearchOptions` when a query needs comparison filters, fuzzy matching, highlighting, sorting, or pagination. Use `SearchRaw` only for a boolean expression you construct deliberately.
+
+::: warning Concurrency per connection
+`MygramClient` serializes concurrent commands on its single TCP connection, so it is safe to share — but one instance executes one request at a time. Use several instances when you need throughput, and never call `Disconnect()` while a request is in flight.
+:::
+
+::: info Thinking about connections
+Holding one client per worker or thread and reusing it beats reconnecting for every short request. After a disconnect or timeout, construct a fresh `MygramClient` and reconnect.
+:::
+
+```cpp
+SearchOptions options;
+options.limit = 50;
+options.sort_column = "created_at";
+options.sort_desc = true;
+options.filters = {{"status", FilterOp::kEqual, "active"}};
+options.fuzzy_distance = 1;
+options.highlight = HighlightOptions{"<strong>", "</strong>", 200, 3};
+
+auto result = client.Search("app_db.articles", "technology", options);
+if (!result) {
+    std::cerr << result.error().message() << "\n";
+}
+```
+
 ### Count Query
 
 ```cpp
 auto result = client.Count("app_db.articles", "hello");
-if (auto* resp = std::get_if<CountResponse>(&result)) {
-    std::cout << "Total matches: " << resp->count << "\n";
+if (result) {
+    std::cout << "Total matches: " << result->count << "\n";
+} else {
+    std::cerr << "Count failed: " << result.error().message() << "\n";
 }
 ```
 
@@ -130,9 +169,9 @@ if (auto* resp = std::get_if<CountResponse>(&result)) {
 
 ```cpp
 auto result = client.Get("app_db.articles", "12345");
-if (auto* doc = std::get_if<Document>(&result)) {
-    std::cout << "Primary key: " << doc->primary_key << "\n";
-    for (const auto& [key, value] : doc->fields) {
+if (result) {
+    std::cout << "Primary key: " << result->primary_key << "\n";
+    for (const auto& [key, value] : result->fields) {
         std::cout << "  " << key << " = " << value << "\n";
     }
 }
@@ -142,10 +181,10 @@ if (auto* doc = std::get_if<Document>(&result)) {
 
 ```cpp
 auto result = client.Info();
-if (auto* info = std::get_if<ServerInfo>(&result)) {
-    std::cout << "Version: " << info->version << "\n";
-    std::cout << "Documents: " << info->doc_count << "\n";
-    std::cout << "Uptime: " << info->uptime_seconds << "s\n";
+if (result) {
+    std::cout << "Version: " << result->version << "\n";
+    std::cout << "Documents: " << result->doc_count << "\n";
+    std::cout << "Uptime: " << result->uptime_seconds << "s\n";
 }
 ```
 
@@ -156,11 +195,9 @@ if (auto* info = std::get_if<ServerInfo>(&result)) {
 client.EnableDebug();
 
 auto result = client.Search("app_db.articles", "hello", 10);
-if (auto* resp = std::get_if<SearchResponse>(&result)) {
-    if (resp->debug) {
-        std::cout << "Query time: " << resp->debug->query_time_ms << "ms\n";
-        std::cout << "Candidates: " << resp->debug->candidates << "\n";
-    }
+if (result && result->debug) {
+    std::cout << "Query time: " << result->debug->query_time_ms << "ms\n";
+    std::cout << "Candidates: " << result->debug->candidates << "\n";
 }
 
 // Disable debug mode
@@ -188,43 +225,15 @@ The library includes a web-style search expression parser that converts Google-l
 
 using namespace mygramdb::client;
 
-// Implicit AND (space-separated)
-auto result = ParseSearchExpression("golang tutorial");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["golang", "tutorial"]
+auto parsed = ParseSearchExpression("\"deep learning\" +(tutorial OR guide) -old");
+if (!parsed) {
+    std::cerr << parsed.error().message() << "\n";
+    return 1;
+}
 
-// Quoted phrase search
-auto result = ParseSearchExpression("\"machine learning\" tutorial");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["\"machine learning\"", "tutorial"]
-
-// Excluded terms
-auto result = ParseSearchExpression("golang -old -deprecated");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["golang"]
-// expr.excluded_terms = ["old", "deprecated"]
-
-// OR expression
-auto result = ParseSearchExpression("python OR ruby");
-auto expr = std::get<SearchExpression>(result);
-// expr.raw_expression = "python OR ruby"
-
-// Complex expression with quotes
-auto result = ParseSearchExpression("\"deep learning\" +(tutorial OR guide) -old");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["\"deep learning\"", "(tutorial OR guide)"]
-// expr.excluded_terms = ["old"]
-
-// Full-width space (Japanese)
-auto result = ParseSearchExpression("機械学習　チュートリアル");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["機械学習", "チュートリアル"]
-
-// Emoji search (4-byte UTF-8 characters)
-auto result = ParseSearchExpression("😀 tutorial -😢");
-auto expr = std::get<SearchExpression>(result);
-// expr.required_terms = ["😀", "tutorial"]
-// expr.excluded_terms = ["😢"]
+const auto& expr = *parsed;
+// expr.required_terms contains the required terms.
+// expr.excluded_terms contains "old".
 ```
 
 #### Converting to Query String
@@ -232,12 +241,14 @@ auto expr = std::get<SearchExpression>(result);
 ```cpp
 // Convert directly to QueryAST-compatible string
 auto result = ConvertSearchExpression("+golang -old");
-if (result.index() == 0) {
-    std::string query = std::get<0>(result);
+if (result) {
+    std::string query = *result;
     // query = "golang AND NOT old"
 
     // Use with MygramClient
-    auto search_result = client.Search("app_db.articles", query, 100);
+    auto search_result = client.SearchRaw("app_db.articles", query, 100);
+} else {
+    std::cerr << result.error().message() << "\n";
 }
 ```
 
@@ -260,21 +271,11 @@ if (result.index() == 0) {
 For simple use cases without OR/grouping:
 
 ```cpp
-std::string main_term;
-std::vector<std::string> and_terms;
-std::vector<std::string> not_terms;
-
-bool success = SimplifySearchExpression(
-    "+golang +tutorial -old",
-    main_term,
-    and_terms,
-    not_terms
-);
-
-if (success) {
-    // main_term = "golang"
-    // and_terms = ["tutorial"]
-    // not_terms = ["old"]
+auto simplified = SimplifySearchExpression("+golang +tutorial -old");
+if (simplified) {
+    // simplified->main_term == "golang"
+    // simplified->and_terms contains "tutorial"
+    // simplified->not_terms contains "old"
 }
 ```
 
@@ -290,15 +291,19 @@ if (success) {
 
 int main() {
     // Configure client
-    MygramClientConfig_C config = {
+    MygramClientConfigV2_C config = {
+        .struct_size = sizeof(config),
+        .version = MYGRAMCLIENT_CONFIG_V2_VERSION,
         .host = "localhost",
         .port = 11016,
         .timeout_ms = 5000,
-        .recv_buffer_size = 65536
+        .recv_buffer_size = 65536,
+        .unix_socket_path = NULL,
+        .dump_save_timeout_ms = 600000
     };
 
     // Create client
-    MygramClient_C* client = mygramclient_create(&config);
+    MygramClient_C* client = mygramclient_create_v2(&config);
     if (!client) {
         fprintf(stderr, "Failed to create client\n");
         return 1;
@@ -341,6 +346,10 @@ gcc -o myapp myapp.c -lmygramclient
 ```
 
 ### Advanced Search (C API)
+
+For new code, use `MygramSearchOptions_C` and `mygramclient_search_with_options`. Zero-initialize the struct and set `struct_size`; its typed filters support `=`, `!=`, `>`, `>=`, `<`, and `<=`, and `fuzzy_distance` is `1` or `2`.
+
+`MygramClientConfigV2_C` is the preferred configuration for new C programs. Set `unix_socket_path` to use a Unix socket (it takes precedence over TCP host and port), and use `dump_save_timeout_ms` to set the total polling deadline for asynchronous `DUMP SAVE`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain ABI-compatible.
 
 ```c
 const char* and_terms[] = {"AI"};
@@ -408,12 +417,11 @@ Napi::Value Search(const Napi::CallbackInfo& info) {
     uint32_t limit = info[2].As<Napi::Number>().Uint32Value();
 
     // Create and connect client
-    MygramClientConfig_C config = {
-        .host = "localhost",
-        .port = 11016,
-        .timeout_ms = 5000,
-        .recv_buffer_size = 65536
-    };
+    MygramClientConfig_C config{};
+    config.host = "localhost";
+    config.port = 11016;
+    config.timeout_ms = 5000;
+    config.recv_buffer_size = 65536;
 
     MygramClient_C* client = mygramclient_create(&config);
     if (mygramclient_connect(client) != 0) {
@@ -461,6 +469,8 @@ NODE_API_MODULE(mygramdb, Init)
 - `port` - Server port (default: 11016)
 - `timeout_ms` - Connection timeout (default: 5000)
 - `recv_buffer_size` - Receive buffer size (default: 65536)
+- `unix_socket_path` - Unix socket path; when set, it takes precedence over TCP
+- `dump_save_timeout_ms` - Total polling deadline for asynchronous `DUMP SAVE`
 
 #### SearchResponse
 - `results` - Vector of SearchResult
@@ -475,34 +485,31 @@ NODE_API_MODULE(mygramdb, Init)
 See `mygramclient_c.h` for full function documentation.
 
 Key functions:
-- `mygramclient_create()` - Create client
+- `mygramclient_create_v2()` - Create a client with the size/versioned configuration
 - `mygramclient_connect()` - Connect to server
 - `mygramclient_search()` - Simple search
 - `mygramclient_search_advanced()` - Advanced search with filters
+- `mygramclient_search_with_options()` - Typed filter, fuzzy, highlight, sort, and pagination search
 - `mygramclient_count()` - Count matches
 - `mygramclient_get()` - Get document by key
 - `mygramclient_free_*()` - Free result structures
 
 ## Thread Safety
 
-The MygramClient class manages a single TCP connection and is **not thread-safe**. For multi-threaded applications, create one client instance per thread or use proper synchronization.
+`MygramClient` serializes concurrent commands on its single TCP connection, so it is safe to share for correctness but executes one request at a time. Use separate instances when you need more throughput. Do not call `Disconnect()` while another thread has a request in flight.
 
 ## Error Handling
 
 ### C++ API
 
-Functions return `std::variant<T, Error>` where:
-- Success: Contains the result type T
-- Failure: Contains an Error with a message
-
-Use `std::get_if<Error>` to check for errors:
+Functions return `mygram::utils::Expected<T, Error>`. Check the result before accessing it:
 
 ```cpp
 auto result = client.Search(...);
-if (auto* err = std::get_if<Error>(&result)) {
-    // Handle error: err->message
+if (!result) {
+    // Handle error: result.error().message()
 } else {
-    auto resp = std::get<SearchResponse>(result);
+    const auto& resp = *result;
     // Use resp
 }
 ```

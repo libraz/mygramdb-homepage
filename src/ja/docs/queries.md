@@ -1,3 +1,12 @@
+---
+title: MygramDB クエリガイド - 検索・絞り込み・ソート・集計
+description: MygramDBのクエリ実践ガイド。基本検索とブール演算子、フレーズ検索、フィルタ、ソート、ハイライト、ファジー検索、FACET集計、シノニム展開、ページネーションを扱います。
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB クエリガイド, 検索例, ブール検索, FILTER, SORT, HIGHLIGHT, FUZZY, FACET 集計, シノニム展開, ページネーション
+---
+
 # クエリガイド
 
 MygramDBで効果的に検索する方法を学びましょう。
@@ -122,7 +131,7 @@ mygram> SEARCH articles golang SORT DESC
 
 ```mygram
 mygram> SEARCH articles golang SORT created_at DESC
-mygram> SEARCH articles golang SORT score ASC
+mygram> SEARCH articles golang SORT _score ASC
 ```
 
 ### 関連度ソート（BM25）
@@ -133,7 +142,7 @@ mygram> SEARCH articles golang SORT score ASC
 mygram> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 ```
 
-BM25は `k1=1.2`、`b=0.75` をパラメータとし、クエリ時にIDFとTFを計算します。`SORT _score` を使用するには、保存された正規化テキストからTFを計算するため `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
+BM25はクエリ時にIDFとTFを計算します。パラメータは `bm25.k1`（デフォルト `1.2`）と `bm25.b`（デフォルト `0.75`）で調整できます。`SORT _score` を使うには `bm25.enable: true` に加え、保存された正規化テキストからTFを数えるため `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
 
 ## ハイライト
 
@@ -220,7 +229,7 @@ mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DE
 ### データベースに関する人気記事
 
 ```mygram
-mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
+mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT _score DESC LIMIT 10
 ```
 
 ### 関連度順＋ハイライト付き
@@ -237,7 +246,7 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-`SEARCH`、`COUNT`、`FACET`、ドキュメントGETはHTTPでも利用できます。v1.7.0以降は `/tables/{identity}/...` のルート形式を使います。
+`SEARCH`、`COUNT`、`FACET`、ドキュメントGETはHTTPでも利用できます。v1.7.0以降は `/tables/{identity}/...` のルート形式を使います。HTTPの `q` は既定でリテラル検索です。意図したBoolean式を送る場合だけ `"mode": "boolean"` を指定してください。
 
 ```bash
 curl -X POST http://localhost:8080/tables/articles/search \
@@ -251,6 +260,10 @@ curl -X POST http://localhost:8080/tables/articles/count \
 curl -X POST http://localhost:8080/tables/articles/facet \
   -H "Content-Type: application/json" \
   -d '{"column": "category", "q": "golang", "limit": 10}'
+
+curl -X POST http://localhost:8080/tables/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang AND tutorial", "mode": "boolean", "limit": 10}'
 ```
 
 2つ以上のDBを設定している場合は `/tables/app_db.articles/...` のように指定します。`SET`、`SHOW VARIABLES`、`SYNC`、`DUMP` などの管理系コマンドはTCP/CLI専用です。

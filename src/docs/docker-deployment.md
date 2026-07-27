@@ -9,6 +9,10 @@ head:
 
 # Docker Deployment Guide
 
+::: warning Review before exposing to production
+The quick-start settings are for evaluation. Before production, revisit the MySQL password, `REPLICATION_SERVER_ID`, the source CIDRs, the Docker memory limit, and the persistent volume for dumps.
+:::
+
 This guide explains how to deploy MygramDB using Docker and Docker Compose.
 
 ## Quick Start
@@ -28,12 +32,13 @@ cp .env.example .env
 nano .env
 ```
 
-> [!WARNING]
-> Change the following default values in `.env`:
->
-> - `MYSQL_ROOT_PASSWORD` - MySQL root password
-> - `MYSQL_PASSWORD` - MySQL replication user password
-> - `REPLICATION_SERVER_ID` - Unique server ID for this MygramDB instance
+::: warning
+Change the following default values in `.env`:
+
+- `MYSQL_ROOT_PASSWORD` - MySQL root password
+- `MYSQL_PASSWORD` - MySQL replication user password
+- `REPLICATION_SERVER_ID` - Unique server ID for this MygramDB instance
+:::
 
 ### 3. Start Services (Development)
 
@@ -62,7 +67,15 @@ docker-compose down -v
 
 ### Environment Variables
 
-All configuration is done via environment variables in the `.env` file:
+The `.env` file configures the single-table quick-start image. The current [`.env.example`](https://github.com/libraz/mygram-db/blob/main/.env.example) is the complete source of supported variables; use a mounted configuration file for multi-table and advanced settings.
+
+::: info Environment variables vs config file
+Environment variables are the fast path to a basic single-table deployment. For multiple tables, multiple databases, filters, synonyms, or detailed HTTP settings, mount a custom configuration file as described below.
+:::
+
+::: tip Prefer a config file in production
+In production, managing an explicit `config.yaml` makes changes easier to review than expressing everything through environment variables. Use environment variables for the values that differ per environment, such as passwords and hostnames.
+:::
 
 #### MySQL Configuration
 
@@ -87,10 +100,15 @@ TABLE_KANJI_NGRAM_SIZE=1            # N-gram size for CJK
 
 #### Replication Configuration
 
+::: info What is server_id?
+**server_id** identifies a MySQL replication connection. Give each MygramDB instance and MySQL replica attached to the same MySQL a value that does not collide.
+:::
+
 ```bash
 REPLICATION_ENABLE=true             # Enable replication
 REPLICATION_SERVER_ID=12345         # Unique server ID (IMPORTANT)
 REPLICATION_START_FROM=snapshot     # Start from: snapshot, latest, or gtid=<UUID:txn>
+REPLICATION_AUTO_INITIAL_SNAPSHOT=true # Build the initial snapshot automatically
 ```
 
 #### Memory Management
@@ -100,13 +118,57 @@ MEMORY_HARD_LIMIT_MB=8192           # Hard memory limit
 MEMORY_SOFT_TARGET_MB=4096          # Soft memory target
 MEMORY_NORMALIZE_NFKC=true          # NFKC normalization
 MEMORY_NORMALIZE_WIDTH=narrow       # Width normalization
+MEMORY_VERIFY_TEXT=off              # off, ascii, or all
+```
+
+#### Dumps, Ranking, and Cache
+
+```bash
+DUMP_DIR=/var/lib/mygramdb/dumps
+DUMP_INTERVAL_SEC=600
+DUMP_RETAIN=3
+BM25_ENABLE=false
+BM25_K1=1.2
+BM25_B=0.75
+CACHE_ENABLED=true
+CACHE_MAX_MEMORY_MB=32
+CACHE_MIN_QUERY_COST_MS=10.0
+CACHE_TTL_SECONDS=3600
+```
+
+Use `DUMP_*`, not the removed `SNAPSHOT_*` variables.
+
+#### MySQL TLS
+
+::: warning Set a Docker memory limit
+MygramDB's own memory settings do not forcibly cap process usage. When running in containers, set `mem_limit` in Compose or the equivalent limit on your orchestration platform.
+:::
+
+```bash
+MYSQL_DATETIME_TIMEZONE=+00:00
+MYSQL_SSL_ENABLE=false
+MYSQL_SSL_CA=
+MYSQL_SSL_CERT=
+MYSQL_SSL_KEY=
+MYSQL_SSL_VERIFY_SERVER_CERT=true
 ```
 
 #### API Server
 
+::: warning About API_BIND=0.0.0.0
+`API_BIND=0.0.0.0` makes the server reachable from outside the container. Always restrict sources with `NETWORK_ALLOW_CIDRS` or `network.allow_cidrs` in the config file, and add a reverse proxy or firewall where appropriate.
+:::
+
 ```bash
 API_BIND=0.0.0.0                    # Bind address
 API_PORT=11016                      # API port
+API_HTTP_ENABLE=true
+API_HTTP_BIND=0.0.0.0
+API_HTTP_PORT=8080
+API_RATE_LIMIT_ENABLE=false
+API_RATE_LIMIT_CAPACITY=100
+API_RATE_LIMIT_REFILL_RATE=10
+API_RATE_LIMIT_MAX_CLIENTS=10000
 ```
 
 #### Network Configuration
@@ -127,8 +189,9 @@ NETWORK_ALLOW_CIDRS=0.0.0.0/0       # Allowed IP ranges (comma-separated)
 # NETWORK_ALLOW_CIDRS=192.168.1.100/32
 ```
 
-> [!WARNING]
-> If `NETWORK_ALLOW_CIDRS` is not set or empty, **all connections will be denied** by default. Always configure this setting.
+::: warning
+If `NETWORK_ALLOW_CIDRS` is not set or empty, **all connections will be denied** by default. Always configure this setting.
+:::
 
 #### Logging
 
@@ -299,10 +362,10 @@ docker exec mygramdb pgrep -x mygramdb
 
 ### Metrics
 
-MygramDB exposes metrics on the API port. Access via:
+MygramDB exposes metrics on the HTTP API port (8080 by default). Access via:
 
 ```bash
-curl http://localhost:11016/metrics
+curl http://localhost:8080/metrics
 ```
 
 ## Backup and Restore
@@ -323,9 +386,10 @@ docker cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
 # Restore MySQL data
 docker exec -i mygramdb_mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} mydb < backup.sql
 
-# Restore MygramDB snapshot
-docker cp ./backup-dumps/ mygramdb:/var/lib/mygramdb/dumps/
-docker-compose restart mygramdb
+# Restore and explicitly load a MygramDB dump
+docker cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
+docker exec mygramdb mygram-cli "DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp"
+docker exec mygramdb mygram-cli "DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp"
 ```
 
 ## Troubleshooting

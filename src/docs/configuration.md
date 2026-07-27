@@ -1,6 +1,19 @@
+---
+title: MygramDB Configuration Reference - config.yaml Options
+description: Complete MygramDB configuration reference. MySQL connection, table and filter definitions, n-grams, synonyms, replication, memory, API server, rate limiting, BM25, query cache, dumps, network ACLs, and logging.
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB configuration, config.yaml, ngram_size, verify_text, required_filters, BM25 settings, query cache, network allow_cidrs, runtime variables
+---
+
 # Configuration
 
 MygramDB accepts YAML or JSON configuration files. Files are validated against the built-in JSON Schema at startup, so unknown keys, wrong types, missing required fields, and invalid enum values fail fast.
+
+::: info How to read this page
+To get running you only need the MySQL connection, `tables`, `replication.server_id`, and `network.allow_cidrs`. Everything else is worth reading once you want to tune search quality, memory use, or operations.
+:::
 
 ## Minimal Example
 
@@ -26,9 +39,17 @@ network:
 
 `mysql.user`, `mysql.database`, and at least one table are required. When `replication.enable` is true (the default), `replication.server_id` is also required and must be unique among MySQL replicas and MygramDB instances.
 
+::: tip What to do after the minimal config
+Writing the config file does not load any data. After starting the server, synchronize each table you want with `SYNC articles` and confirm completion with `SYNC STATUS`.
+:::
+
+::: info What is server_id?
+**server_id** is the identifier used for a MySQL replication connection. It must not collide with any other MySQL replica or MygramDB instance attached to the same MySQL — a duplicate makes the upstream unable to tell the two apart.
+:::
+
 ## MySQL / MariaDB Connection
 
-MygramDB works with MySQL 8.4/9.x and MariaDB 10.6+/11.x. The same `mysql` section is used for both; the server flavor is detected from `SELECT VERSION()` and MygramDB chooses the correct GTID format.
+MygramDB works with MySQL 8.4/9.x and MariaDB 10.6+/11.x. The same `mysql` section is used for both; MygramDB uses a capability probe to select the correct GTID format.
 
 ```yaml
 mysql:
@@ -45,11 +66,22 @@ mysql:
   write_timeout_ms: 3600000
   session_timeout_sec: 3600
   datetime_timezone: "+09:00"
+  ssl_enable: true
+  ssl_ca: "/etc/mygramdb/mysql-ca.pem"
+  ssl_cert: "/etc/mygramdb/mysql-client-cert.pem"
+  ssl_key: "/etc/mygramdb/mysql-client-key.pem"
+  ssl_verify_server_cert: true
 ```
 
 `datetime_timezone` controls how MySQL `DATETIME`, `DATE`, and `TIME` values are interpreted. `TIMESTAMP` values are always handled as UTC.
 
+Set `ssl_enable` and the CA/certificate/key paths when MySQL requires TLS. Leave the certificate paths empty only when the server does not require them; keep `ssl_verify_server_cert: true` for verified TLS.
+
 Environment variables can override selected MySQL fields: `MYGRAM_MYSQL_USER`, `MYGRAM_MYSQL_PASSWORD`, `MYGRAM_MYSQL_HOST`, and `MYGRAM_MYSQL_DATABASE`.
+
+::: tip DATETIME vs TIMESTAMP
+MySQL `DATETIME` carries no timezone. MygramDB uses `datetime_timezone` to decide which timezone those values are in. `TIMESTAMP` is already normalized to UTC by MySQL, so this setting does not affect it.
+:::
 
 ### Required MySQL Settings
 
@@ -73,6 +105,10 @@ For MariaDB, GTID uses MariaDB's native `domain-server-sequence` format. Ensure 
 GRANT SELECT, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'repl_user'@'%';
 FLUSH PRIVILEGES;
 ```
+
+::: warning Narrowing the grant
+In production you can scope `SELECT` to just the searchable databases instead of `*.*`. The initial `SYNC` still needs read access to the target tables, and binlog follow-up still needs `REPLICATION SLAVE` and `REPLICATION CLIENT`.
+:::
 
 ## Table Configuration
 
@@ -101,6 +137,10 @@ tables:
 
 In a single-database configuration, bare references such as `SEARCH articles hello` work. When the configuration spans two or more databases, all TCP, CLI, C/C++, and HTTP references must use `<database>.<table>`.
 
+::: info What is a table identity?
+A **table identity** is the name MygramDB uses to refer to one searchable table. With a single database, `articles` is enough; with several, the database has to be included, as in `app_db.articles`.
+:::
+
 `text_source` must specify either:
 
 | Field | Meaning |
@@ -109,11 +149,20 @@ In a single-database configuration, bare references such as `SEARCH articles hel
 | `concat` | Concatenate two or more columns before indexing |
 | `delimiter` | Separator used with `concat` (default: space) |
 
+::: warning Configured column validation
+
+Table names, database names, primary keys, filter names, and text-source names must be valid SQL identifiers. Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VARBINARY`, or `BLOB`. Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. MygramDB checks these rules before replication starts so the initial loader and binlog reader can represent the same values.
+:::
+
 ## Filters
 
 `required_filters` decide which rows are indexed. Rows that do not match these conditions are omitted from the index; during replication, rows moving out of the condition are removed and rows moving in are added.
 
-<img src="/diagrams/filter-indexing.svg" alt="required_filters decide whether MySQL rows enter the index, while search-time filters narrow already indexed rows at query time." class="doc-diagram" />
+::: warning required_filters vs filters
+`required_filters` decide whether a row enters the index at all. `filters` register columns you can narrow by at query time. To keep soft-deleted rows out of search entirely, use `required_filters`; to let a search screen filter by status, use `filters`.
+:::
+
+<DocDiagram name="filter-indexing" alt="required_filters decide whether MySQL rows enter the index, while search-time filters narrow already indexed rows at query time." />
 
 ```yaml
 tables:
@@ -136,16 +185,17 @@ tables:
 filters:
   - name: "status"
     type: "int"
-    bitmap_index: true
   - name: "category"
     type: "string"
-    dict_compress: true
   - name: "created_at"
     type: "datetime"
-    bucket: "day"
 ```
 
-Supported filter types include signed and unsigned integer sizes, `float`, `double`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. `bucket` is available for datetime-like values with `minute`, `hour`, or `day`. `ENUM` and `SET` columns cannot be configured as filters because binlog row events do not carry the labels needed to keep initial load and replication semantics identical.
+Supported filter types include signed and unsigned integer sizes (including `mediumint` and `mediumint_unsigned`), `float`, `double`, `boolean`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. A `boolean` filter maps to a signed MySQL `TINYINT(1)` and accepts `true`/`false` or `1`/`0`; required boolean filters support `=`, `!=`, `IS NULL`, and `IS NOT NULL`. `ENUM` and `SET` columns cannot be configured as filters because binlog row events do not carry the labels needed to keep initial load and replication semantics identical.
+
+::: warning Reserved filter keys
+`bitmap_index`, `dict_compress`, and `bucket` are accepted by the schema and preserved across dumps, but they do not change behavior yet. Setting them has no effect on indexing or query performance.
+:::
 
 ## N-gram And Posting Lists
 
@@ -163,11 +213,23 @@ tables:
 
 `ngram_size` applies to ASCII/alphanumeric text. In v1.8.0 and later, the omitted default is `2`; set `ngram_size: 1` explicitly only if you need the old unigram behavior. `kanji_ngram_size` applies to CJK characters; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
 
-`freq_bits` can be `0`, `4`, or `8`. BM25 scoring and highlighting use stored normalized text when `memory.verify_text` is enabled; they do not require `freq_bits`.
+::: info What is an N-gram?
+An **N-gram** is a short slice of a string. Because it splits by character rather than by word, it works without a dictionary even in languages that do not separate words with spaces.
+:::
+
+::: warning Reserved posting keys
+The whole `posting` block — `block_size`, `freq_bits`, and `use_roaring` — is validated and preserved across dumps but not yet enforced. Delta-to-Roaring conversion is driven by `memory.roaring_threshold` and by `OPTIMIZE`, not by `use_roaring`.
+:::
+
+BM25 scoring and highlighting use stored normalized text when `memory.verify_text` is enabled; they do not depend on `freq_bits`.
 
 ## Per-table Synonyms
 
 Synonym expansion is configured per table, not globally.
+
+::: tip Why synonyms are per table
+The same word can mean different things in different tables — synonyms useful for a product catalogue may be wrong for an article archive. MygramDB therefore configures them under `tables[*].synonyms` rather than globally.
+:::
 
 ```yaml
 tables:
@@ -226,6 +288,10 @@ memory:
 
 `hard_limit_mb`, `soft_target_mb`, `arena_chunk_mb`, and `minute_epoch` are reserved/not yet enforced. Size the host so the full index and optional text store fit in RAM.
 
+::: warning About the memory limit
+`hard_limit_mb` does not currently stop the process at the OS level. In production, estimate from the row count, `verify_text` mode, and cache size, then provision enough RAM.
+:::
+
 `verify_text` stores normalized text and verifies n-gram candidates:
 
 | Value | Behavior |
@@ -246,8 +312,13 @@ api:
     max_connections: 10000
     worker_threads: 0
     recv_timeout_sec: 60
+    idle_timeout_sec: 300
+    reaper_interval_sec: 5
     thread_pool_queue_size: 1000
     max_write_queue_bytes: 16777216
+    max_total_buffered_bytes: 268435456
+    max_pending_frames: 1024
+    max_pending_frame_bytes: 4194304
     keepalive:
       enabled: true
       idle_sec: 60
@@ -268,7 +339,11 @@ api:
   max_query_length: 128
 ```
 
-TCP and HTTP bind to loopback by default. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
+TCP and HTTP bind to loopback by default. `idle_timeout_sec: 0` disables TCP idle reaping. The pending-frame limits cap completed requests waiting for a worker; reads pause at 75% of either limit and resume after the queue drains. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
+
+::: info What TCP and HTTP each handle
+The TCP API serves search plus administrative commands such as `SYNC`, `DUMP`, and `SET`. The HTTP API covers search, count, facet, document lookup, health, and metrics; it exposes no administrative commands.
+:::
 
 ## Rate Limiting
 
@@ -283,6 +358,53 @@ api:
 
 TCP and HTTP share one rate limiter, so a client cannot double its quota by spreading requests across protocols.
 
+## Relevance Scoring (BM25)
+
+```yaml
+bm25:
+  enable: false
+  k1: 1.2
+  b: 0.75
+```
+
+BM25 is off by default. `SORT _score` fails with `SORT _score requires BM25 to be enabled in configuration` until `enable` is `true`, and it additionally needs `memory.verify_text` set to `"ascii"` or `"all"` so term frequency can be counted from stored text.
+
+`k1` controls term-frequency saturation (higher values let repeated terms keep raising the score). `b` controls document-length normalization between `0.0` (off) and `1.0` (full).
+
+## Query Cache
+
+```yaml
+cache:
+  enabled: true
+  max_memory_mb: 32
+  min_query_cost_ms: 10.0
+  ttl_seconds: 3600
+  invalidation_strategy: "ngram"
+  compression_enabled: true
+  eviction_batch_size: 10
+  invalidation:
+    batch_size: 1000
+    max_delay_ms: 100
+```
+
+Only queries slower than `min_query_cost_ms` are cached, so cheap lookups do not evict useful entries. `invalidation_strategy: "ngram"` invalidates just the entries whose terms overlap a changed row; `"table"` drops every entry for the table, which is cheaper to compute but far more destructive. `ttl_seconds: 0` disables expiry.
+
+`cache.enabled`, `cache.min_query_cost_ms`, and `cache.ttl_seconds` can be changed at runtime with `SET`. See [Operations Guide](/docs/operations) for the `CACHE STATS` / `CACHE CLEAR` commands.
+
+## Index Build
+
+```yaml
+build:
+  mode: "select_snapshot"
+  batch_size: 5000
+```
+
+`batch_size` is the number of rows fetched per round during the initial load started by `SYNC`. `mode` currently accepts only `select_snapshot`.
+
+::: warning Reserved build keys
+`parallelism` and `throttle_ms` are validated but not yet enforced; the initial load is single-threaded and unthrottled.
+:::
+
 ## Persistence
 
 ```yaml
@@ -291,9 +413,15 @@ dump:
   default_filename: "mygramdb.dmp"
   interval_sec: 7200
   retain: 3
+  restore_memory_budget_mb: 4096
+  restore_max_section_mb: 2048
 ```
 
-`interval_sec: 0` disables automatic dumps. Manual `DUMP SAVE` uses `default_filename` unless a path is provided. In v1.7.0 and later, dump metadata preserves each table's database so multi-database identities round-trip correctly.
+`interval_sec: 0` disables automatic dumps. Manual `DUMP SAVE` uses `default_filename` unless a path is provided. `restore_memory_budget_mb` bounds aggregate staged data during a V2 restore; `restore_max_section_mb` bounds one encoded V2 section. In v1.7.0 and later, dump metadata preserves each table's database so multi-database identities round-trip correctly.
+
+::: warning Put the dump directory on persistent storage
+Under Docker or Kubernetes, point `dump.dir` at a persistent volume. Writing dumps to the container's ephemeral filesystem loses them when the container is recreated.
+:::
 
 ## Network Security
 
@@ -305,6 +433,10 @@ network:
 ```
 
 If `allow_cidrs` is empty or omitted, connections are denied. Add only the application server and operator networks that need access. MygramDB does not provide native TLS or API authentication; put it behind a firewall, private network, or reverse proxy when exposing HTTP.
+
+::: danger Never expose it directly to a public network
+The MygramDB search API has no built-in user authentication. Do not publish it to the internet with `0.0.0.0/0` allowed.
+:::
 
 ## Logging
 
@@ -322,11 +454,11 @@ logging:
 Use MySQL-style commands over the TCP protocol:
 
 ```sql
-SHOW VARIABLES;
-SHOW VARIABLES LIKE 'cache%';
-SET logging.level = 'debug';
-SET cache.enabled = false;
-SET api.default_limit = 200;
+SHOW VARIABLES
+SHOW VARIABLES LIKE 'cache%'
+SET logging.level = 'debug'
+SET cache.enabled = false
+SET api.default_limit = 200
 ```
 
 Only variables marked mutable by `SHOW VARIABLES` can be changed at runtime. MySQL connection identity, tables, `memory.verify_text`, dump directory, network ACLs, and listener binds require restart.

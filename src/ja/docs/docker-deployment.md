@@ -67,7 +67,7 @@ docker-compose down -v
 
 ### 環境変数
 
-すべての設定は `.env` ファイルの環境変数で行います：
+`.env` は単一テーブルのクイックスタート用イメージを設定します。対応する環境変数の全一覧は最新の [`.env.example`](https://github.com/libraz/mygram-db/blob/main/.env.example) を参照してください。複数テーブルや詳細設定には設定ファイルをマウントします。
 
 ::: info 環境変数と設定ファイル
 環境変数は単一テーブルの基本構成をすばやく起動するための入口です。複数テーブル、複数DB、フィルタ、シノニム、詳細なHTTP設定が必要な場合は、後述のカスタム設定ファイルをマウントしてください。
@@ -104,6 +104,7 @@ TABLE_KANJI_NGRAM_SIZE=1            # CJK用のN-gramサイズ
 REPLICATION_ENABLE=true             # レプリケーションを有効化
 REPLICATION_SERVER_ID=12345         # 一意なサーバーID（重要）
 REPLICATION_START_FROM=snapshot     # 開始位置: snapshot, latest, または gtid=<UUID:txn>
+REPLICATION_AUTO_INITIAL_SNAPSHOT=true # 初期スナップショットを自動作成
 ```
 
 ::: info 用語補足
@@ -117,6 +118,35 @@ MEMORY_HARD_LIMIT_MB=8192           # ハードメモリ制限
 MEMORY_SOFT_TARGET_MB=4096          # ソフトメモリ目標
 MEMORY_NORMALIZE_NFKC=true          # NFKC正規化
 MEMORY_NORMALIZE_WIDTH=narrow       # 幅の正規化
+MEMORY_VERIFY_TEXT=off              # off、ascii、all
+```
+
+#### ダンプ、ランキング、キャッシュ
+
+```bash
+DUMP_DIR=/var/lib/mygramdb/dumps
+DUMP_INTERVAL_SEC=600
+DUMP_RETAIN=3
+BM25_ENABLE=false
+BM25_K1=1.2
+BM25_B=0.75
+CACHE_ENABLED=true
+CACHE_MAX_MEMORY_MB=32
+CACHE_MIN_QUERY_COST_MS=10.0
+CACHE_TTL_SECONDS=3600
+```
+
+削除済みの `SNAPSHOT_*` ではなく `DUMP_*` を使ってください。
+
+#### MySQL TLS
+
+```bash
+MYSQL_DATETIME_TIMEZONE=+00:00
+MYSQL_SSL_ENABLE=false
+MYSQL_SSL_CA=
+MYSQL_SSL_CERT=
+MYSQL_SSL_KEY=
+MYSQL_SSL_VERIFY_SERVER_CERT=true
 ```
 
 ::: warning Dockerのメモリ制限
@@ -128,6 +158,13 @@ MygramDBのメモリ設定だけでは、プロセスの使用量を強制的に
 ```bash
 API_BIND=0.0.0.0                    # バインドアドレス
 API_PORT=11016                      # APIポート
+API_HTTP_ENABLE=true
+API_HTTP_BIND=0.0.0.0
+API_HTTP_PORT=8080
+API_RATE_LIMIT_ENABLE=false
+API_RATE_LIMIT_CAPACITY=100
+API_RATE_LIMIT_REFILL_RATE=10
+API_RATE_LIMIT_MAX_CLIENTS=10000
 ```
 
 ::: warning API_BIND=0.0.0.0 の扱い
@@ -307,10 +344,10 @@ docker exec mygramdb pgrep -x mygramdb
 
 ### メトリクス
 
-MygramDB は API ポートでメトリクスを公開します。アクセス方法：
+MygramDB はHTTP APIポート（デフォルトは8080）でメトリクスを公開します。アクセス方法：
 
 ```bash
-curl http://localhost:11016/metrics
+curl http://localhost:8080/metrics
 ```
 
 ## バックアップとリストア
@@ -331,9 +368,10 @@ docker cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
 # MySQL データのリストア
 docker exec -i mygramdb_mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} mydb < backup.sql
 
-# MygramDB スナップショットのリストア
-docker cp ./backup-dumps/ mygramdb:/var/lib/mygramdb/dumps/
-docker-compose restart mygramdb
+# MygramDBダンプをコピーして明示的に読み込む
+docker cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
+docker exec mygramdb mygram-cli "DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp"
+docker exec mygramdb mygram-cli "DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp"
 ```
 
 ## トラブルシューティング

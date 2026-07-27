@@ -11,6 +11,10 @@ head:
 
 MygramDB uses a simple text-based protocol over TCP (similar to memcached).
 
+::: info This is not SQL
+`SEARCH`, `COUNT`, `DUMP`, and `REPLICATION` on this page are MygramDB's own TCP commands. They borrow SQL-like keywords, but they are not SQL sent to MySQL. To call MygramDB from an application over JSON, use the [HTTP API](/docs/http-api).
+:::
+
 ## Connection
 
 Connect to MygramDB via TCP:
@@ -26,6 +30,10 @@ Or use the CLI client:
 ```
 
 ## Command Format
+
+::: tip Choosing TCP or HTTP
+The TCP protocol suits `mygram-cli` and administrative commands. For web applications and browser integration, the HTTP API is usually easier because it speaks JSON and can handle CORS.
+:::
 
 Commands are text-based, one command per line. Responses are terminated with newline.
 
@@ -66,6 +74,10 @@ OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
 **For detailed query syntax, boolean operators, filters, sorting, and advanced features, see [Query Syntax Guide](/docs/query-syntax).**
+
+::: info Reading the response
+`total_count` is the total number of matches; the primary keys that follow are the current page. If you need the document body or highlighted snippets, `GET` them after the search or use the HTTP API response shape instead.
+:::
 
 ---
 
@@ -208,6 +220,10 @@ replication_deletes_applied: 5000
 ## CONFIG Commands
 
 The CONFIG command family provides runtime configuration help, inspection, and verification.
+
+::: info CONFIG is for inspection
+`CONFIG SHOW` and `CONFIG VERIFY` inspect and validate configuration. To change a value on a running server, use `SET` / `SHOW VARIABLES`, which are limited to the mutable runtime variables.
+:::
 
 ### CONFIG HELP [path]
 
@@ -368,6 +384,8 @@ CONFIG VERIFY <filepath>
 **Parameters:**
 - `filepath` (required): Path to configuration file (YAML or JSON)
 
+Relative paths are resolved from the directory containing the active configuration file. Use an absolute path in automation when the service working directory differs.
+
 **Examples:**
 
 Verify valid config:
@@ -401,6 +419,10 @@ Response (error):
 
 The DUMP command family provides unified snapshot management with integrity verification.
 
+::: warning DUMP LOAD replaces current data
+`DUMP SAVE` writes, `DUMP VERIFY` checks, and `DUMP INFO` reports. `DUMP LOAD` is different: it replaces the current index and document store with the dump's contents. Confirm the target file and its GTID before running it.
+:::
+
 ### DUMP SAVE
 
 Save complete snapshot to single binary file (`.dmp`). This command runs **asynchronously** and returns immediately.
@@ -427,9 +449,13 @@ Use `DUMP STATUS` to monitor progress and check completion.
 
 Load snapshot from binary file.
 
+::: warning This replaces the live search state
+`DUMP LOAD` replaces the current index and document store. Run `DUMP VERIFY` and `DUMP INFO` first to check for corruption and to confirm the GTID and table identities.
+:::
+
 **Syntax:**
 ```mygram
-DUMP LOAD [<filepath>]
+DUMP LOAD <filepath>
 ```
 
 **Example:**
@@ -443,7 +469,7 @@ Verify snapshot file integrity without loading data.
 
 **Syntax:**
 ```mygram
-DUMP VERIFY [<filepath>]
+DUMP VERIFY <filepath>
 ```
 
 **Example:**
@@ -457,7 +483,7 @@ Display snapshot file metadata (version, GTID, tables, size, flags).
 
 **Syntax:**
 ```mygram
-DUMP INFO [<filepath>]
+DUMP INFO <filepath>
 ```
 
 **Example:**
@@ -524,7 +550,7 @@ Aggregate distinct values of a filter column with document counts.
 ### Syntax
 
 ```mygram
-FACET <table> <column> [search_text] [AND <term>] [NOT <term>] [FILTER <col> <op> <value>] [LIMIT <n>]
+FACET <table> <column> [search_text] [AND <term>] [NOT <term>] [FILTER <col> <op> <value>] [LIMIT <n>] [OFFSET <n>]
 ```
 
 ### Examples
@@ -538,6 +564,8 @@ Values scoped to search results:
 ```mygram
 FACET articles category "machine learning" FILTER status = 1 LIMIT 10
 ```
+
+`OFFSET` skips facet buckets after they are ordered by count. It defaults to `0`.
 
 ### Response
 
@@ -608,6 +636,10 @@ END
 
 Stop binlog replication (index becomes read-only).
 
+::: warning No MySQL changes are applied while stopped
+Search keeps working during `REPLICATION STOP`, but new MySQL changes are not reflected. After maintenance, run `REPLICATION START` and confirm with `REPLICATION STATUS`.
+:::
+
 ### Syntax
 
 ```mygram
@@ -657,7 +689,7 @@ SYNC <table_name>
 ### Response (Success)
 
 ```mygram
-OK SYNC STARTED table=<table_name> job_id=1
+OK SYNC STARTED table=<table_name>
 ```
 
 ### Response (Error)
@@ -674,13 +706,21 @@ ERROR Table '<table_name>' not found in configuration
 - Returns immediately after starting
 - Builds snapshot from MySQL using SELECT query
 - Captures GTID at snapshot time
-- Automatically starts binlog replication with captured GTID when complete
+- Drains replication and restarts it from the saved GTID when complete, so commits for other tables are not skipped
+
+### Cancel a SYNC
+
+```mygram
+SYNC STOP [<table_name>]
+```
+
+Cancellation is asynchronous. Use `SYNC STATUS` until the operation reports `CANCELLED` or another terminal state.
 
 ### Conflicts
 
 - **DUMP LOAD**: Blocked during SYNC (prevents data corruption)
 - **REPLICATION START**: Blocked during SYNC (SYNC auto-starts replication)
-- **SYNC** (same table): Blocked if already in progress
+- **SYNC**: Blocked while another long-running maintenance operation is in progress
 
 ### Example
 
@@ -736,8 +776,8 @@ status=IDLE message="No sync operation performed"
 | `rate` | Processing rate (rows/s) |
 | `rows` | Total rows processed |
 | `time` | Total processing time |
-| `gtid` | Captured snapshot GTID |
-| `replication` | Replication status: `STARTED`, `ALREADY_RUNNING`, `DISABLED`, `FAILED` |
+| `gtid` | Saved GTID used for replication restart |
+| `replication` | Replication status: `STARTED`, `DISABLED`, `FAILED` |
 | `error` | Error message (if failed) |
 
 ### Example
@@ -761,20 +801,24 @@ echo "SYNC STATUS" | nc localhost 11016
 
 Optimize index posting lists (convert Delta Encoding to Roaring Bitmap based on density).
 
+::: tip When to run it
+`OPTIMIZE` runs without stopping search, but it temporarily uses extra memory. On large datasets, run it during low-traffic hours and check memory health with `/info` or `INFO` beforehand.
+:::
+
 ### Syntax
 
 ```mygram
-OPTIMIZE
+OPTIMIZE [<db.table>]
 ```
+
+Omit the table on a single-table deployment; qualify it when more than one table is configured.
 
 ### How it works
 
 - **Pre-execution checks**: Memory health and availability verification
-- Temporarily stops binlog replication
 - Copies and optimizes posting lists in batches
-- Query processing continues (using old index)
-- Atomically switches after optimization completes
-- Resumes binlog replication
+- Query processing continues (using the old batch until each swap)
+- Each batch is swapped in atomically, so replication keeps running throughout
 
 ### Memory Safety
 
@@ -837,6 +881,10 @@ ERROR Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
 ## DEBUG Command
 
 Enable or disable debug mode for the current connection to see detailed query execution metrics.
+
+::: info Per-connection setting
+`DEBUG ON` affects only the current TCP connection. Other `mygram-cli` sessions and application connections are unchanged.
+:::
 
 ### Syntax
 
@@ -908,6 +956,89 @@ offset: <value> [(default)]
 
 ---
 
+## CACHE Commands
+
+Inspect and control the query cache. See [Configuration Guide](/docs/configuration#query-cache) for the `cache` settings themselves.
+
+### Syntax
+
+```mygram
+CACHE STATS
+CACHE CLEAR [<db.table>]
+CACHE ENABLE
+CACHE DISABLE
+```
+
+`CACHE CLEAR` without a table drops every entry; with a table it drops only that table's entries.
+
+### Responses
+
+```mygram
+OK CACHE_CLEARED
+OK CACHE_CLEARED table=app_db.articles
+OK CACHE_ENABLED
+OK CACHE_DISABLED
+```
+
+`CACHE STATS` returns a multi-line report terminated by `END`:
+
+```mygram
+OK CACHE_STATS
+
+# Cache
+enabled: true
+total_queries: 15000
+cache_hits: 12000
+cache_misses: 3000
+hit_rate: 0.8000
+current_entries: 420
+current_memory_bytes: 8388608
+evictions: 12
+ttl_expirations: 5
+avg_cache_hit_time_ms: 0.041
+avg_cache_miss_time_ms: 18.220
+total_time_saved_ms: 218640.000
+END
+```
+
+`CACHE ENABLE` / `CACHE DISABLE` change the running state only. To persist the setting, use `SET cache.enabled = ...` or edit `config.yaml`.
+
+---
+
+## SET and SHOW VARIABLES
+
+MySQL-style runtime variable commands. Only variables reported as mutable can be changed; see [Operations Guide](/docs/operations) for the full workflow.
+
+### Syntax
+
+```mygram
+SET <variable> = <value> [, <variable2> = <value2> ...]
+SHOW VARIABLES [LIKE '<pattern>']
+```
+
+`SHOW VARIABLES LIKE` accepts exactly one pattern.
+
+### Responses
+
+```mygram
++OK Variable 'logging.level' set to 'debug'
++OK 2 variables set
+```
+
+`SHOW VARIABLES` renders a MySQL-style table with a `Mutable` column:
+
+```mygram
++---------------------+-----------+---------+
+| Variable_name       | Value     | Mutable |
++---------------------+-----------+---------+
+| api.default_limit   | 100       | YES     |
+| cache.enabled       | true      | YES     |
+| memory.verify_text  | off       | NO      |
++---------------------+-----------+---------+
+```
+
+---
+
 ## Error Response
 
 All errors follow this format:
@@ -945,9 +1076,24 @@ OK RESULTS 5 1 2 3 4 5
 
 ### Single Command Mode
 
+The command is passed as positional arguments — there is no `-c` flag. Quote the whole command when it contains spaces or shell metacharacters:
+
 ```bash
 ./build/bin/mygram-cli SEARCH articles "hello world"
+./build/bin/mygram-cli "SET logging.level = 'debug'"
 ```
+
+### Command-line Options
+
+| Option | Description |
+|--------|-------------|
+| `-h HOST` | Server hostname (default: `127.0.0.1`) |
+| `-p PORT` | Server port (default: `11016`) |
+| `-s SOCKET_PATH` | Unix domain socket path; overrides `-h`/`-p` |
+| `--retry N` | Retry the connection N times if refused (default: `0`) |
+| `--wait-ready` | Keep retrying until the server is ready |
+| `--version` | Print the client version and exit |
+| `--help` | Print usage and exit |
 
 ### Help Command
 
@@ -956,14 +1102,27 @@ In interactive mode, type `help` to see available commands:
 ```
 > help
 Available commands:
-  SEARCH, COUNT, GET              - Search and retrieval
-  INFO, CONFIG                    - Server information and configuration
-  DUMP SAVE/LOAD/VERIFY/INFO/STATUS - Snapshot management
-  REPLICATION STATUS/STOP/START   - Replication control
-  OPTIMIZE                        - Index optimization
-  DEBUG ON/OFF                    - Enable/disable debug mode
-  quit, exit                      - Exit client
+  SEARCH <db.table> <text> [(AND|OR|NOT) <term>...] [FILTER <col=val>...]
+         [SORT [BY] <col>|ASC|DESC] [LIMIT <n>] [OFFSET <n>]
+  COUNT <db.table> <text> [(AND|OR|NOT) <term>...] [FILTER <col=val>...]
+  GET <db.table> <primary_key>
+  INFO              - Show server statistics
+  CONFIG            - Show current configuration
+  SET <variable> = <value> [, ...]         - Change runtime variables
+  SHOW VARIABLES [LIKE <pattern>]         - Show runtime variables
+  FACET <db.table> <column> [text] [FILTER <col=val>...] [LIMIT <n>]
+                    - Compute facet counts
+  REPLICATION STATUS|STOP|START
+  DEBUG ON|OFF      - Toggle per-connection debug output
+  OPTIMIZE [db.table]  - Compact posting lists for one or all tables
+  CACHE STATS|CLEAR|ENABLE|DISABLE
+  DUMP SAVE|LOAD|VERIFY|INFO|STATUS
+  SYNC <db.table>|STOP [db.table]|STATUS
 ```
+
+::: info
+Commands are **not** terminated with a semicolon. The parser splits on whitespace only, so `SHOW VARIABLES;` is rejected as an unknown subcommand.
+:::
 
 ---
 

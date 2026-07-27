@@ -1,10 +1,23 @@
-# v1.7 Migration Guide
+---
+title: Upgrade to MygramDB v1.7
+description: "Move a MygramDB deployment to v1.7: database-qualified table identities, the new /tables/{identity} HTTP routes, multi-database indexing, and consistent snapshots."
+---
+
+# Upgrade to v1.7
+
+::: warning HTTP clients need attention
+v1.7.0 changes the HTTP table routes. A TCP/CLI-centric deployment is barely affected, but an application that searches over HTTP will not work until its endpoints are updated.
+:::
 
 MygramDB v1.7.0 adds database-qualified table identities, multi-database indexing, HTTP/TCP feature parity for core search APIs, and multi-table consistent snapshots. Most single-database TCP/CLI users can upgrade without changing commands, but HTTP clients must update table routes.
 
 ## What Changed
 
 ### HTTP table routes
+
+::: info What is a table identity?
+A **table identity** is the name MygramDB uses to refer to one searchable table unambiguously. With multiple databases, the same table name such as `articles` can exist more than once, so the database is included as in `app_db.articles`.
+:::
 
 All table HTTP endpoints now live under `/tables/{identity}`:
 
@@ -17,7 +30,7 @@ All table HTTP endpoints now live under `/tables/{identity}`:
 
 `{identity}` is either a bare table name in a single-database configuration or a database-qualified table name such as `app_db.articles`.
 
-Old routes such as `/{table}/search`, `/{table}/count`, and `/{table}/{primary_key}` are removed.
+Old routes such as `/{table}/search`, `/{table}/count`, `/{table}/{primary_key}`, and the interim two-segment `/tables/{database}/{table}/...` form are removed.
 
 ```bash
 # Before v1.7
@@ -87,6 +100,10 @@ HTTP `/search` supports sort, fuzzy search, and highlighting through dedicated J
 
 ## Snapshot And Dump Notes
 
+::: tip Take a dump right after upgrading
+Creating a `DUMP SAVE` on the new version means later restores preserve multi-database table identities correctly. Keep the old version's dumps until you are past the point of rolling back.
+:::
+
 v1.7.0 preserves per-table database names in dump metadata. After upgrading, keep old dump files for rollback, then create a fresh dump so restored metadata contains qualified table identities.
 
 For multi-table configurations with replication enabled, initial snapshots use one consistent MySQL snapshot across all tables and capture a shared GTID. Concurrent dump/snapshot operations coordinate on the drained GTID so the dump can resume replication from a precise position.
@@ -99,4 +116,3 @@ For multi-table configurations with replication enabled, initial snapshots use o
 4. Keep previous dumps until rollback is no longer needed.
 5. Run `DUMP SAVE` after upgrade to create v1.7 metadata with qualified identities.
 6. Verify `SYNC`, `SEARCH`, `/tables/{identity}/search`, `/tables/{identity}/count`, and `/tables/{identity}/facet` against each configured table.
-

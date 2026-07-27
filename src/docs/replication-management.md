@@ -9,6 +9,10 @@ head:
 
 # Replication Management
 
+::: info What this page covers
+"Management" here means how MygramDB automatically pauses and resumes its own replication around `DUMP SAVE`, `DUMP LOAD`, `SYNC`, and MySQL failover. It is not a feature for managing MySQL primary promotion or your replica topology.
+:::
+
 This document describes how MygramDB manages MySQL replication across different operations.
 
 ## Overview
@@ -18,6 +22,10 @@ MygramDB automatically manages replication start/stop to ensure data consistency
 ## Automatic Replication Management
 
 ### DUMP SAVE Operations
+
+::: tip Searching during DUMP SAVE
+`DUMP SAVE` writes a snapshot to disk. Search requests keep working, but replication is paused for the duration, so a long save temporarily increases the lag behind MySQL.
+:::
 
 When executing `DUMP SAVE`:
 
@@ -36,6 +44,10 @@ When executing `DUMP SAVE`:
 
 ### DUMP LOAD Operations
 
+::: warning DUMP LOAD replaces, it does not merge
+`DUMP LOAD` discards the current index and document store before reading the dump file. Loading the wrong file replaces your live search data, so verify the file path, the target environment, and the GTID inside the dump first.
+:::
+
 When executing `DUMP LOAD`:
 
 1. **Pre-operation**: If replication is running, it is automatically stopped
@@ -44,8 +56,8 @@ When executing `DUMP LOAD`:
 
 2. **During operation**: All data is cleared and reloaded from dump file
 
-3. **Post-operation**: Replication is automatically restarted with updated GTID
-   - If load succeeded and dump contains GTID: Updates replication to loaded GTID position
+3. **Post-operation**: Replication is restarted only if it was running before the load
+   - If load succeeded and dump contains GTID: Uses the loaded GTID position
    - Clears `replication_paused_for_dump` flag
    - Logs: `"Auto-restarted replication after DUMP LOAD"` with new GTID (on success)
 
@@ -54,6 +66,10 @@ When executing `DUMP LOAD`:
 - GTID inconsistency (current position doesn't match loaded data)
 
 ### SYNC Operations
+
+::: info What is a full resynchronization?
+A **full resynchronization** re-reads the target MySQL table from the beginning and rebuilds MygramDB's search data. Unlike normal replication, which applies only the deltas arriving over the binlog, its read load on MySQL is proportional to the number of rows.
+:::
 
 When executing `SYNC` for a table:
 
@@ -70,21 +86,13 @@ When executing `SYNC` for a table:
 
 When changing MySQL connection settings:
 
-1. **Pre-operation**: Replication is automatically stopped
-   - Sets `mysql_reconnecting` flag to `true`
-   - Current GTID position is saved
-   - Old MySQL connection is closed
-   - Logs: `"Stopping replication before MySQL reconnection"`
+1. **Candidate validation**: MygramDB connects to and validates the new MySQL server before disturbing the live connection or replication reader.
 
-2. **Reconnection**: New MySQL connection is established
-   - Connection is validated (GTID mode, binlog format)
-   - GTID position is restored
+2. **Handoff**: Only after validation succeeds does MygramDB stop the reader, save its drained GTID, and replace the connection.
 
-3. **Post-operation**: Replication is automatically restarted from saved GTID
-   - Clears `mysql_reconnecting` flag (on success or failure)
-   - Logs: `"Restarted replication after MySQL reconnection"` (on success)
+3. **Post-operation**: Replication restarts from the saved GTID. If the later handoff fails, MygramDB restores the old connection and restarts its reader.
 
-**Rationale**: Changing MySQL server connection requires stopping replication, reconnecting, and resuming from the same GTID position to maintain consistency.
+**Rationale**: Candidate validation keeps a failed failover from needlessly interrupting production replication.
 
 ## Manual Replication Control Blocking
 

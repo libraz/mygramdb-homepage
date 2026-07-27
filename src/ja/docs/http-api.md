@@ -66,7 +66,8 @@ POST /tables/app_db.threads/search HTTP/1.1
 Content-Type: application/json
 
 {
-  "q": "breaking news AND tech NOT old",
+  "q": "breaking news AND tech",
+  "mode": "boolean",
   "filters": {
     "status": 1,
     "category": "tech"
@@ -80,7 +81,8 @@ Content-Type: application/json
 
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| `q` | string | はい | ブール演算子を含む検索テキスト。検索オプションはJSONフィールドで指定 |
+| `q` | string | はい | 検索テキスト。`mode` が `"boolean"` でない限りリテラルとして扱う |
+| `mode` | string | いいえ | `"literal"`（既定）または `"boolean"` |
 | `filters` | object | いいえ | フィルタ条件（カラム: 値のペア） |
 | `limit` | integer | いいえ | 返す最大結果数（デフォルト: 100、最大: 1000） |
 | `offset` | integer | いいえ | スキップする結果数（デフォルト: 0） |
@@ -88,11 +90,19 @@ Content-Type: application/json
 | `highlight` | object | いいえ | ハイライト設定（下記参照） |
 | `fuzzy` | integer | いいえ | あいまい検索の編集距離（`1` または `2`） |
 
-::: warning `q` に制御句を混ぜない
-HTTP APIでは `LIMIT`、`FILTER`、`SORT` などを `q` 文字列に混ぜず、専用のJSONフィールドで指定してください。これはHTTPリクエストを安全に検証し、TCPプロトコルとの挙動差を減らすためです。
-:::
+### リテラル検索とBoolean検索
 
-**クエリ構文:**
+HTTPでは、既定で `q` をリテラルな検索テキストとして扱います。たとえば `AND` や `LIMIT` は演算子や制御句ではなく、通常の検索語です。Boolean式を送るときだけ、`"mode": "boolean"` を明示してください。
+
+```json
+{
+  "q": "tech AND (AI OR machine learning) NOT old",
+  "mode": "boolean",
+  "limit": 50
+}
+```
+
+**Booleanクエリ構文（`mode: "boolean"`）:**
 
 - **シンプル検索**: `"keyword"`
 - **引用符付きフレーズ**: `"\"breaking news\""` （語句の並びを保ったフレーズを検索）
@@ -101,7 +111,7 @@ HTTP APIでは `LIMIT`、`FILTER`、`SORT` などを `q` 文字列に混ぜず�
 - **NOT演算子**: `"news NOT sports"`
 - **組み合わせ**: `"tech AND AI NOT old"`
 
-`q` は制御句の差し込みには使われません。`limit`、`offset`、`sort`、`filters`、`highlight`、`fuzzy` はJSONフィールドで指定してください。`q` 内の `LIMIT` や `SORT` のような文字列は、検索テキストまたはブールクエリのトークンとして扱われます。
+`limit`、`offset`、`sort`、`filters`、`highlight`、`fuzzy` はJSONフィールドで指定してください。`q` にこれらの制御句は書けません。リテラルモードでは `LIMIT` や `SORT` のような文字列も検索テキストの一部として扱われます。
 
 **レスポンス (200 OK):**
 
@@ -112,7 +122,6 @@ HTTP APIでは `LIMIT`、`FILTER`、`SORT` などを `q` 文字列に混ぜず�
   "offset": 0,
   "results": [
     {
-      "doc_id": 101,
       "primary_key": "article_101",
       "filters": {
         "status": 1,
@@ -120,7 +129,6 @@ HTTP APIでは `LIMIT`、`FILTER`、`SORT` などを `q` 文字列に混ぜず�
       }
     },
     {
-      "doc_id": 205,
       "primary_key": "article_205",
       "filters": {
         "status": 1,
@@ -188,6 +196,7 @@ Content-Type: application/json
 
 {
   "q": "breaking news AND tech",
+  "mode": "boolean",
   "filters": {
     "status": 1
   }
@@ -212,10 +221,12 @@ Content-Type: application/json
 |-----------|----|------|------|
 | `column` | string | はい | 集計対象のフィルタカラム |
 | `q` | string | いいえ | ファセット対象を絞る検索クエリ |
+| `mode` | string | いいえ | `q` の `"literal"`（既定）または `"boolean"` |
 | `filters` | object | いいえ | 追加のフィルタ条件 |
 | `limit` | integer | いいえ | 返すファセットバケット数の上限（1-1000） |
+| `offset` | integer | いいえ | スキップするファセットバケット数（既定: 0） |
 
-`offset`、`sort`、`highlight`、`fuzzy` は FACET ではサポートされず、指定するとエラーになります。
+`sort`、`highlight`、`fuzzy` は FACET ではサポートされず、指定するとエラーになります。
 
 **リクエスト:**
 
@@ -226,6 +237,7 @@ Content-Type: application/json
 {
   "column": "category",
   "q": "database OR mysql",
+  "mode": "boolean",
   "filters": {
     "status": 1
   },
@@ -253,7 +265,7 @@ HTTP API は検索、カウント、ドキュメント取得、ヘルス、メ�
 
 ### GET /tables/{identity}/{primary_key}
 
-プライマリキーで単一のドキュメントを取得します。レスポンスには内部 `doc_id` も含まれます。
+プライマリキーで単一のドキュメントを取得します。
 
 **リクエスト:**
 
@@ -265,7 +277,6 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 
 ```json
 {
-  "doc_id": 12345,
   "primary_key": "thread_12345",
   "filters": {
     "status": 1,
@@ -534,7 +545,7 @@ Kubernetesでは `/health/live` をLiveness Probe、`/health/ready` をReadiness
 
 ### GET /health/detail
 
-詳細な監視スナップショットです。`"status": "healthy"` または `"status": "degraded"` を含む `200 OK` を返します。ロードバランサーのレディネス判定にはこのエンドポイントではなく `/health/ready` を使用してください。
+詳細な監視スナップショットです。`"status": "healthy"` または `"status": "degraded"` を含む `200 OK` を返します。ロードバランサーのレディネス判定にはこのエンドポイントではなく `/health/ready` を使用してください。`/health/live` と `/health/ready` 以外と同様に、CIDR許可リストの対象です。
 
 ### GET /config
 
@@ -588,7 +599,10 @@ GET /replication/status HTTP/1.1
 ```json
 {
   "enabled": true,
-  "current_gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+  "status": "running",
+  "current_gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+  "processed_events": 12345,
+  "queue_size": 0
 }
 ```
 
@@ -602,7 +616,7 @@ GET /replication/status HTTP/1.1
 
 ## CORS サポート
 
-ブラウザから直接アクセスする場合は `api.http.enable_cors: true` を設定し、`api.http.cors_allow_origin` に信頼できるOriginを指定します。不要な場合は CORS を無効のままにしてください。
+ブラウザから直接アクセスする場合は `api.http.enable_cors: true` を設定し、`api.http.cors_allow_origin` に信頼できるOriginを指定します。Originを空のままにすると `*` になるため、信頼できるOriginを指定せずにCORSを有効化しないでください。不要な場合は CORS を無効のままにしてください。
 
 **CORS ヘッダー:**
 
@@ -675,7 +689,7 @@ const response = await fetch('http://localhost:8080/tables/threads/search', {
 const data = await response.json();
 console.log(`${data.count} 件の結果が見つかりました`);
 data.results.forEach(doc => {
-  console.log(`ドキュメント ${doc.doc_id}: ${doc.primary_key}`);
+  console.log(`ドキュメント ${doc.primary_key}`);
 });
 ```
 
@@ -694,7 +708,7 @@ response = requests.post('http://localhost:8080/tables/threads/search', json={
 data = response.json()
 print(f"{data['count']} 件の結果が見つかりました")
 for doc in data['results']:
-    print(f"ドキュメント {doc['doc_id']}: {doc['primary_key']}")
+    print(f"ドキュメント {doc['primary_key']}")
 ```
 
 ## パフォーマンスの考慮事項
@@ -720,7 +734,9 @@ for doc in data['results']:
 |--------|------|
 | 200 | 成功 |
 | 400 | 不正なリクエスト（無効な入力） |
+| 403 | 禁止（送信元IPが許可されていない） |
 | 404 | 見つかりません（ドキュメントが存在しない） |
+| 429 | リクエスト過多（レート制限を超過） |
 | 500 | 内部サーバーエラー |
 | 503 | サービス利用不可、機能無効、レプリケーション利用不可、またはテーブル同期中 |
 

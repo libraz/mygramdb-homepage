@@ -11,6 +11,10 @@ head:
 
 ## Overview
 
+::: info When to read this page
+This is for developers on macOS who want to catch Linux or GitHub Actions build failures before pushing. It is not the installation procedure for using MygramDB.
+:::
+
 This guide explains how to test your code in the same Linux environment used by GitHub Actions CI, catching platform-specific issues (like missing headers or compiler differences) **before** pushing to CI.
 
 ## Problem
@@ -179,6 +183,10 @@ make docker-test-linux  # Uses $(nproc) cores
 ```
 
 ### 4. ccache
+
+::: info What is ccache?
+**ccache** caches compilation results and reuses them. Files whose headers and compile options have not changed are not recompiled, which makes repeat builds much faster.
+:::
 
 The container uses ccache to speed up compilation. This is shared across builds.
 

@@ -11,16 +11,20 @@ head:
 
 Choosing the right full-text search solution depends on your requirements. Here's a detailed comparison.
 
+::: info The assumption behind this comparison
+MygramDB targets one specific case: the system of record is already in MySQL or MariaDB, and only search needs to be faster. If you want a search engine at the center of your data platform, or you need distributed analytics, Elasticsearch and similar tools are the better fit.
+:::
+
 ## Quick Comparison
 
 | Feature | MygramDB | Elasticsearch | MySQL FULLTEXT |
 |---------|----------|---------------|----------------|
-| **Latency** | <1ms | 50-500ms | 100-3000ms |
+| **Latency** | See benchmark | 50-500ms | See benchmark |
 | **Deployment** | Single binary | Cluster | Built-in |
 | **Data sync** | MySQL / MariaDB binlog | ETL required | Native |
 | **Scalability** | Single node | Distributed | Single node |
-| **Memory** | ~2.3GB/1M docs (with verify_text) | ~2-4GB/1M docs | Buffer pool |
-| **Concurrency** | QPS 11,766 | High | QPS 2-8 |
+| **Memory** | See benchmark | ~2-4GB/1M docs | Buffer pool |
+| **Concurrency** | See benchmark | High | See benchmark |
 | **Multibyte / Unicode** | N-gram (ICU NFKC) | Language plugins | N-gram parser |
 | **Analytics** | Basic | Advanced | None |
 | **Learning curve** | Low | High | Low |
@@ -32,7 +36,7 @@ Choosing the right full-text search solution depends on your requirements. Here'
 **Best for:** MySQL-based applications needing fast search without infrastructure complexity.
 
 **Pros:**
-- Sub-millisecond consistent latency
+- Cache-off benchmark results published with the test configuration
 - Zero configuration data sync via binlog (MySQL 8.4/9.x and MariaDB 10.6+/11.x)
 - Single binary deployment
 - No cluster management
@@ -42,6 +46,10 @@ Choosing the right full-text search solution depends on your requirements. Here'
 **Cons:**
 - Single node only (no distributed search)
 - Data must fit in RAM
+
+::: tip What "no ETL" actually means
+Your application never pushes search documents anywhere. It does not mean zero setup: MySQL still needs GTID, ROW-format binlog, a replication user, and an initial `SYNC` per table.
+:::
 
 ### Elasticsearch
 
@@ -70,14 +78,13 @@ Choosing the right full-text search solution depends on your requirements. Here'
 - Zero data sync overhead
 
 **Cons:**
-- Slow (100-3000ms per query)
-- Low throughput under concurrent load (2-8 QPS)
+- Query-dependent latency and throughput; see the cache-off benchmark
 - Cache-dependent performance
 - Limited scalability
 
 ## Performance Comparison
 
-See [Benchmarks](/benchmarks) for detailed results on 1.1M Wikipedia articles. Key takeaway: MygramDB delivers 2,634-11,766 QPS with sub-millisecond latency, while MySQL FULLTEXT manages only 2-8 QPS with 300-2,566ms latency.
+See [Benchmarks](/benchmarks) for the current cache-off results and full test configuration.
 
 ## Migration Path
 
@@ -88,13 +95,17 @@ See [Benchmarks](/benchmarks) for detailed results on 1.1M Wikipedia articles. K
 3. Point search queries to MygramDB
 4. Write operations remain on MySQL
 
+::: warning HTTP routes changed in v1.7.0
+The HTTP API uses `/tables/{identity}/search` from v1.7.0 onward; the older `/{table}/search` form was removed. Check [Upgrade to v1.7](/docs/migration-v1.7) before migrating.
+:::
+
 ```bash
-# 1. Start MygramDB
+# 1. Start MygramDB (in production, supply a config file or the environment variables your deployment needs)
 docker run -d -p 11016:11016 -p 8080:8080 \
   -e MYSQL_HOST=your-mysql \
   ghcr.io/libraz/mygram-db:latest
 
-# 2. Search via MygramDB
+# 2. After the initial sync, search via MygramDB
 curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "search term"}'

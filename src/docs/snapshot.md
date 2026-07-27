@@ -11,6 +11,10 @@ head:
 
 MygramDB provides snapshot commands for backing up and restoring your database state. Snapshots capture the entire database including all indexed data, configuration, and replication position (GTID).
 
+::: info "Snapshot" and "dump"
+This page uses the two terms interchangeably. Both mean the in-memory MygramDB search index written out to a file.
+:::
+
 ## Overview
 
 A snapshot is a single binary file (`.dmp`) that contains:
@@ -21,6 +25,10 @@ A snapshot is a single binary file (`.dmp`) that contains:
 
 In v1.7.0 and later, snapshot metadata preserves each table's database name. This is required for multi-database deployments where `app_db.articles` and `archive_db.articles` may coexist in one MygramDB instance.
 
+::: tip Not a MySQL backup
+A MygramDB dump exists to bring MygramDB back quickly. It is not a backup of MySQL. Protecting the source data remains a separate MySQL-side responsibility.
+:::
+
 ## Commands
 
 ### DUMP SAVE - Create Snapshot
@@ -29,12 +37,12 @@ Save the current database state to a snapshot file.
 
 **Syntax:**
 ```mygram
-DUMP SAVE <filepath> [WITH STATISTICS]
+DUMP SAVE [<filepath>] [--with-stats]
 ```
 
 **Parameters:**
-- `<filepath>`: Path where the snapshot file will be saved
-- `WITH STATISTICS` (optional): Include performance statistics in the snapshot
+- `<filepath>` (optional): Path where the snapshot file will be saved
+- `--with-stats` (optional): Include performance statistics in the snapshot
 
 **Examples:**
 ```mygram
@@ -42,15 +50,12 @@ DUMP SAVE <filepath> [WITH STATISTICS]
 DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
 
 -- Snapshot with statistics
-DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp WITH STATISTICS
+DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp --with-stats
 ```
 
 **Response:**
 ```mygram
-OK SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
-tables: 2
-size: 1234567 bytes
-gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
+OK DUMP_STARTED /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 ### DUMP LOAD - Restore Snapshot
@@ -72,18 +77,17 @@ DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
 
 **Response:**
 ```mygram
-OK LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
-tables: 2
-documents: 10000
-gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
+OK LOADED /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
-> [!IMPORTANT]
-> - Loading a snapshot **replaces** all current data.
-> - The database will resume replication from the GTID stored in the snapshot.
-> - All tables must be configured in the current config file.
-> - For multi-database deployments, configured table identities must match the dump metadata (`<database>.<table>`).
-> - MygramDB does **not** automatically load dump files on startup. To restore from a dump after a restart, start MygramDB, run `DUMP VERIFY`, then run `DUMP LOAD`.
+::: warning
+- Loading a snapshot **replaces** all current data.
+- The database will resume replication from the GTID stored in the snapshot.
+- All tables must be configured in the current config file.
+- For multi-database deployments, configured table identities must match the dump metadata (`<database>.<table>`).
+- MygramDB does **not** automatically load dump files on startup. To restore from a dump after a restart, start MygramDB, run `DUMP VERIFY`, then run `DUMP LOAD`.
+- v1.9 writes dump format v2 and still loads v1 and v2 dump files. Its embedded document-store payload is v3 and retains pre-normalization text for accurate highlighting.
+:::
 
 ### DUMP VERIFY - Check Integrity
 
@@ -104,10 +108,7 @@ DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
 
 **Response (Success):**
 ```mygram
-OK VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
-status: valid
-crc: verified
-size: verified
+OK DUMP_VERIFIED /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
 **Response (Failure):**
@@ -136,14 +137,15 @@ DUMP INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 
 **Response:**
 ```mygram
-OK INFO /var/lib/mygramdb/dumps/mygramdb.dmp
-version: 1
+OK DUMP_INFO /var/lib/mygramdb/dumps/mygramdb.dmp
+version: 2
 gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
 tables: 2
-flags: 0x18
-  statistics: yes
-size: 1234567 bytes
-timestamp: 1672531200 (2023-01-01 00:00:00 UTC)
+flags: 24
+file_size: 1234567
+timestamp: 1672531200
+has_statistics: true
+END
 ```
 
 ## Integrity Protection
@@ -153,6 +155,10 @@ timestamp: 1672531200 (2023-01-01 00:00:00 UTC)
 All snapshot files include CRC32 checksums at multiple levels:
 - **File-level CRC**: Detects any corruption in the entire file
 - **Section-level CRC**: Validates individual sections (config, statistics, index, document store)
+
+::: info What is CRC32?
+**CRC32** is a short check value used to detect whether a file has been damaged. It is not cryptographic tamper detection, but it reliably catches truncated files and disk corruption.
+:::
 
 ### File Size Validation
 
@@ -209,7 +215,7 @@ ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be
 If the snapshot version is too new:
 
 ```mygram
-ERROR Snapshot file version 2 is newer than supported version 1
+ERROR Snapshot file version 3 is newer than supported version 2
 ```
 
 **Actions:**
@@ -245,7 +251,7 @@ You can also schedule manual snapshots for disaster recovery:
 # Example: Daily backup script
 #!/bin/bash
 DATE=$(date +%Y%m%d)
-echo "DUMP SAVE /var/lib/mygramdb/dumps/manual_${DATE}.dmp WITH STATISTICS" | mygram-cli
+echo "DUMP SAVE /var/lib/mygramdb/dumps/manual_${DATE}.dmp --with-stats" | mygram-cli
 ```
 
 ### Retention Policy
@@ -350,7 +356,7 @@ Recovery from a dump is operator-driven. MygramDB does not scan
 `dump.dir` or load the newest dump during startup. Start the server first,
 verify the intended dump file, and then run `DUMP LOAD`.
 
-When `DUMP LOAD` completes, MygramDB automatically resumes replication:
+When `DUMP LOAD` completes, MygramDB resumes replication only if it was running before the load:
 
 1. **GTID Extraction**: Reads replication position from snapshot
 2. **BinlogReader Resume**: Continues from the stored GTID
@@ -366,8 +372,8 @@ When `DUMP LOAD` completes, MygramDB automatically resumes replication:
 DUMP VERIFY mygramdb.dmp
 DUMP LOAD mygramdb.dmp
 
-# 4. MygramDB automatically processes transactions 81-100
-# 5. Resumes real-time replication from 101+
+# 4. If replication was running before the load, MygramDB processes transactions 81-100
+# 5. Otherwise start replication explicitly after confirming the loaded state
 ```
 
 ## Troubleshooting

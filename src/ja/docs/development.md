@@ -217,17 +217,49 @@ snprintf(buf, sizeof(buf), "%d",
 
 ## テストの実行
 
-Makefile を使用:
+既定の target は `SLOW` と `LOAD` ラベルのテストを除外します。
 
 ```bash
+# 既定の unit / integration スイート
 make test
+
+# SLOW テストも含める
+make test-all
+
+# Docker 上の MySQL を起動する opt-in テスト
+make test-mysql
+make test-large-dump
 ```
 
-または CTest を直接使用:
+### E2E スイート
 
 ```bash
-cd build
-ctest --output-on-failure
+# 既定の MySQL 8.4 スイート
+make e2e-test
+
+# MySQL 8.4/9.4、MariaDB 10.11/11.4 の matrix
+make e2e-matrix
+
+# 2台の MySQL を使う failover スイート
+make e2e-failover
+```
+
+marker の指定方法と MariaDB 専用 runner は [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e) を参照してください。
+
+### ローカル sanitizer と fuzz
+
+sanitizer build と fuzz harness は、明示的に実行するローカル確認です。CI job は増やさず、fuzz harness は CTest に登録しません。
+
+```bash
+# 必要に応じて ENABLE_ASAN を ENABLE_TSAN または ENABLE_UBSAN に置き換える。
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
+cmake --build build-asan -j
+ctest --test-dir build-asan -L CONCURRENCY -LE LOAD --output-on-failure
+
+# parser と dump header に対する randomized harness
+cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON
+cmake --build build-fuzz --target binary_input_fuzz -j
+./build-fuzz/bin/binary_input_fuzz 100000
 ```
 
 ## トラブルシューティング

@@ -11,6 +11,10 @@ head:
 
 This guide helps you set up the development environment for MygramDB with real-time linting and auto-formatting (like ESLint/Prettier for JavaScript).
 
+::: info Who this page is for
+This page is for developers building MygramDB itself or changing its C++ code. If you only want to use MygramDB, start with [Installation](/docs/installation) and [Configuration](/docs/configuration).
+:::
+
 ## Prerequisites
 
 Before starting development, install the required tools.
@@ -68,6 +72,10 @@ sudo update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-18 100
 ```
 
 ## Verify Installation
+
+::: info clang-format vs clang-tidy
+**clang-format** rewrites C++ source layout automatically; **clang-tidy** is a static analyzer that flags unsafe constructs and style violations. Formatting output differs between versions, so this project pins both to version 18 — the same version CI uses.
+:::
 
 ```bash
 # Check if tools are installed
@@ -211,17 +219,51 @@ snprintf(buf, sizeof(buf), "%d",
 
 ## Running Tests
 
-Using Makefile:
+The default target excludes tests labelled `SLOW` and `LOAD`.
 
 ```bash
+# Default unit and integration suite
 make test
+
+# Include SLOW tests
+make test-all
+
+# Opt-in tests that start Docker-backed MySQL
+make test-mysql
+make test-large-dump
 ```
 
-Or using CTest directly:
+### End-to-end suites
 
 ```bash
-cd build
-ctest --output-on-failure
+# Default MySQL 8.4 suite
+make e2e-test
+
+# MySQL 8.4/9.4 and MariaDB 10.11/11.4 matrix
+make e2e-matrix
+
+# Dedicated two-server MySQL failover suite
+make e2e-failover
+```
+
+See the [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e)
+for marker selection and the focused MariaDB replication runner.
+
+### Local sanitizers and fuzzing
+
+Sanitizer builds and the fuzz harness are explicit local checks. They do not add
+CI jobs or make the fuzz harness a CTest target.
+
+```bash
+# Replace ENABLE_ASAN with ENABLE_TSAN or ENABLE_UBSAN as needed.
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
+cmake --build build-asan -j
+ctest --test-dir build-asan -L CONCURRENCY -LE LOAD --output-on-failure
+
+# Randomized parser and dump-header harness
+cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON
+cmake --build build-fuzz --target binary_input_fuzz -j
+./build-fuzz/bin/binary_input_fuzz 100000
 ```
 
 ## Troubleshooting

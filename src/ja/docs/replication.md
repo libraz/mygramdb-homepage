@@ -151,7 +151,7 @@ replication:
 
 下の図は、この保証がトランザクション境界をまたいでどう成り立つかを示しています。スナップショットトランザクションが開始すると同時に `gtid_executed` が取得され、その凍結されたビューの中だけでテーブルを読み取る間も新規書き込みはbinlogに蓄積され続け、スナップショット完了後はまさに取得したそのGTIDからbinlogストリーミングが再開されます。
 
-<img src="/diagrams/gtid-snapshot-handoff.svg" alt="MygramDBがコンシステントスナップショットのトランザクション開始時点でgtid_executedを取得し、その凍結ビュー内でテーブルを読み取る間に新規書き込みはbinlogに蓄積され、取得したGTIDのちょうど次からbinlogストリーミングを開始することでトランザクションの欠落も二重適用も起きないことを示すタイムライン図" class="doc-diagram" />
+<DocDiagram name="gtid-snapshot-handoff" alt="MygramDBがコンシステントスナップショットのトランザクション開始時点でgtid_executedを取得し、その凍結ビュー内でテーブルを読み取る間に新規書き込みはbinlogに蓄積され、取得したGTIDのちょうど次からbinlogストリーミングを開始することでトランザクションの欠落も二重適用も起きないことを示すタイムライン図" />
 
 **動作:**
 - データ一貫性のため `START TRANSACTION WITH CONSISTENT SNAPSHOT` を使用
@@ -173,7 +173,7 @@ replication:
 ```
 
 **動作:**
-- `SHOW BINARY LOG STATUS` を使用して最新の GTID を取得
+- MySQLでは `SHOW BINARY LOG STATUS`、MariaDBでは `SELECT @@GLOBAL.gtid_binlog_pos` を使って最新のGTIDを取得
 - MygramDB 起動後の変更のみを取得
 
 **使うタイミング:**
@@ -209,10 +209,10 @@ MygramDB は自動的に処理します：
 
 ### DDL 操作
 
-MygramDB は一部の DDL イベントを検知します。ただし、検索対象カラムやフィルタカラムの意味が変わるスキーマ変更は、自動で安全に追従できない場合があります。
+MygramDB は一部の DDL イベントを検知します。設定済みの主キー、テキストソース、フィルタカラムの意味を変える互換性のない変更では、GTID を進める前にレプリケーションを停止します。
 
 ::: warning スキーマ変更後は再同期を検討
-`text_source`、`primary_key`、`filters`、`required_filters` に関係するカラムを変更した場合は、設定を見直し、MygramDBを再起動して `SYNC` で再構築してください。
+`text_source`、`primary_key`、`filters`、`required_filters` に関係するカラムを変更した場合は、スキーマまたは設定を修正してから `SYNC` で再構築してください。再起動だけでは再開しません。
 :::
 
 #### TRUNCATE TABLE
@@ -263,7 +263,9 @@ MygramDB はこれらの MySQL カラム型をレプリケートできます：
 - TINYINT、SMALLINT、INT、MEDIUMINT、BIGINT（signed/unsigned）
 
 ### 文字列型
-- VARCHAR、CHAR、TEXT、BLOB、ENUM、SET
+- VARCHAR、CHAR、TEXT、ENUM、SET
+
+設定済みの主キー、テキストソース、フィルタカラムには `BINARY`、`VARBINARY`、`BLOB` を使えません。設定で使用する文字列カラムには、`utf8mb4`、`utf8`/`utf8mb3`、`ascii` のいずれかの照合順序が必要です。
 
 ### 日時型
 - DATE、TIME、DATETIME、TIMESTAMP（小数秒対応）
@@ -319,7 +321,12 @@ echo "REPLICATION STATUS" | nc localhost 11016
 
 レスポンス:
 ```
-OK REPLICATION status=running gtid=3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
+OK REPLICATION
+status: running
+current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
+processed_events: 12345
+queue_size: 0
+END
 ```
 
 ### レプリケーションを停止
@@ -428,7 +435,7 @@ mysql:
 
 replication:
   enable: true
-  server_id: 0                    # 0 = 自動生成
+  server_id: 83917                # 1 から 4294967295 の一意な値
   start_from: "snapshot"          # snapshot|latest|gtid=<UUID:txn>
   queue_size: 10000
   reconnect_backoff_min_ms: 500   # 予約済み / 現在は未強制

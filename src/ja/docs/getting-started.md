@@ -1,3 +1,12 @@
+---
+title: MygramDB クイックスタート - 5分で導入して検索する
+description: MygramDBを5分で動かす手順。前提条件、パッケージのインストール、最小構成のconfig.yaml、サービス起動、最初のSYNCとSEARCHまでを説明します。
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB クイックスタート, はじめに, インストール, 最小構成, 初回検索, SYNC コマンド, MySQL 全文検索 導入
+---
+
 # クイックスタート
 
 最小構成でMygramDBを起動し、MySQL上の既存データを読み込んで検索できるところまで確認します。
@@ -9,7 +18,7 @@
 
 MygramDBは既存のデータベースの隣に配置するサイドカーです。アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBはbinlogを追従して独自の検索インデックスを構築し、検索クエリのみがMygramDBへ送られます。
 
-<img src="/diagrams/deployment-topology.svg" alt="アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBがGTID binlogストリームを追従してインメモリ検索インデックスを維持し、検索クエリのみをTCP 11016またはHTTP 8080でMygramDBに送る構成図" class="doc-diagram" />
+<DocDiagram name="deployment-topology" alt="アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBがGTID binlogストリームを追従してインメモリ検索インデックスを維持し、検索クエリのみをTCP 11016またはHTTP 8080でMygramDBに送る構成図" />
 
 ::: info 用語補足
 **GTID** はMySQLの変更履歴に付く一意な番号です。MygramDBはGTIDを使って、再起動後も「どこまでMySQLの変更を読んだか」を正確に引き継ぎます。
@@ -123,5 +132,5 @@ OK RESULTS 3 101 205 387
 - [設定リファレンス（詳細）](/ja/docs/configuration)
 - [MySQLレプリケーション](/ja/docs/replication)
 - [運用ガイド](/ja/docs/operations)
-- [v1.8アップグレードノート](/ja/docs/upgrade-v1.8)
-- [v1.7移行ガイド](/ja/docs/migration-v1.7)
+- [v1.9 へのアップグレード](/ja/docs/upgrade-v1.9)
+- [v1.7 へのアップグレード](/ja/docs/migration-v1.7)

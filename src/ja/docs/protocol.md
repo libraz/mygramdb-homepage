@@ -384,6 +384,8 @@ CONFIG VERIFY <filepath>
 **パラメータ:**
 - `filepath` (必須): 設定ファイルのパス（YAMLまたはJSON）
 
+相対パスは、使用中の設定ファイルがあるディレクトリから解決します。サービスの作業ディレクトリと異なる可能性がある自動化では絶対パスを使ってください。
+
 **例:**
 
 有効な設定を検証:
@@ -453,7 +455,7 @@ DUMP SAVE /backup/mygramdb.dmp --with-stats
 
 **構文:**
 ```mygram
-DUMP LOAD [<filepath>]
+DUMP LOAD <filepath>
 ```
 
 **例:**
@@ -467,7 +469,7 @@ DUMP LOAD /backup/mygramdb.dmp
 
 **構文:**
 ```mygram
-DUMP VERIFY [<filepath>]
+DUMP VERIFY <filepath>
 ```
 
 **例:**
@@ -481,7 +483,7 @@ DUMP VERIFY /backup/mygramdb.dmp
 
 **構文:**
 ```mygram
-DUMP INFO [<filepath>]
+DUMP INFO <filepath>
 ```
 
 **例:**
@@ -548,7 +550,7 @@ END
 ### 構文
 
 ```mygram
-FACET <table> <column> [search_text] [AND <term>] [NOT <term>] [FILTER <col> <op> <value>] [LIMIT <n>]
+FACET <table> <column> [search_text] [AND <term>] [NOT <term>] [FILTER <col> <op> <value>] [LIMIT <n>] [OFFSET <n>]
 ```
 
 ### 例
@@ -562,6 +564,8 @@ FACET articles status
 ```mygram
 FACET articles category "機械学習" FILTER status = 1 LIMIT 10
 ```
+
+`OFFSET` はカウント順に並べたファセットバケットをスキップします。既定値は `0` です。
 
 ### レスポンス
 
@@ -668,6 +672,26 @@ OK REPLICATION_STARTED
 
 ---
 
+## SYNC コマンド
+
+設定済みテーブルをMySQLから読み直して再構築します。
+
+### 構文
+
+```mygram
+SYNC <table_name>
+```
+
+### レスポンス
+
+```mygram
+OK SYNC STARTED table=<table_name>
+```
+
+SYNCは非同期で実行されます。同期中は対象テーブルへの `SEARCH`、`COUNT`、`GET`、`FACET` が拒否されます。完了後は、他テーブルのコミットを飛ばさないよう保存済みGTIDからレプリケーションを再開します。進捗と失敗理由は `SYNC STATUS` で確認してください。詳しくは[SYNCコマンドガイド](/ja/docs/sync-command)を参照してください。
+
+---
+
 ## OPTIMIZE コマンド
 
 インデックスポスティングリストを最適化します（密度に基づいてデルタエンコーディングをRoaring Bitmapに変換）。
@@ -679,17 +703,17 @@ OK REPLICATION_STARTED
 ### 構文
 
 ```mygram
-OPTIMIZE
+OPTIMIZE [<db.table>]
 ```
+
+単一テーブル構成ではテーブル名を省略できます。2つ以上のテーブルを設定している場合は修飾名で指定してください。
 
 ### 動作
 
 - **実行前チェック**: メモリヘルスと可用性の検証
-- binlogレプリケーションを一時停止
 - ポスティングリストをバッチでコピーして最適化
-- クエリ処理は継続（古いインデックスを使用）
-- 最適化完了後にアトミックに切り替え
-- binlogレプリケーションを再開
+- クエリ処理は継続（切り替わるまでは旧バッチを使用）
+- バッチごとにアトミックに切り替わるため、binlogレプリケーションは止まりません
 
 ### メモリ安全性
 
@@ -827,6 +851,89 @@ offset: <value> [(default)]
 
 ---
 
+## CACHE コマンド
+
+クエリキャッシュの状態確認と制御を行います。`cache` の設定項目そのものは[設定ガイド](/ja/docs/configuration#クエリキャッシュ)を参照してください。
+
+### 構文
+
+```mygram
+CACHE STATS
+CACHE CLEAR [<db.table>]
+CACHE ENABLE
+CACHE DISABLE
+```
+
+`CACHE CLEAR` はテーブル名を省略すると全エントリを、テーブル名を指定するとそのテーブルのエントリだけを破棄します。
+
+### レスポンス
+
+```mygram
+OK CACHE_CLEARED
+OK CACHE_CLEARED table=app_db.articles
+OK CACHE_ENABLED
+OK CACHE_DISABLED
+```
+
+`CACHE STATS` は `END` で終わる複数行のレポートを返します。
+
+```mygram
+OK CACHE_STATS
+
+# Cache
+enabled: true
+total_queries: 15000
+cache_hits: 12000
+cache_misses: 3000
+hit_rate: 0.8000
+current_entries: 420
+current_memory_bytes: 8388608
+evictions: 12
+ttl_expirations: 5
+avg_cache_hit_time_ms: 0.041
+avg_cache_miss_time_ms: 18.220
+total_time_saved_ms: 218640.000
+END
+```
+
+`CACHE ENABLE` / `CACHE DISABLE` は稼働中の状態だけを変更します。設定として残す場合は `SET cache.enabled = ...` を使うか、`config.yaml` を編集してください。
+
+---
+
+## SET / SHOW VARIABLES
+
+MySQL互換のランタイム変数コマンドです。変更できるのは mutable と表示された変数だけです。運用手順は[運用ガイド](/ja/docs/operations)を参照してください。
+
+### 構文
+
+```mygram
+SET <variable> = <value> [, <variable2> = <value2> ...]
+SHOW VARIABLES [LIKE '<pattern>']
+```
+
+`SHOW VARIABLES LIKE` に指定できるパターンはちょうど1つです。
+
+### レスポンス
+
+```mygram
++OK Variable 'logging.level' set to 'debug'
++OK 2 variables set
+```
+
+`SHOW VARIABLES` は `Mutable` 列を持つMySQL形式のテーブルを返します。
+
+```mygram
++---------------------+-----------+---------+
+| Variable_name       | Value     | Mutable |
++---------------------+-----------+---------+
+| api.default_limit   | 100       | YES     |
+| cache.enabled       | true      | YES     |
+| memory.verify_text  | off       | NO      |
++---------------------+-----------+---------+
+```
+
+---
+
 ## エラーレスポンス
 
 すべてのエラーは以下の形式に従います：
@@ -864,9 +971,24 @@ OK RESULTS 5 1 2 3 4 5
 
 ### 単一コマンドモード
 
+コマンドは位置引数として渡します。`-c` のようなフラグはありません。空白やシェルのメタ文字を含む場合は全体を引用符で囲んでください。
+
 ```bash
 ./build/bin/mygram-cli SEARCH articles "hello world"
+./build/bin/mygram-cli "SET logging.level = 'debug'"
 ```
+
+### コマンドラインオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-h HOST` | サーバーのホスト名（デフォルト: `127.0.0.1`） |
+| `-p PORT` | サーバーのポート（デフォルト: `11016`） |
+| `-s SOCKET_PATH` | Unixドメインソケットのパス。`-h`/`-p` より優先されます |
+| `--retry N` | 接続を拒否された場合にN回リトライ（デフォルト: `0`） |
+| `--wait-ready` | サーバーが準備完了になるまでリトライを続ける |
+| `--version` | クライアントのバージョンを表示して終了 |
+| `--help` | 使い方を表示して終了 |
 
 ### helpコマンド
 
@@ -874,15 +996,28 @@ OK RESULTS 5 1 2 3 4 5
 
 ```
 > help
-利用可能なコマンド:
-  SEARCH, COUNT, GET              - 検索と取得
-  INFO, CONFIG                    - サーバー情報と設定
-  DUMP SAVE/LOAD/VERIFY/INFO/STATUS - スナップショット管理
-  REPLICATION STATUS/STOP/START   - レプリケーション制御
-  OPTIMIZE                        - インデックス最適化
-  DEBUG ON/OFF                    - デバッグモードの有効化/無効化
-  quit, exit                      - クライアント終了
+Available commands:
+  SEARCH <db.table> <text> [(AND|OR|NOT) <term>...] [FILTER <col=val>...]
+         [SORT [BY] <col>|ASC|DESC] [LIMIT <n>] [OFFSET <n>]
+  COUNT <db.table> <text> [(AND|OR|NOT) <term>...] [FILTER <col=val>...]
+  GET <db.table> <primary_key>
+  INFO              - Show server statistics
+  CONFIG            - Show current configuration
+  SET <variable> = <value> [, ...]         - Change runtime variables
+  SHOW VARIABLES [LIKE <pattern>]         - Show runtime variables
+  FACET <db.table> <column> [text] [FILTER <col=val>...] [LIMIT <n>]
+                    - Compute facet counts
+  REPLICATION STATUS|STOP|START
+  DEBUG ON|OFF      - Toggle per-connection debug output
+  OPTIMIZE [db.table]  - Compact posting lists for one or all tables
+  CACHE STATS|CLEAR|ENABLE|DISABLE
+  DUMP SAVE|LOAD|VERIFY|INFO|STATUS
+  SYNC <db.table>|STOP [db.table]|STATUS
 ```
+
+::: info
+コマンドの末尾にセミコロンは付けません。パーサは空白でのみトークンを分割するため、`SHOW VARIABLES;` は未知のサブコマンドとして拒否されます。
+:::
 
 ---
 

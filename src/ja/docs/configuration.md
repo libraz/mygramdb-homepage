@@ -1,3 +1,12 @@
+---
+title: MygramDB 設定リファレンス - config.yaml の全項目
+description: MygramDBの設定リファレンス。MySQL接続、テーブルとフィルタの定義、N-gram、シノニム、レプリケーション、メモリ、APIサーバー、レート制限、BM25、クエリキャッシュ、ダンプ、ネットワークACL、ログを説明します。
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB 設定, config.yaml, ngram_size, verify_text, required_filters, BM25 設定, クエリキャッシュ, network allow_cidrs, ランタイム変数
+---
+
 # 設定
 
 MygramDB は YAML または JSON の設定ファイルを読み込みます。起動時に組み込み JSON Schema で検証されるため、未知のキー、型違い、必須項目不足、無効な enum 値は起動前に検出されます。
@@ -40,7 +49,7 @@ network:
 
 ## MySQL / MariaDB 接続
 
-MygramDB は MySQL 8.4/9.x と MariaDB 10.6+/11.x に対応します。同じ `mysql` セクションを使い、`SELECT VERSION()` からサーバー種別を判定して適切なGTID形式を選びます。
+MygramDB は MySQL 8.4/9.x と MariaDB 10.6+/11.x に対応します。同じ `mysql` セクションを使い、機能プローブでサーバー種別を判定して適切なGTID形式を選びます。
 
 ```yaml
 mysql:
@@ -57,9 +66,16 @@ mysql:
   write_timeout_ms: 3600000
   session_timeout_sec: 3600
   datetime_timezone: "+09:00"
+  ssl_enable: true
+  ssl_ca: "/etc/mygramdb/mysql-ca.pem"
+  ssl_cert: "/etc/mygramdb/mysql-client-cert.pem"
+  ssl_key: "/etc/mygramdb/mysql-client-key.pem"
+  ssl_verify_server_cert: true
 ```
 
 `datetime_timezone` は MySQL の `DATETIME`、`DATE`、`TIME` の解釈に使われます。`TIMESTAMP` は常にUTCとして扱われます。
+
+MySQLでTLSが必要な場合は、`ssl_enable` とCA・証明書・鍵のパスを設定します。サーバーが必要としない場合だけ証明書パスを空にし、検証するTLSでは `ssl_verify_server_cert: true` を維持してください。
 
 ::: tip DATETIMEとTIMESTAMPの違い
 MySQLの `DATETIME` はタイムゾーン情報を持たない日時です。MygramDBは `datetime_timezone` を使って「このDATETIMEはどのタイムゾーンの時刻か」を解釈します。`TIMESTAMP` はMySQL側でUTC基準に変換されるため、この設定の影響を受けません。
@@ -133,11 +149,16 @@ tables:
 | `concat` | 2つ以上のカラムを連結してインデックス化 |
 | `delimiter` | `concat` で使う区切り文字（デフォルトは空白） |
 
+::: warning 設定済みカラムの検証
+
+テーブル名、データベース名、主キー、フィルタ名、テキストソース名は有効な SQL 識別子でなければなりません。設定済みの主キー、テキストソース、フィルタカラムには `BINARY`、`VARBINARY`、`BLOB` を使えません。文字列カラムには `utf8mb4`、`utf8`/`utf8mb3`、`ascii` のいずれかの照合順序が必要です。初期ロードと binlog 読み取りで同じ値を扱えるよう、MygramDB はレプリケーション開始前にこれらを検証します。
+:::
+
 ## フィルタ
 
 `required_filters` はインデックス対象行を決めます。条件に一致しない行はインデックス化されません。レプリケーション中、条件から外れた行は削除され、条件に入った行は追加されます。
 
-<img src="/diagrams/filter-indexing.svg" alt="required_filters はMySQLの行をインデックスに入れるかを決め、検索時の filters はインデックス済みの行をクエリ時に絞り込むことを示す図" class="doc-diagram" />
+<DocDiagram name="filter-indexing" alt="required_filters はMySQLの行をインデックスに入れるかを決め、検索時の filters はインデックス済みの行をクエリ時に絞り込むことを示す図" />
 
 ::: warning `required_filters` と `filters` の違い
 `required_filters` は「そもそもインデックスに入れるか」を決めます。`filters` は「検索時に絞り込める列」を登録します。たとえば論理削除済みレコードを最初から検索対象外にしたい場合は `required_filters`、検索画面でステータス別に絞りたい場合は `filters` を使います。
@@ -164,16 +185,17 @@ tables:
 filters:
   - name: "status"
     type: "int"
-    bitmap_index: true
   - name: "category"
     type: "string"
-    dict_compress: true
   - name: "created_at"
     type: "datetime"
-    bucket: "day"
 ```
 
-フィルタ型は符号あり/なし整数、`float`、`double`、`string`、`varchar`、`text`、`datetime`、`date`、`timestamp`、`time` に対応します。日時系には `minute`、`hour`、`day` の `bucket` を指定できます。`ENUM` と `SET` はフィルタ型として設定できません。binlog行イベントだけではラベルを復元できず、初期ロードとレプリケーションで意味がずれる可能性があるためです。
+フィルタ型は `mediumint` と `mediumint_unsigned` を含む符号あり/なし整数、`float`、`double`、`boolean`、`string`、`varchar`、`text`、`datetime`、`date`、`timestamp`、`time` に対応します。`boolean` はMySQLの符号付き `TINYINT(1)` に対応し、`true`/`false` または `1`/`0` を使えます。required filterとしてのbooleanは `=`、`!=`、`IS NULL`、`IS NOT NULL` を使えます。`ENUM` と `SET` はフィルタ型として設定できません。binlog行イベントだけではラベルを復元できず、初期ロードとレプリケーションで意味がずれる可能性があるためです。
+
+::: warning 予約済みのフィルタキー
+`bitmap_index`、`dict_compress`、`bucket` はスキーマ上受け付けられ、ダンプにも保存されますが、まだ挙動には影響しません。指定してもインデックス構築やクエリ性能は変わりません。
+:::
 
 ## N-gram とポスティングリスト
 
@@ -195,7 +217,11 @@ tables:
 **N-gram** は文字列を小さな断片に分けたものです。日本語のように単語の区切りが空白で分からない言語でも、文字単位・2文字単位で分けることで辞書なしに検索できます。
 :::
 
-`freq_bits` は `0`、`4`、`8` を指定できます。BM25スコアリングやハイライトは、`memory.verify_text` が有効な場合に保存される正規化テキストを使用します。`freq_bits` は必須ではありません。
+::: warning 予約済みの posting キー
+`posting` ブロック全体（`block_size`、`freq_bits`、`use_roaring`）は検証されダンプにも保存されますが、まだ挙動には反映されません。デルタ符号化からRoaring Bitmapへの変換は `use_roaring` ではなく `memory.roaring_threshold` と `OPTIMIZE` が制御します。
+:::
+
+BM25スコアリングやハイライトは、`memory.verify_text` が有効な場合に保存される正規化テキストを使用します。`freq_bits` には依存しません。
 
 ## テーブル単位のシノニム
 
@@ -286,8 +312,13 @@ api:
     max_connections: 10000
     worker_threads: 0
     recv_timeout_sec: 60
+    idle_timeout_sec: 300
+    reaper_interval_sec: 5
     thread_pool_queue_size: 1000
     max_write_queue_bytes: 16777216
+    max_total_buffered_bytes: 268435456
+    max_pending_frames: 1024
+    max_pending_frame_bytes: 4194304
     keepalive:
       enabled: true
       idle_sec: 60
@@ -308,7 +339,7 @@ api:
   max_query_length: 128
 ```
 
-TCPとHTTPはデフォルトでループバックにバインドします。`api.default_limit` と `api.max_query_length` は `SET` で実行時変更できます。ネットワークバインド、HTTPボディサイズ上限、多くの接続設定は再起動が必要です。
+TCPとHTTPはデフォルトでループバックにバインドします。`idle_timeout_sec: 0` でTCPアイドル接続の回収を無効にします。保留フレームの上限は、ワーカー待ちの完了済みリクエストを制限します。どちらかの上限の75%で読み取りを止め、キューが減ると再開します。`api.default_limit` と `api.max_query_length` は `SET` で実行時変更できます。ネットワークバインド、HTTPボディサイズ上限、多くの接続設定は再起動が必要です。
 
 ::: info TCPとHTTPの役割
 TCP APIは検索に加えて `SYNC`、`DUMP`、`SET` などの管理コマンドも扱います。HTTP APIは検索、カウント、ファセット、ドキュメント取得、ヘルスチェック、メトリクスが中心で、管理コマンドは公開しません。
@@ -327,6 +358,53 @@ api:
 
 TCPとHTTPは同じレートリミッタを共有します。そのため、同じクライアントがプロトコルを分散しても制限を2倍にはできません。
 
+## 関連度スコアリング（BM25）
+
+```yaml
+bm25:
+  enable: false
+  k1: 1.2
+  b: 0.75
+```
+
+BM25はデフォルトで無効です。`enable` を `true` にするまで `SORT _score` は `SORT _score requires BM25 to be enabled in configuration` で失敗します。さらに、保存済みテキストから語句頻度を数えるため `memory.verify_text` を `"ascii"` または `"all"` にする必要があります。
+
+`k1` は語句頻度の飽和度を制御します（値を大きくすると、同じ語が繰り返されるほどスコアが伸び続けます）。`b` はドキュメント長の正規化度合いで、`0.0`（無効）から `1.0`（完全）の範囲で指定します。
+
+## クエリキャッシュ
+
+```yaml
+cache:
+  enabled: true
+  max_memory_mb: 32
+  min_query_cost_ms: 10.0
+  ttl_seconds: 3600
+  invalidation_strategy: "ngram"
+  compression_enabled: true
+  eviction_batch_size: 10
+  invalidation:
+    batch_size: 1000
+    max_delay_ms: 100
+```
+
+キャッシュ対象は `min_query_cost_ms` より遅いクエリだけです。安価な検索でキャッシュを埋めて有用なエントリを追い出さないための仕組みです。`invalidation_strategy: "ngram"` は変更行と語が重なるエントリだけを無効化します。`"table"` は判定は軽い代わりに、そのテーブルの全エントリを破棄します。`ttl_seconds: 0` で有効期限は無効になります。
+
+`cache.enabled`、`cache.min_query_cost_ms`、`cache.ttl_seconds` は `SET` で実行時に変更できます。`CACHE STATS` / `CACHE CLEAR` コマンドは[運用ガイド](/ja/docs/operations)を参照してください。
+
+## インデックス構築
+
+```yaml
+build:
+  mode: "select_snapshot"
+  batch_size: 5000
+```
+
+`batch_size` は `SYNC` による初期ロードで1回に取得する行数です。`mode` は現在 `select_snapshot` のみ指定できます。
+
+::: warning 予約済みの build キー
+`parallelism` と `throttle_ms` は検証されますが、まだ挙動には反映されません。初期ロードはシングルスレッドで、スロットリングも行われません。
+:::
+
 ## 永続化
 
 ```yaml
@@ -335,9 +413,11 @@ dump:
   default_filename: "mygramdb.dmp"
   interval_sec: 7200
   retain: 3
+  restore_memory_budget_mb: 4096
+  restore_max_section_mb: 2048
 ```
 
-`interval_sec: 0` は自動ダンプを無効化します。手動の `DUMP SAVE` はパスを指定しない場合 `default_filename` を使います。v1.7.0以降、ダンプメタデータに各テーブルのDB名が保存されるため、複数DBの識別子を正しく復元できます。
+`interval_sec: 0` は自動ダンプを無効化します。手動の `DUMP SAVE` はパスを指定しない場合 `default_filename` を使います。`restore_memory_budget_mb` はV2復元時に段階的に保持するデータ全体の上限、`restore_max_section_mb` はV2ダンプの1セクションの上限です。v1.7.0以降、ダンプメタデータに各テーブルのDB名が保存されるため、複数DBの識別子を正しく復元できます。
 
 ::: warning ダンプ保存先は永続化する
 DockerやKubernetesで運用する場合、`dump.dir` は永続ボリュームに置いてください。コンテナ内の一時的なファイルシステムに保存すると、再作成時にダンプが失われます。
@@ -374,11 +454,11 @@ logging:
 TCPプロトコルからMySQL風のコマンドを使います。
 
 ```sql
-SHOW VARIABLES;
-SHOW VARIABLES LIKE 'cache%';
-SET logging.level = 'debug';
-SET cache.enabled = false;
-SET api.default_limit = 200;
+SHOW VARIABLES
+SHOW VARIABLES LIKE 'cache%'
+SET logging.level = 'debug'
+SET cache.enabled = false
+SET api.default_limit = 200
 ```
 
 実行時に変更できるのは `SHOW VARIABLES` で mutable として表示される項目だけです。MySQL接続先、テーブル、`memory.verify_text`、ダンプディレクトリ、ネットワークACL、リスナーのbind設定は再起動が必要です。

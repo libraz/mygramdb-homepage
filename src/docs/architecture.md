@@ -11,22 +11,21 @@ head:
 
 MygramDB runs as a sidecar process alongside MySQL (8.4/9.x) or MariaDB (10.6+/11.x). It reads the upstream server's binary log to build and maintain an in-memory full-text index, then serves search queries over TCP and HTTP. The server flavor is auto-detected from `SELECT VERSION()`, so the same binary and config work with either.
 
-<img src="/diagrams/system-flow.svg" alt="MySQL remains the source of truth while MygramDB reads snapshots and binlog events, maintains an in-memory index, and serves search traffic over TCP or HTTP." class="doc-diagram" />
+<DocDiagram name="system-flow" alt="MySQL remains the source of truth while MygramDB reads snapshots and binlog events, maintains an in-memory index, and serves search traffic over TCP or HTTP." />
 
 The important boundary is ownership: MySQL/MariaDB remains the durable source of truth for writes and normal SQL. MygramDB keeps a derived search index that can be rebuilt from a snapshot plus binlog replay.
 
+::: info What is a sidecar?
+A **sidecar** is a process added next to an existing system to take on one specific job, without replacing it. Here MySQL keeps handling writes and ordinary SQL, while MygramDB handles full-text search.
+:::
+
 ## System Overview
 
-```mermaid
-flowchart LR
-    MySQL[(MySQL)] -->|binlog stream| BR["BinlogReader"]
-    BR -->|row events| IDX["Index + DocStore"]
-    IDX -->|search results| SH["SearchHandler"]
-    SH -->|response| TCP["TCP Client\nport 11016"]
-    SH -->|response| HTTP["HTTP Client\nport 8080"]
-    IDX -->|periodic dump| SNAP["Snapshot File"]
-    SNAP -->|load on startup| IDX
-```
+::: info Index vs DocStore
+The **index** is the structure that finds candidate documents fast. The **DocStore** holds what is needed to return and narrow those candidates — primary keys and filter values. They are separate on purpose: one is optimized for lookup, the other for retrieval.
+:::
+
+<DocDiagram name="component-flow" alt="Internal component chain: MySQL feeds BinlogReader, which updates the in-memory Index and DocStore, SearchHandler answers TCP and HTTP clients, and a snapshot file is dumped periodically and loaded on startup." />
 
 **Components:**
 
@@ -44,18 +43,7 @@ MygramDB operates in three phases:
 
 When `SYNC` is run, or when `replication.auto_initial_snapshot: true` is configured, MygramDB performs a consistent snapshot of the source table. The default is `auto_initial_snapshot: false`, so production operators explicitly choose when the initial MySQL read happens:
 
-```mermaid
-sequenceDiagram
-    participant M as MySQL
-    participant B as MygramDB
-    B->>M: START TRANSACTION WITH CONSISTENT SNAPSHOT
-    B->>M: SELECT @@global.gtid_executed
-    Note over B: Capture GTID position
-    B->>M: SELECT id, text_col, filter_cols FROM table
-    Note over B: Stream rows, build index
-    B->>M: COMMIT
-    Note over B: Start binlog from captured GTID
-```
+<DocDiagram name="initial-snapshot-sequence" alt="MygramDB opens a consistent-snapshot transaction, records gtid_executed, streams the table rows to build the index, commits, and then starts binlog reading from the captured GTID." />
 
 This guarantees no data is missed or duplicated between the snapshot and subsequent binlog events.
 
@@ -63,17 +51,7 @@ This guarantees no data is missed or duplicated between the snapshot and subsequ
 
 After the initial snapshot, MygramDB switches to binlog streaming:
 
-```mermaid
-sequenceDiagram
-    participant M as MySQL
-    participant Q as Event Queue
-    participant W as Worker
-    M->>Q: Row events (INSERT/UPDATE/DELETE)
-    Note over Q: Bounded queue (default 10,000)
-    Q->>W: Dequeue event
-    W->>W: Update Index + DocStore
-    W->>W: Invalidate affected cache entries
-```
+<DocDiagram name="live-replication-sequence" alt="MySQL pushes row events into a bounded event queue; a worker dequeues each event, updates the index and document store, and invalidates the affected cache entries." />
 
 The BinlogReader thread reads events into a bounded queue. A worker thread dequeues events and applies them to the index and document store. This decoupling allows the binlog reader to keep up with MySQL even during bursts.
 
@@ -87,34 +65,11 @@ Search queries arrive via TCP (port 11016, default) or HTTP (port 8080, disabled
 
 Since v1.5.3, MygramDB uses an **event-driven Reactor I/O model** for TCP connections. The reactor uses epoll (Linux) or kqueue (macOS) to multiplex thousands of connections onto a single event-loop thread, dispatching work to a bounded worker pool.
 
-```mermaid
-flowchart TD
-    subgraph "Main Thread"
-        INIT["Initialization\nConfig, Snapshot Load"]
-        ORCH["Server Orchestrator\nLifecycle Management"]
-    end
-    subgraph "Reactor Thread"
-        EV["epoll/kqueue event loop\nConnection multiplexing"]
-    end
-    subgraph "BinlogReader Thread"
-        BL["MySQL binlog stream\n→ Event Queue"]
-    end
-    subgraph "Worker Thread Pool"
-        W1["Worker: Event processing\n(Index + DocStore writes)"]
-        W2["Worker: Query execution\n(concurrent reads)"]
-        W3["Worker: Query execution\n(concurrent reads)"]
-    end
-    subgraph "Background Threads"
-        SS["Snapshot Scheduler\n(periodic dump)"]
-    end
-    INIT --> ORCH
-    EV -->|"dispatch"| W2
-    EV -->|"dispatch"| W3
-    BL -->|"event queue"| W1
-    W2 -->|"shared_mutex\n(read lock)"| IDX["Index\n+ DocStore"]
-    W3 -->|"shared_mutex\n(read lock)"| IDX
-    W1 -->|"shared_mutex\n(write lock)"| IDX
-```
+::: info What is a Reactor I/O model?
+A **Reactor I/O model** watches many connections from a small number of threads and hands work to a worker only when there is something to process. Because it does not create a thread per connection, idle connections cost almost nothing.
+:::
+
+<DocDiagram name="thread-model" alt="The main thread initializes and orchestrates, a reactor thread multiplexes connections, a BinlogReader thread feeds the event queue, and a worker pool takes read locks for queries and a write lock for event apply on the shared Index and DocStore." />
 
 **Concurrency model:**
 
@@ -124,6 +79,10 @@ flowchart TD
 - Search queries acquire a read lock. Binlog event processing acquires a write lock.
 - This is optimal for the read-heavy workload: searches never block each other, and writes only block briefly during index updates.
 - Per-connection **backpressure** (`api.tcp.max_write_queue_bytes`, default 16 MiB) force-closes slow clients whose write queue exceeds the cap, preventing memory exhaustion.
+
+::: info What is backpressure?
+**Backpressure** stops the server's pending-send buffer from growing without bound when a client reads slowly. Closing connections that pass the cap keeps one slow client from consuming the whole process's memory.
+:::
 - Atomic counters are used for statistics (query count, cache hits) to avoid lock contention on the hot path.
 
 All threads are joined on shutdown. No threads are detached.
@@ -132,19 +91,11 @@ All threads are joined on shutdown. No threads are detached.
 
 MygramDB uses **snapshot-based persistence**, not a write-ahead log (WAL).
 
-```mermaid
-flowchart LR
-    subgraph "Runtime"
-        IDX["Index + DocStore\n(in memory)"]
-        GTID["Current GTID position"]
-    end
-    subgraph "Disk"
-        DUMP["Snapshot file\n(index + GTID)"]
-    end
-    IDX -->|"periodic dump"| DUMP
-    DUMP -->|"load on startup"| IDX
-    GTID -->|"saved with snapshot"| DUMP
-```
+::: info What is a WAL?
+A **write-ahead log** records every change sequentially as it happens. MygramDB treats MySQL as the source of truth, so instead of its own WAL it recovers from a periodic dump plus catch-up from the MySQL binlog.
+:::
+
+<DocDiagram name="persistence-cycle" alt="The in-memory index and current GTID position are dumped periodically to a snapshot file on disk, and recovery loads that dump then replays the binlog from the saved GTID." />
 
 **How it works:**
 
@@ -156,28 +107,13 @@ Since v1.5.0, snapshot writes use **atomic file operations** (write to temp file
 
 If no snapshot has been loaded, run `SYNC <table>` (or `SYNC <database>.<table>` in multi-database configurations) to build the initial snapshot. Automatic startup snapshots only run when `replication.auto_initial_snapshot` is explicitly enabled.
 
+::: warning Not a substitute for MySQL backups
+MygramDB snapshots exist to restore the search index quickly. Backups and point-in-time recovery for the source data remain MySQL's responsibility.
+:::
+
 ## Memory Layout
 
-```mermaid
-flowchart TD
-    subgraph "Per-Table Memory"
-        subgraph "Index"
-            NG["N-gram Map\nstring → PostingList"]
-            PL["PostingList\nDelta-encoded or Roaring bitmap"]
-        end
-        subgraph "DocumentStore"
-            DM["DocID → Primary Key map"]
-            FM["Filter columns\n(category, status, etc.)"]
-        end
-        subgraph "Text Store (optional)"
-            TS["DocID → Original text\n(for verify_text)"]
-        end
-    end
-    subgraph "Cache"
-        QC["Query Cache\nquery hash → result set"]
-        RI["Reverse Index\nn-gram → cache entry set"]
-    end
-```
+<DocDiagram name="memory-layout" alt="Per table, the index holds an n-gram map and posting lists, the document store holds primary keys and filter columns, and an optional text store holds normalized text; a shared cache holds query results and an n-gram reverse index." />
 
 **Sizing reference** (1.1M Wikipedia articles, avg. 666 chars):
 

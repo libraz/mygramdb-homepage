@@ -2,7 +2,7 @@
 layout: home
 title: MygramDB - In-memory full-text search with MySQL replication
 titleTemplate: false
-description: MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Sub-millisecond queries on million-row datasets.
+description: MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs through MySQL replication. See reproducible benchmarks on 1.1M articles.
 head:
   - - meta
     - name: keywords
@@ -10,7 +10,7 @@ head:
 
 hero:
   name: "MygramDB"
-  text: "Sub-millisecond full-text search"
+  text: "In-memory full-text search"
   tagline: In-memory search engine with MySQL / MariaDB binlog replication
   actions:
     - theme: brand
@@ -24,7 +24,7 @@ features:
   - icon:
       src: /icons/zap.svg
     title: MySQL FULLTEXT too slow?
-    details: MygramDB delivers sub-millisecond queries with in-memory indexing. No more timeout errors.
+    details: Route heavyweight FULLTEXT reads to an in-memory search index. See the reproducible benchmarks for measured latency and throughput.
   - icon:
       src: /icons/refresh-cw.svg
     title: Real-time MySQL / MariaDB sync
@@ -49,11 +49,15 @@ features:
 
 MygramDB deploys as a sidecar next to MySQL/MariaDB: the application keeps writing through the database as before, MygramDB follows the binlog to build its own in-memory search index, and only search reads are routed to MygramDB.
 
-<img src="/diagrams/deployment-topology.svg" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." class="doc-diagram" />
+<DocDiagram name="deployment-topology" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." />
 
 ## Quick Start
 
 MySQL requires GTID mode and a replication user:
+
+::: info GTID and binlog
+**GTID** is a unique identifier attached to each MySQL change; **binlog** is MySQL's change log. MygramDB reads the binlog and tracks how far it has read using the GTID. See the [Glossary](/docs/glossary) for more.
+:::
 
 ```sql
 SET GLOBAL enforce_gtid_consistency = ON;

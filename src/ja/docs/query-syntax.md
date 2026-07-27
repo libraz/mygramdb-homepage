@@ -57,6 +57,8 @@ SEARCH <table> <term>
 SEARCH threads golang
 ```
 
+区切り文字以外の句読点は語句に含められます。たとえば `c++`、`e-mail`、`v1.9.0` はそれぞれ1つの語として解析されます。
+
 ### レスポンスフォーマット
 
 **SEARCHレスポンス:**
@@ -358,37 +360,37 @@ SEARCH threads golang SORT DESC  -- プライマリキー降順
 
 ```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
-SEARCH posts database SORT score ASC LIMIT 20
+SEARCH posts database SORT _score ASC LIMIT 20
 ```
 
 ### ブール演算クエリとの組み合わせ
 
 ```mygram
 SEARCH threads (golang OR python) AND tutorial SORT created_at DESC LIMIT 10
-SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT score ASC
+SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 ```
 
 ### パフォーマンスの考慮事項
 
 **ソートアルゴリズム:**
-- **LIMITあり**: `partial_sort`を使用 - O(N × log(K)) ただし K = LIMIT + OFFSET
-- **LIMITなし**: 完全ソート - O(N × log(N))
-- **メモリ**: インプレースソート、追加メモリ割り当てなし
+- **小さいLIMITあり**: `LIMIT + OFFSET` が結果件数の半分未満なら `partial_sort` を使います。計算量は O(N × log(K)) です（K = LIMIT + OFFSET）。
+- **それ以外**: 完全ソートを使います。計算量は O(N × log(N)) です。
+- **メモリ**: 対象件数によっては一時的なソートキー領域を確保するため、インプレース処理とは限りません。
 
 **大規模な結果セット（例：100万件中80万件がヒット）の場合:**
-- partial_sort最適化を活用するため、画面表示やAPI応答ではできるだけ `LIMIT` を指定してください（条件によっては約3倍高速）
-- 数値キーの場合、プライマリキーのソートはフィルタカラムより高速です
+- `LIMIT + OFFSET` を結果件数より十分小さくすると、partial_sortの対象になります
+- プライマリキーでのソートも一致した結果を比較します。本番に近いデータで列ごとの性能を測定してください
 - 結果はOFFSET/LIMIT適用**前に**ソートされます（正しいページネーション）
 
 **パフォーマンス例:**
-- 80万件の結果でLIMIT 100の場合：partial_sortで約3倍高速
-- インプレースソート：メモリオーバーヘッドなし
+- 80万件の結果でLIMIT 100の場合はpartial_sortの対象になります
+- 大きな結果セットでは一時的なソートキー領域が必要になることがあります
 
 ### カラム検証
 
 - **プライマリキー**: 常に有効
-- **フィルタカラム**: 少なくとも1つのドキュメントに存在する必要があります
-- **存在しないカラム**: 警告としてログに記録され、NULL値として扱われます（最後にソート）
+- **フィルタカラム**: 設定済みである必要があります
+- **存在しないカラム**: エラーとして拒否されます
 
 ---
 
@@ -408,7 +410,9 @@ SEARCH articles tech LIMIT 10
 ```
 
 **デフォルト:** 100（config.yamlの`api.default_limit`で設定可能）
-**範囲:** 5-1000（`kMinLimit`と`kMaxLimit`で設定可能）
+**範囲:** 1-1000。`api.default_limit` 自体は5〜1000の範囲でしか設定できませんが、クエリで `LIMIT` を明示する場合は1から1000まで指定できます。
+
+MySQL形式の `LIMIT <offset>,<count>` も使えます。ただし、`OFFSET` 句と併用するとエラーになります。
 
 ### OFFSET - 結果のスキップ
 
@@ -468,7 +472,7 @@ SEARCH threads (golang OR python) AND tutorial
 
 ### ページネーションの性能
 
-- **LIMIT最適化**: partial_sortを有効化（大規模結果セットで有利）
+- **LIMIT最適化**: `LIMIT + OFFSET` が結果件数の半分未満の場合だけpartial_sortを使う
 - **OFFSETコスト**: O(N) ただし N = OFFSET（結果は生成されますが返されません）
 - **ページネーション**: 一貫性のある順序が必要な場合は、`SORT` と `LIMIT` を組み合わせる
 - **深いページネーション**: 大きなOFFSET値（例：10000+）は遅くなる可能性があります
@@ -496,9 +500,9 @@ BM25は以下に基づいて各ドキュメントの関連度スコアを計算�
 - **IDF（逆文書頻度）**: 全ドキュメント中での語句の希少性
 - **ドキュメント長正規化**: マッチする語句を含む短いドキュメントがより高スコア
 
-**パラメータ**（組み込み、設定変更不可）：
-- `k1 = 1.2` — 語句頻度の飽和度
-- `b = 0.75` — ドキュメント長正規化（0 = なし、1 = 完全）
+**パラメータ**（`config.yaml` の `bm25` セクションで変更可能）：
+- `bm25.k1` — 語句頻度の飽和度（デフォルト `1.2`）
+- `bm25.b` — ドキュメント長正規化（デフォルト `0.75`。0 = なし、1 = 完全）
 
 ### 例
 
@@ -509,9 +513,19 @@ SEARCH articles golang AND tutorial SORT _score LIMIT 20
 
 ### 前提条件
 
-BM25スコアリングには、正規化テキストの保存が必要です。設定で `verify_text` を `"ascii"` または `"all"` に設定してください。
+`SORT _score` には2つの設定が必要です。どちらもデフォルトは無効なので、初期設定のままではクエリが拒否されます。
+
+| 設定 | 役割 | 未設定時のエラー |
+|------|------|------------------|
+| `bm25.enable: true` | 関連度スコアリングを有効化 | `SORT _score requires BM25 to be enabled in configuration` |
+| `memory.verify_text: "ascii"` または `"all"` | 語句頻度を保存済み正規化テキストから数えるため | `SORT _score requires normalized text storage.` |
 
 ```yaml
+bm25:
+  enable: true
+  k1: 1.2
+  b: 0.75
+
 memory:
   verify_text: "all"  # または "ascii"
 ```
@@ -671,10 +685,10 @@ ERROR Filter column not found: invalid_column
 **存在しないカラム:**
 ```mygram
 SEARCH articles tech SORT nonexistent DESC
-WARNING Column 'nonexistent' not found in documents, treating as NULL
+ERROR Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
 ```
 
-注意：存在しないカラムは警告を生成しますがエラーにはなりません（NULLとして扱われます）。
+存在しないカラムはエラーとして拒否されます。
 
 ---
 
@@ -682,7 +696,7 @@ WARNING Column 'nonexistent' not found in documents, treating as NULL
 
 各`SEARCH`は決まったパイプラインで実行されます。クエリはASTに解析され、N-gram参照で候補ドキュメントが得られ、AND・NOT・FILTERが順に候補集合を絞り込み、最後にSORTとLIMIT/OFFSETが結果ページを確定します。以下の各ヒントはこのパイプラインのどこか一段階に対応しており、DEBUGコマンドも同じ名前の段階ごとに所要時間を報告します。
 
-<img src="/diagrams/query-pipeline.svg" alt="クエリはASTに解析され、N-gram参照で候補が得られ、AND積集合・NOT除外・FILTER適用の順に候補集合が絞り込まれ、LIMITがある場合は部分ソートが使われ、最後にOFFSETとLIMITが適用されて結果が返るまでの実行パイプラインを示す図" class="doc-diagram" />
+<DocDiagram name="query-pipeline" alt="クエリはASTに解析され、N-gram参照で候補が得られ、AND積集合・NOT除外・FILTER適用の順に候補集合が絞り込まれます。SORTではLIMITとOFFSETの合計が結果件数の半分未満の場合だけ部分ソートを使い、最後にOFFSETとLIMITが適用されます。" />
 
 ### 1. 制約の強い用語を先に配置
 
@@ -731,7 +745,7 @@ SEARCH articles tech AND ai AND published
 ### 5. 大規模結果セットにはLIMITを付ける
 
 ```mygram
--- 良い: partial_sort最適化を使用
+-- 良い: LIMITが結果件数に対して十分小さい場合はpartial_sortを使える
 SEARCH articles tech SORT created_at DESC LIMIT 10
 
 -- 遅い: すべての結果の完全ソート
@@ -800,6 +814,8 @@ MygramDBはインデックス作成と検索にN-gramトークン化を使用し
 - **CJKテキスト**: 漢字/かなに対して別のN-gramサイズ（設定可能）
 - **Unicode正規化**: NFKC正規化、幅変換、オプションの小文字化
 
+設定したN-gramサイズより短い検索語には、正規化済みテキストの保存が必要です。`memory.verify_text: "ascii"` または `"all"` を設定してください。設定しない場合、サーバーは不完全な結果を返さずにそのクエリを拒否します。
+
 ---
 
 ## 関連情報
@@ -809,4 +825,3 @@ MygramDBはインデックス作成と検索にN-gramトークン化を使用し
 - [プロトコルリファレンス](/ja/docs/protocol) - すべてのコマンドとプロトコルの詳細
 - [設定ガイド](/ja/docs/configuration) - フィルタ、N-gramサイズ、制限の設定
 - [パフォーマンスチューニング](/ja/docs/performance) - 高度な最適化手法
-```

@@ -1,4 +1,17 @@
+---
+title: MygramDB Installation - RPM, DEB, Docker, and Source Build
+description: Install MygramDB from an RPM or DEB package, run it with Docker, or build from source. Includes systemd service setup, install verification, and security notes.
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB installation, RPM package, DEB package, Docker image, build from source, systemd service, install verification
+---
+
 # Installation
+
+::: info Which method to choose
+Use the RPM on RHEL/AlmaLinux/Rocky Linux, the DEB on Ubuntu, and Docker for evaluation or container platforms. Build from source when you are developing or need a custom build.
+:::
 
 ## RPM Package (Recommended)
 
@@ -15,16 +28,22 @@ sudo rpm -i mygramdb-*.el10.x86_64.rpm
 This installs:
 - `/usr/bin/mygramdb` - Server binary
 - `/usr/bin/mygram-cli` - CLI client
-- `/etc/mygramdb/config.yaml` - Sample configuration
+- `/etc/mygramdb/config.yaml.example` - Configuration template
 - systemd service file
 
-Start the service:
+Create and edit the service configuration before starting it:
 
 ```bash
+sudo cp /etc/mygramdb/config.yaml.example /etc/mygramdb/config.yaml
+sudoedit /etc/mygramdb/config.yaml
 sudo systemctl enable --now mygramdb
 ```
 
 ## Docker
+
+::: warning Prepare a config file before starting
+For production use under Docker, mount a config file containing the MySQL connection, replication settings, target tables, and `network.allow_cidrs`. Simply starting the image does not complete the initial sync of existing data.
+:::
 
 ```bash
 docker pull ghcr.io/libraz/mygram-db:latest
@@ -37,7 +56,7 @@ docker run -d \
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.8.0`
+- `ghcr.io/libraz/mygram-db:1.9.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
@@ -128,6 +147,10 @@ sudo journalctl -u mygramdb -f
 
 ## Verify Installation
 
+::: info What is still needed after installing
+Installing the package or pulling the image does not load any searchable data. After configuring the MySQL connection, the target tables, and the allowed network range, run `SYNC <table>` once to build the index from existing rows.
+:::
+
 ```bash
 mygramdb --help
 mygram-cli --help
@@ -135,8 +158,9 @@ mygram-cli --help
 
 ## Security Note
 
-> [!CAUTION]
-> MygramDB **refuses to run as root** for security. Always run it as a dedicated non-privileged user.
+::: danger
+MygramDB **refuses to run as root** for security. Always run it as a dedicated non-privileged user.
+:::
 
 ## Next Steps
 
@@ -147,5 +171,5 @@ mygram-cli --help
 
 - [Docker Deployment](/docs/docker-deployment)
 - [Operations Guide](/docs/operations)
-- [v1.8 Upgrade Notes](/docs/upgrade-v1.8)
-- [v1.7 Migration Guide](/docs/migration-v1.7)
+- [Upgrade to v1.8](/docs/upgrade-v1.8)
+- [Upgrade to v1.7](/docs/migration-v1.7)

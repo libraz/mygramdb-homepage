@@ -76,7 +76,7 @@ echo "SYNC articles" | nc localhost 11016
 
 **レスポンス（成功）:**
 ```mygram
-OK SYNC STARTED table=articles job_id=1
+OK SYNC STARTED table=articles
 ```
 
 **レスポンス（エラー）:**
@@ -91,7 +91,15 @@ ERROR Table 'products' not found in configuration
 - 開始後すぐにレスポンスを返す
 - MySQL の SELECT クエリからスナップショットをビルド
 - スナップショット時点の GTID を取得
-- 完了時に取得した GTID から binlog レプリケーションを自動的に開始
+- 完了時にレプリケーションをドレインし、他テーブルのコミットを飛ばさないよう保存済みGTIDから再開
+
+### SYNC STOP - 同期をキャンセル
+
+```mygram
+SYNC STOP [<table_name>]
+```
+
+キャンセルは非同期です。`SYNC STATUS` で `CANCELLED` または別の終了状態になるまで確認してください。
 
 ### SYNC STATUS - 同期の進捗を確認
 
@@ -148,19 +156,18 @@ status=IDLE message="No sync operation performed"
 | `rows` | 処理した総行数 | `25000` |
 | `time` | 総処理時間 | `5.2s` |
 | `gtid` | 取得したスナップショット GTID | `uuid:123` |
-| `replication` | レプリケーションステータス | `STARTED`, `ALREADY_RUNNING`, `DISABLED`, `FAILED` |
+| `replication` | レプリケーションステータス | `STARTED`, `DISABLED`, `FAILED` |
 | `error` | エラーメッセージ（失敗時） | `MySQL connection lost` |
 
 ### レプリケーションステータス値
 
-- **STARTED**: スナップショット GTID から binlog レプリケーションを開始（成功）
-- **ALREADY_RUNNING**: レプリケーションは既に実行中（GTID は更新されない）
+- **STARTED**: 保存済みGTIDからbinlogレプリケーションを再開（成功）
 - **DISABLED**: 設定でレプリケーションが無効
 - **FAILED**: スナップショットは成功したがレプリケーションの開始に失敗（ログを確認）
 
-次の図は、SYNCのライフサイクル全体を示します。メモリ健全性チェックに始まり、スナップショット構築中は対象テーブルへのHTTP読み取りが `503` を返すこと、完了後のレプリケーション自動開始、そして終了状態と、SYNCと相互排他になる操作の関係です。
+次の図は、SYNCのライフサイクル全体を示します。メモリ健全性チェックに始まり、スナップショット構築中はテーブル読み取りが拒否されること、完了後のレプリケーション自動再開、そして終了状態と、SYNCと相互排他になる操作の関係です。
 
-<img src="/diagrams/sync-lifecycle.svg" alt="SYNCはメモリ健全性チェックを経てMySQLのSELECTからスナップショットを構築し、その間対象テーブルへのHTTP読み取りは503を返し、GTIDを取得後にレプリケーションを自動開始(開始・既に稼働・無効・失敗)して完了・失敗・キャンセルのいずれかで終わり、実行中はOPTIMIZEやDUMPと相互排他になることを示す状態遷移図" class="doc-diagram" />
+<DocDiagram name="sync-lifecycle" alt="SYNCはメモリ健全性チェックを経てMySQLのSELECTからスナップショットを構築し、その間テーブル読み取りは拒否されます。保存済みGTIDからレプリケーションを自動再開し、開始・無効・失敗のいずれかで完了、失敗、キャンセルに至ります。実行中はOPTIMIZEやDUMPと相互排他です。" />
 
 ## コマンドの競合
 
@@ -168,31 +175,29 @@ status=IDLE message="No sync operation performed"
 
 | コマンド | 動作 | 理由 |
 |---------|----------|--------|
-| `DUMP LOAD` | **拒否** | SYNC 中はダンプを読み込めない（データ破損を防止） |
+| `DUMP SAVE` / `DUMP LOAD` | **拒否** | 長時間のメンテナンス操作は相互排他 |
+| `OPTIMIZE` | **拒否** | 長時間のメンテナンス操作は相互排他 |
+| 自動スナップショット | **拒否** | 長時間のメンテナンス操作は相互排他 |
 | `REPLICATION START` | **拒否** | SYNC 完了時にレプリケーションを自動開始するため |
 | `SYNC`（同じテーブル） | **拒否** | このテーブルの SYNC は既に進行中 |
 
 ### SYNC開始を拒否する実行中操作
 
-v1.8.0以降、`OPTIMIZE`、`DUMP SAVE`、`DUMP LOAD` の実行中は新しい `SYNC` が拒否されます。現在の操作が完了してから再実行してください。
+v1.8.1以降、`SYNC`、`DUMP SAVE`、`DUMP LOAD`、`OPTIMIZE`、自動スナップショットは1つの操作枠を共有します。これらのいずれかが実行中は新しい `SYNC` が拒否されるため、完了後に再実行してください。
 
 ### SYNC 中に許可される操作
 
 | コマンド | 動作 | 備考 |
 |---------|----------|-------|
-| `SEARCH` | TCP/CLIでは許可 | 部分的な結果を返す（これまでにロードされたデータ） |
-| `COUNT` | TCP/CLIでは許可 | 現在のカウントを返す（同期の進行に伴い増加） |
-| `GET` | TCP/CLIでは許可 | ロード済みなら返す、未ロードならエラー |
+| `SEARCH` | **拒否** | 対象テーブルは同期中 |
+| `COUNT` | **拒否** | 対象テーブルは同期中 |
+| `GET` | **拒否** | 対象テーブルは同期中 |
 | `INFO` | 許可 | 同期の進捗を含む現在のサーバー状態を表示 |
-| `DUMP SAVE` | **警告** | 許可されるが警告をログ記録（同期途中の状態を保存する可能性） |
-| `SYNC`（別のテーブル） | 許可 | マルチテーブル対応、独立した操作 |
+| `DUMP SAVE` / `DUMP LOAD` / `OPTIMIZE` | **拒否** | SYNCの完了後に再実行 |
+| `SYNC`（別のテーブル） | **拒否** | 長時間の操作は同時に1つだけ実行できる |
 | `REPLICATION STOP` | 許可 | 独立した操作 |
 
-HTTPのテーブル読み取り（search、count、facet、ドキュメントGET）は、対象テーブルの同期中に `503` を返します。
-
-::: info SYNC中の検索結果
-SYNC中の `SEARCH` や `COUNT` は、すでに読み込み済みのデータを対象にします。全件を反映した結果が必要な処理では、`SYNC STATUS` が `COMPLETED` になるまで待ってからクエリしてください。
-:::
+TCP/CLIとHTTPのテーブル読み取り（search、count、facet、ドキュメントGET）は、対象テーブルの同期中に拒否されます。HTTPは `503` を返します。
 
 ## 使用シナリオ
 
@@ -235,9 +240,11 @@ replication:
 ```
 
 ```bash
-# 各テーブルを独立して同期
+# 1つのテーブルを同期し、完了を確認してから次のテーブルを開始します。
 mygram-cli SYNC articles
+# SYNC STATUS で articles が COMPLETED になったことを確認します。
 mygram-cli SYNC products
+# SYNC STATUS で products が COMPLETED になったことを確認します。
 mygram-cli SYNC users
 
 # 複数DBのテーブル識別子
@@ -245,10 +252,8 @@ mygram-cli SYNC app_db.articles
 
 # すべての同期ステータスを確認
 mygram-cli SYNC STATUS
-# 出力:
-# table=articles status=COMPLETED rows=10000 time=5.0s gtid=uuid:123 replication=STARTED
-# table=products status=IN_PROGRESS progress=5000/20000 rows (25.0%) rate=3000 rows/s
-# table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=ALREADY_RUNNING
+# 最後の SYNC 完了後の出力:
+# table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=STARTED
 ```
 
 ### シナリオ 3: 計画的メンテナンス

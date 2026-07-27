@@ -11,6 +11,10 @@ head:
 
 MygramDB supports a rich boolean query syntax for complex text search operations.
 
+::: info This is not SQL
+MygramDB queries are a small search command language, not SQL. A query such as `SEARCH articles mysql FILTER status = 1 LIMIT 10` carries only search terms and search options.
+:::
+
 ## Table of Contents
 
 - [Basic Syntax](#basic-syntax)
@@ -38,11 +42,12 @@ SEARCH <table> <query_expression> [FILTER ...] [SORT ...] [LIMIT ...] [OFFSET ..
 COUNT <table> <query_expression> [FILTER ...]
 ```
 
-> [!NOTE]
-> `<table>` accepts the database-qualified form `` `database.table` `` (e.g. `app_db.articles`). In a
-> single-database deployment (only one distinct database is configured), a bare table name such as
-> `articles` also works. Qualification is required only when the configuration spans two or more
-> databases; a bare name is then rejected as ambiguous.
+::: info
+`<table>` accepts the database-qualified form `` `database.table` `` (e.g. `app_db.articles`). In a
+single-database deployment (only one distinct database is configured), a bare table name such as
+`articles` also works. Qualification is required only when the configuration spans two or more
+databases; a bare name is then rejected as ambiguous.
+:::
 
 ### Simple Term Search
 
@@ -54,6 +59,8 @@ Example:
 ```mygram
 SEARCH threads golang
 ```
+
+Terms may include punctuation unless it is a query delimiter. For example, `c++`, `e-mail`, and `v1.9.0` are each parsed as one term.
 
 ### Response Format
 
@@ -85,6 +92,10 @@ OK COUNT 42
 
 Search for documents containing **all** specified terms.
 
+::: tip How this differs from a bare space
+A plain `golang tutorial` is effectively treated as "contains both" as well. For anything more complex, writing `AND` explicitly is safer for readability.
+:::
+
 ```mygram
 SEARCH <table> term1 AND term2 AND term3
 ```
@@ -110,6 +121,10 @@ SEARCH threads golang OR python OR rust
 ### NOT Search
 
 Exclude documents containing specific terms.
+
+::: warning Using NOT well
+`NOT` removes documents from the result set. A query that leads with `NOT` tends to produce a very wide candidate set, so on large indexes pair it with positive terms wherever possible.
+:::
 
 ```mygram
 SEARCH <table> term1 NOT term2
@@ -200,6 +215,10 @@ When no parentheses are used, operators have the following precedence (highest t
 **Parsed as:** `(a AND b) OR (c AND d)`
 
 **Best Practice:** Use parentheses to make intent explicit, even when not strictly necessary.
+
+::: tip Pin the intent with parentheses
+Even where they are not strictly required, parentheses prevent misreading in complex conditions.
+:::
 
 ---
 
@@ -295,6 +314,10 @@ MygramDB supports filtering on indexed filter columns:
 
 **Note:** Only columns configured as filters in `config.yaml` can be used in FILTER clauses.
 
+::: warning FILTER requires configuration
+A column not registered under `filters` in `config.yaml` cannot be used with `FILTER`. This is a separate setting from `required_filters`, which decides whether a row is indexed at all.
+:::
+
 ### Filter Performance
 
 - **Bitmap indexes**: Very fast for low-cardinality columns (e.g., status, category)
@@ -314,6 +337,10 @@ SEARCH <table> <query> SORT <column> [ASC|DESC]
 ```
 
 **Note:** The `ORDER BY` syntax is not supported. Use `SORT` instead.
+
+::: info Not SQL's ORDER BY
+MygramDB has no `ORDER BY` syntax. Use `SORT` to order search results.
+:::
 
 ### Default Behavior
 
@@ -344,37 +371,37 @@ Sort by any indexed filter column:
 
 ```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
-SEARCH posts database SORT score ASC LIMIT 20
+SEARCH posts database SORT _score ASC LIMIT 20
 ```
 
 ### Combining with Boolean Queries
 
 ```mygram
 SEARCH threads (golang OR python) AND tutorial SORT created_at DESC LIMIT 10
-SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT score ASC
+SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 ```
 
 ### Performance Considerations
 
 **Sorting Algorithm:**
-- **With LIMIT**: Uses `partial_sort` - O(N × log(K)) where K = LIMIT + OFFSET
-- **Without LIMIT**: Uses full sort - O(N × log(N))
-- **Memory**: In-place sorting, no additional memory allocation
+- **With a small LIMIT**: Uses `partial_sort` when `LIMIT + OFFSET` is less than half of the result set, for O(N × log(K)) work where K = LIMIT + OFFSET.
+- **Otherwise**: Uses a full sort, O(N × log(N)).
+- **Memory**: Sorting can allocate temporary sort-key storage for eligible result sets; do not assume it is in-place.
 
 **For large result sets (e.g., 1M documents with 800K matches):**
-- **Always use LIMIT** whenever possible to leverage partial_sort optimization (~3x faster)
-- Sorting by primary key is faster than filter columns for numeric keys
+- Keep `LIMIT + OFFSET` well below the result count to use the partial-sort path.
+- Measure the chosen sort column on production-like data; primary-key sorting still compares the matching results.
 - Results are sorted **before** applying OFFSET/LIMIT (ensures correct pagination)
 
 **Example Performance:**
-- 800K results with LIMIT 100: ~3x faster with partial_sort
-- Sorting happens in-place: no memory overhead
+- 800K results with LIMIT 100 use the partial-sort path.
+- Large result sets can require temporary sort-key storage.
 
 ### Column Validation
 
 - **Primary key**: Always valid
-- **Filter columns**: Must exist in at least one document
-- **Non-existent columns**: Logged as warning, treated as NULL values (sorted last)
+- **Filter columns**: Must be configured
+- **Non-existent columns**: Rejected with an error
 
 ---
 
@@ -394,7 +421,9 @@ SEARCH articles tech LIMIT 10
 ```
 
 **Default:** 100 (configurable via `api.default_limit` in config.yaml)
-**Range:** 5-1000 (configurable via `kMinLimit` and `kMaxLimit`)
+**Range:** 1-1000. `api.default_limit` itself must be between 5 and 1000, but an explicit `LIMIT` clause accepts any value from 1 up to 1000.
+
+MySQL-style `LIMIT <offset>,<count>` is also accepted; combining it with a separate `OFFSET` clause is an error.
 
 ### OFFSET - Skip Results
 
@@ -454,7 +483,7 @@ This query:
 
 ### Pagination Performance
 
-- **LIMIT optimization**: Enables partial_sort (much faster for large result sets)
+- **LIMIT optimization**: Uses partial sort only when `LIMIT + OFFSET` is less than half of the result set
 - **OFFSET cost**: O(N) where N = OFFSET (results are still generated, just not returned)
 - **Best practice**: Use LIMIT with SORT for consistent pagination
 - **Deep pagination**: Large OFFSET values (e.g., 10000+) can be slow
@@ -464,6 +493,10 @@ This query:
 ## BM25 Relevance Scoring (SORT _score)
 
 Sort results by relevance using the BM25 ranking function.
+
+::: info What is BM25?
+**BM25** is a standard ranking function that scores relevance from how often a term appears, how rare the term is, and how long the document is. Use it when you want the most relevant documents on top rather than plain ID order.
+:::
 
 ### Syntax
 
@@ -478,9 +511,9 @@ BM25 computes a relevance score for each document based on:
 - **IDF (Inverse Document Frequency)**: How rare the term is across all documents
 - **Document length normalization**: Shorter documents with matching terms score higher
 
-**Parameters** (built-in, not configurable):
-- `k1 = 1.2` — Term frequency saturation
-- `b = 0.75` — Document length normalization (0 = none, 1 = full)
+**Parameters** (configurable in the `bm25` section of `config.yaml`):
+- `bm25.k1` — Term frequency saturation (default `1.2`)
+- `bm25.b` — Document length normalization (default `0.75`; 0 = none, 1 = full)
 
 ### Examples
 
@@ -491,9 +524,19 @@ SEARCH articles golang AND tutorial SORT _score LIMIT 20
 
 ### Requirements
 
-BM25 scoring requires `verify_text` to be set to `"ascii"` or `"all"` in configuration, since term frequency is counted from stored normalized text.
+`SORT _score` needs two settings. Both are off by default, so a fresh configuration rejects the query.
+
+| Setting | Why | Error when missing |
+|---------|-----|--------------------|
+| `bm25.enable: true` | Turns on relevance scoring | `SORT _score requires BM25 to be enabled in configuration` |
+| `memory.verify_text: "ascii"` or `"all"` | Term frequency is counted from stored normalized text | `SORT _score requires normalized text storage.` |
 
 ```yaml
+bm25:
+  enable: true
+  k1: 1.2
+  b: 0.75
+
 memory:
   verify_text: "all"  # or "ascii"
 ```
@@ -509,6 +552,10 @@ SEARCH articles "database" SORT _score DESC FILTER category = tech LIMIT 10
 ## Highlighting (HIGHLIGHT)
 
 Return text snippets with search terms highlighted using configurable tags.
+
+::: tip verify_text is required
+Highlighting cuts snippets out of stored normalized text. With `verify_text: "off"` the text is not retained, so highlighting is unavailable.
+:::
 
 ### Syntax
 
@@ -556,6 +603,10 @@ SEARCH articles "tech" HIGHLIGHT TAG <b> </b> SORT _score DESC FILTER status = 1
 ## Fuzzy Search (FUZZY)
 
 Match terms within a specified Levenshtein edit distance (insertions, deletions, substitutions).
+
+::: info What is Levenshtein edit distance?
+**Levenshtein edit distance** is the number of insertions, deletions, and substitutions needed to turn one string into another. `FUZZY 1` tolerates about one typo; `FUZZY 2` allows a somewhat wider candidate set.
+:::
 
 ### Syntax
 
@@ -645,10 +696,10 @@ ERROR Filter column not found: invalid_column
 **Non-existent column:**
 ```mygram
 SEARCH articles tech SORT nonexistent DESC
-WARNING Column 'nonexistent' not found in documents, treating as NULL
+ERROR Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
 ```
 
-Note: Non-existent columns generate a warning but don't error (treated as NULL).
+Non-existent columns are rejected with an error.
 
 ---
 
@@ -656,7 +707,7 @@ Note: Non-existent columns generate a warning but don't error (treated as NULL).
 
 Each `SEARCH` runs through a fixed pipeline: the query is parsed to an AST, n-gram lookup produces candidate documents, then AND/NOT/FILTER narrow that candidate set in sequence before SORT and LIMIT/OFFSET produce the final page. The tips below each target one stage of this pipeline, and the DEBUG command reports timing per stage using these same names.
 
-<img src="/diagrams/query-pipeline.svg" alt="A query is parsed to an AST, n-gram lookup produces candidates, AND intersection, NOT exclusion, and FILTER application shrink the candidate set in that order, then SORT uses a partial sort when LIMIT is present and OFFSET and LIMIT are applied last before results are returned." class="doc-diagram" />
+<DocDiagram name="query-pipeline" alt="A query is parsed to an AST, n-gram lookup produces candidates, AND intersection, NOT exclusion, and FILTER application shrink the candidate set in that order, then SORT uses partial sort only when LIMIT plus OFFSET is less than half of the result set. OFFSET and LIMIT are applied last before results are returned." />
 
 ### 1. Place Restrictive Terms First
 
@@ -705,7 +756,7 @@ Filters on indexed columns are faster than text search on those terms.
 ### 5. Always Use LIMIT for Large Result Sets
 
 ```mygram
--- Good: Uses partial_sort optimization
+-- Good: can use partial sort when the limit is small relative to the result set
 SEARCH articles tech SORT created_at DESC LIMIT 10
 
 -- Slower: Full sort of all results
@@ -774,6 +825,8 @@ MygramDB uses n-gram tokenization for indexing and search:
 - **CJK text**: Separate n-gram size for kanji/kana (configurable)
 - **Unicode normalization**: NFKC normalization, width conversion, optional lowercasing
 
+Terms shorter than the configured n-gram size need stored normalized text. Set `memory.verify_text: "ascii"` or `"all"`; otherwise the server rejects that query instead of returning an incomplete result.
+
 ---
 
 ## Snapshot Synchronization Commands
@@ -794,7 +847,7 @@ SYNC articles
 
 **Response:**
 ```mygram
-OK SYNC STARTED table=articles job_id=1
+OK SYNC STARTED table=articles
 ```
 
 **See [SYNC Command Guide](/docs/sync-command) for detailed usage.**

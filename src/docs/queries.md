@@ -1,9 +1,23 @@
+---
+title: MygramDB Query Guide - Search, Filter, Sort, and Aggregate
+description: Practical guide to querying MygramDB. Basic and boolean search, phrase search, filters, sorting, highlighting, fuzzy search, FACET aggregation, synonyms, and pagination.
+head:
+  - - meta
+    - name: keywords
+      content: MygramDB query guide, search examples, boolean search, FILTER, SORT, HIGHLIGHT, FUZZY, FACET aggregation, synonym expansion, pagination
+---
+
 # Query Guide
 
 Learn how to search effectively with MygramDB.
 
-> [!WARNING]
-> Before executing queries, ensure your IP is registered in `allow_cidrs` in the configuration. Without CIDR registration, all connections are denied. See [Network Security](/docs/configuration#network-security).
+::: info What is CIDR?
+**CIDR** is a notation for a range of IP addresses. If you cannot connect, first check that the client IP falls inside `network.allow_cidrs`.
+:::
+
+::: warning Allow your source IP
+Before executing queries, ensure your IP is registered in `allow_cidrs` in the configuration. Without CIDR registration, all connections are denied. See [Network Security](/docs/configuration#network-security).
+:::
 
 ## Connecting with mygram-cli
 
@@ -27,6 +41,10 @@ mygram> SEARCH app_db.articles hello world
 ```
 
 ## Boolean Operators
+
+::: tip Reading the operators
+`AND` means "contains both", `OR` means "contains any", and `NOT` means "exclude anything containing this". For anything complex, parentheses make the intent unambiguous.
+:::
 
 ### AND - All terms must match
 
@@ -77,6 +95,10 @@ mygram> SEARCH articles tech FILTER views > 1000
 mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
 ```
 
+::: warning Filter columns must be configured
+`FILTER` only works on columns declared under `tables[*].filters` or `tables[*].required_filters` in the config file. A column that exists in MySQL but is not declared cannot be used as a search-time filter.
+:::
+
 Multiple filters (AND logic):
 
 ```mygram
@@ -107,7 +129,7 @@ Sort by column:
 
 ```mygram
 mygram> SEARCH articles golang SORT created_at DESC
-mygram> SEARCH articles golang SORT score ASC
+mygram> SEARCH articles golang SORT _score ASC
 ```
 
 ### Relevance Sort (BM25)
@@ -118,7 +140,7 @@ Sort by BM25 relevance score using the reserved `_score` column (v1.6.0+):
 mygram> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 ```
 
-BM25 uses `k1=1.2`, `b=0.75` and computes IDF and TF at query time. `SORT _score` requires `verify_text` to be set to `"ascii"` or `"all"` so that term frequency can be counted from stored normalized text.
+BM25 computes IDF and TF at query time, with `bm25.k1` (default `1.2`) and `bm25.b` (default `0.75`) as tuning parameters. `SORT _score` requires both `bm25.enable: true` and `verify_text` set to `"ascii"` or `"all"`, so that term frequency can be counted from stored normalized text.
 
 ## Highlighting
 
@@ -205,7 +227,7 @@ mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DE
 ### Find popular posts about databases
 
 ```mygram
-mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT score DESC LIMIT 10
+mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT _score DESC LIMIT 10
 ```
 
 ### Top relevance with highlighted snippets
@@ -222,7 +244,7 @@ mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
 
 ## HTTP API
 
-`SEARCH`, `COUNT`, `FACET`, and document GET are also exposed over HTTP. v1.7.0 uses the `/tables/{identity}/...` route shape:
+`SEARCH`, `COUNT`, `FACET`, and document GET are also exposed over HTTP. v1.7.0 uses the `/tables/{identity}/...` route shape. HTTP `q` is literal by default; add `"mode": "boolean"` only when `q` is an intentional boolean expression.
 
 ```bash
 curl -X POST http://localhost:8080/tables/articles/search \
@@ -236,6 +258,10 @@ curl -X POST http://localhost:8080/tables/articles/count \
 curl -X POST http://localhost:8080/tables/articles/facet \
   -H "Content-Type: application/json" \
   -d '{"column": "category", "q": "golang", "limit": 10}'
+
+curl -X POST http://localhost:8080/tables/articles/search \
+  -H "Content-Type: application/json" \
+  -d '{"q": "golang AND tutorial", "mode": "boolean", "limit": 10}'
 ```
 
 With two or more configured databases, use `/tables/app_db.articles/...`. Admin commands such as `SET`, `SHOW VARIABLES`, `SYNC`, and `DUMP` remain TCP/CLI-only.
@@ -250,8 +276,9 @@ Without parentheses, operators are evaluated in this order:
 
 Example: `a OR b AND c` is parsed as `a OR (b AND c)`
 
-> [!TIP]
-> Use parentheses to make your intent clear and avoid unexpected results.
+::: tip Pin the intent with parentheses
+Use parentheses to make your intent clear and avoid unexpected results.
+:::
 
 ## Performance Tips
 
