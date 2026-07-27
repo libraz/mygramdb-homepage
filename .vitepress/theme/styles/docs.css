@@ -1,0 +1,732 @@
+/* =========================================
+   Docs Reading Surface
+   Editorial-grade docs styled to match the
+   site's blue / IBM-Plex instrument aesthetic.
+   Works in both light and dark modes via
+   VitePress semantic vars (--vp-c-*).
+
+   Everything here is scoped to `.VPDoc` so the
+   `layout: home` page keeps its own treatment
+   (see home.css).
+   ========================================= */
+
+/* Japanese sidebar labels run longer than the 272px default allows
+   (e.g. レプリケーション管理 = 10 fullwidth chars plus the nesting indent),
+   which wraps mid-word and strands a lone trailing character. Widen the
+   rail for the ja locale so every current label fits on one line. */
+html[lang='ja'] {
+  --vp-sidebar-width: 300px;
+}
+
+/* If a future label still has to wrap, split it evenly across lines
+   instead of orphaning a single character. */
+.VPSidebarItem .text {
+  text-wrap: balance;
+}
+
+/* Widen the reading column on docs pages. VitePress defaults are
+   tuned for narrow prose (688px with aside / 752px without); for
+   API docs with code blocks and tables a wider rail reads better. */
+@media (min-width: 960px) {
+  .VPDoc:not(.has-sidebar) .content {
+    max-width: 880px;
+  }
+  .VPDoc:not(.has-sidebar) .container {
+    max-width: 1120px;
+  }
+}
+
+@media (min-width: 1280px) {
+  /* Higher specificity to beat VitePress's scoped styles
+     (`.VPDoc.has-aside .content-container[data-v-...]`).
+     Use `>` so we don't reach into `.VPDocAsideOutline > .content`,
+     which has its own border-left + padding for the outline rail. */
+  .VPContent .VPDoc.has-aside > .container > .content > .content-container {
+    max-width: none;
+  }
+  .VPContent .VPDoc.has-aside > .container > .content {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+@media (min-width: 1440px) {
+  .VPDoc:not(.has-sidebar) .content {
+    max-width: 920px;
+  }
+  .VPDoc:not(.has-sidebar) .container {
+    max-width: 1200px;
+  }
+}
+
+/* --- Headings --- */
+.VPDoc .vp-doc h1 {
+  font-family: var(--mg-font-head);
+  font-weight: 700;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.VPDoc .vp-doc h1::before {
+  content: '§';
+  display: inline-block;
+  margin-right: 0.55rem;
+  color: var(--vp-c-brand-1);
+  font-weight: 400;
+  font-size: 0.62em;
+  vertical-align: 0.22em;
+  letter-spacing: 0;
+  opacity: 0.7;
+}
+
+.VPDoc .vp-doc h2 {
+  font-family: var(--mg-font-head);
+  font-weight: 600;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--vp-c-divider);
+  position: relative;
+}
+
+.VPDoc .vp-doc h2::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(to right, var(--vp-c-brand-2), transparent);
+}
+
+.VPDoc .vp-doc h3 {
+  font-family: var(--mg-font-head);
+  font-weight: 600;
+  font-size: 1.18rem;
+  letter-spacing: -0.005em;
+  margin-top: 2.25rem;
+}
+
+.VPDoc .vp-doc h4 {
+  font-family: var(--mg-font-head);
+  font-weight: 600;
+  font-size: 1.02rem;
+  margin-top: 1.75rem;
+}
+
+.VPDoc .vp-doc .header-anchor {
+  color: var(--vp-c-brand-1);
+  opacity: 0;
+  font-weight: 400;
+  transition: opacity var(--transition-default);
+}
+
+.VPDoc .vp-doc h1:hover .header-anchor,
+.VPDoc .vp-doc h2:hover .header-anchor,
+.VPDoc .vp-doc h3:hover .header-anchor,
+.VPDoc .vp-doc h4:hover .header-anchor,
+.VPDoc .vp-doc .header-anchor:focus {
+  opacity: 0.6;
+}
+
+/* --- Body type --- */
+.VPDoc .vp-doc p,
+.VPDoc .vp-doc li {
+  font-family: var(--vp-font-family-base);
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.VPDoc .vp-doc p {
+  margin: 1rem 0;
+}
+
+.VPDoc .vp-doc ul,
+.VPDoc .vp-doc ol {
+  padding-left: 1.4rem;
+}
+
+.VPDoc .vp-doc li + li {
+  margin-top: 0.35rem;
+}
+
+/* --- Japanese reading tuning ---
+   Japanese sets best with more leading and a touch of tracking than Latin;
+   IBM Plex Sans at the Latin body size reads dense otherwise. Headings and
+   tables enable 'palt' so fullwidth punctuation (、。「」（）) doesn't leave
+   large gaps in tight, large type. */
+html[lang='ja'] .VPDoc .vp-doc p,
+html[lang='ja'] .VPDoc .vp-doc li {
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+}
+
+html[lang='ja'] .VPDoc .vp-doc h1,
+html[lang='ja'] .VPDoc .vp-doc h2,
+html[lang='ja'] .VPDoc .vp-doc h3,
+html[lang='ja'] .VPDoc .vp-doc h4 {
+  letter-spacing: 0;
+  line-height: 1.45;
+  font-feature-settings: 'palt' 1;
+}
+
+html[lang='ja'] .VPDoc .vp-doc .custom-block p,
+html[lang='ja'] .VPDoc .vp-doc .custom-block li {
+  line-height: 1.8;
+}
+
+/* --- Inline code --- */
+.VPDoc .vp-doc :not(pre) > code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.84em;
+  padding: 0.14em 0.42em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vp-c-brand-3) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vp-c-brand-3) 18%, transparent);
+  color: var(--vp-c-text-1);
+}
+
+.dark .VPDoc .vp-doc :not(pre) > code {
+  background: color-mix(in srgb, var(--vp-c-brand-3) 14%, transparent);
+  border-color: color-mix(in srgb, var(--vp-c-brand-3) 26%, transparent);
+}
+
+/* --- Code blocks --- */
+.VPDoc .vp-doc div[class*='language-'] {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--vp-c-brand-3) 16%, transparent);
+  background: var(--vp-code-block-bg);
+  margin: 1.5rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.VPDoc .vp-doc div[class*='language-']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(to right, var(--vp-c-brand-2), transparent);
+  z-index: 1;
+}
+
+.VPDoc .vp-doc div[class*='language-'] pre {
+  padding: 1.15rem 0;
+}
+
+.VPDoc .vp-doc div[class*='language-'] code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85rem;
+  line-height: 1.65;
+  padding: 0 1.5rem !important;
+}
+
+.VPDoc .vp-doc .lang {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  top: 8px;
+  right: 14px;
+}
+
+.VPDoc .vp-doc [class*='language-'] > button.copy {
+  border-radius: 6px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+/* --- Tables --- */
+.VPDoc .vp-doc table {
+  /* block + overflow-x lets wide tables scroll instead of overflowing the
+     content rail and overlapping the aside (TOC). max-content + min-width
+     keeps narrow tables full-width. */
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: none;
+  border-radius: 0;
+  border-collapse: collapse;
+  font-family: var(--vp-font-family-base);
+}
+
+.VPDoc .vp-doc thead {
+  border-bottom: 1px solid color-mix(in srgb, var(--vp-c-brand-3) 22%, transparent);
+}
+
+.VPDoc .vp-doc th {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+  text-align: left;
+  padding: 0.7rem 1rem;
+  background: color-mix(in srgb, var(--vp-c-brand-3) 5%, transparent);
+  color: var(--vp-c-brand-1);
+  border: none;
+}
+
+.VPDoc .vp-doc tr {
+  background: transparent !important;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.VPDoc .vp-doc td {
+  padding: 0.78rem 1rem;
+  font-size: 0.95rem;
+  border: none;
+  border-top: 1px solid var(--vp-c-divider);
+  /* Numeric columns (latency, QPS, sizes) align cleanly. */
+  font-variant-numeric: tabular-nums;
+}
+
+.VPDoc .vp-doc td code,
+.VPDoc .vp-doc th code {
+  overflow-wrap: anywhere;
+}
+
+/* Japanese pages: wider columns read better */
+html[lang='ja'] .VPDoc .vp-doc td,
+html[lang='ja'] .VPDoc .vp-doc th {
+  letter-spacing: 0.02em;
+  line-height: 1.7;
+  font-feature-settings: 'palt' 1;
+}
+
+/* --- Links --- */
+.VPDoc .vp-doc a {
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
+  background-image: linear-gradient(to right, var(--vp-c-brand-1) 50%, transparent 50%);
+  background-size: 4px 1px;
+  background-repeat: repeat-x;
+  background-position: 0 1.05em;
+  transition: color var(--transition-fast), background-position var(--transition-fast);
+}
+
+.VPDoc .vp-doc a:hover {
+  background-image: linear-gradient(to right, var(--vp-c-brand-1), var(--vp-c-brand-1));
+}
+
+/* Don't decorate links that wrap a header anchor, or that carry their own
+   surface (the stretched hit target on a repo card). */
+.VPDoc .vp-doc h1 a,
+.VPDoc .vp-doc h2 a,
+.VPDoc .vp-doc h3 a,
+.VPDoc .vp-doc h4 a,
+.VPDoc .vp-doc h5 a,
+.VPDoc .vp-doc h6 a,
+.VPDoc .vp-doc .vp-button,
+.VPDoc .vp-doc .repo-card__hit {
+  background: none;
+}
+
+/* --- Blockquotes --- */
+.VPDoc .vp-doc blockquote {
+  border-left: 2px solid var(--vp-c-brand-2);
+  background: color-mix(in srgb, var(--vp-c-brand-3) 5%, transparent);
+  padding: 0.85rem 1.25rem;
+  margin: 1.5rem 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.VPDoc .vp-doc blockquote > p {
+  color: var(--vp-c-text-2);
+  margin: 0;
+}
+
+/* --- Custom containers (:::tip / info / warning / danger / details) ---
+   Each type sets a single --cb-accent; border, background tint, and the
+   title color are all derived from it so the semantic color reads at a
+   glance instead of every block looking blue. */
+.VPDoc .vp-doc .custom-block {
+  --cb-accent: var(--cb-tip);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--cb-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--cb-accent) 7%, transparent);
+}
+
+.VPDoc .vp-doc .custom-block.tip,
+.VPDoc .vp-doc .custom-block.success {
+  --cb-accent: var(--cb-tip);
+}
+
+.VPDoc .vp-doc .custom-block.info { --cb-accent: var(--cb-info); }
+.VPDoc .vp-doc .custom-block.warning { --cb-accent: var(--cb-warning); }
+.VPDoc .vp-doc .custom-block.danger,
+.VPDoc .vp-doc .custom-block.caution { --cb-accent: var(--cb-danger); }
+
+.VPDoc .vp-doc .custom-block-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+  display: block;
+  color: var(--cb-accent);
+}
+
+.VPDoc .vp-doc .custom-block p {
+  font-size: 0.93rem;
+  margin: 0.4rem 0;
+  line-height: 1.6;
+}
+
+.VPDoc .vp-doc .custom-block li {
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+.VPDoc .vp-doc .custom-block ul,
+.VPDoc .vp-doc .custom-block ol {
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
+}
+
+.VPDoc .vp-doc .custom-block li + li {
+  margin-top: 0.25rem;
+}
+
+.VPDoc .vp-doc .custom-block p code,
+.VPDoc .vp-doc .custom-block li code {
+  font-size: 0.86em;
+}
+
+.VPDoc .vp-doc .custom-block p:first-of-type {
+  margin-top: 0;
+}
+
+.VPDoc .vp-doc .custom-block p:last-of-type {
+  margin-bottom: 0;
+}
+
+/* Details (collapsible) — styled as an interactive disclosure, not a filled
+   callout: a quiet hairline container at rest, brand accents on interaction,
+   and the site's signature gradient hairline across the top while open. */
+.VPDoc .vp-doc details.custom-block {
+  --cb-accent: var(--cb-note);
+  padding: 0 1.15rem;
+  border: 1px solid var(--vp-c-divider);
+  background: transparent;
+  overflow: clip;
+  transition:
+    border-color var(--transition-default),
+    background-color var(--transition-default);
+}
+
+.VPDoc .vp-doc details.custom-block:hover {
+  border-color: color-mix(in srgb, var(--vp-c-brand-3) 38%, transparent);
+}
+
+.VPDoc .vp-doc details.custom-block[open] {
+  border-color: color-mix(in srgb, var(--vp-c-brand-3) 30%, transparent);
+  background: color-mix(in srgb, var(--vp-c-brand-3) 4%, transparent);
+}
+
+/* Top hairline shared with h2 rules and code blocks, revealed while open. */
+.VPDoc .vp-doc details.custom-block::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(to right, var(--vp-c-brand-2), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-default);
+}
+
+.VPDoc .vp-doc details.custom-block[open]::before {
+  opacity: 1;
+}
+
+/* Consecutive details read as one grouped accordion list. The negative
+   margin collapses with the previous block's 1.5rem into a 0.5rem gap. */
+.VPDoc .vp-doc details.custom-block + details.custom-block {
+  margin-top: -1rem;
+}
+
+.VPDoc .vp-doc details.custom-block summary {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 -1.15rem;
+  padding: 0.78rem 1.15rem;
+  font-family: var(--vp-font-family-base);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  list-style: none;
+  color: var(--vp-c-text-1);
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-default);
+}
+
+.VPDoc .vp-doc details.custom-block summary:hover {
+  color: var(--vp-c-brand-1);
+}
+
+/* Ring sits inside the container (overflow: clip would eat an outer ring). */
+.VPDoc .vp-doc details.custom-block summary:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: -2px;
+  border-radius: 10px;
+}
+
+.VPDoc .vp-doc details.custom-block summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Hairline between the summary row and the revealed body. Always present
+   (transparent) so toggling never shifts layout. */
+.VPDoc .vp-doc details.custom-block[open] summary {
+  border-bottom-color: color-mix(in srgb, var(--vp-c-brand-3) 18%, transparent);
+}
+
+/* Marker: a right-aligned chip with a CSS-drawn plus. On open it spins 180°
+   while the vertical bar collapses to zero, morphing the plus into a minus. */
+.VPDoc .vp-doc details.custom-block summary::after {
+  content: '';
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 6px;
+  color: var(--cb-accent);
+  border: 1px solid color-mix(in srgb, var(--cb-accent) 32%, transparent);
+  background-color: transparent;
+  background-image:
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor);
+  background-size: 9px 1.5px, 1.5px 9px;
+  background-position: center center;
+  background-repeat: no-repeat;
+  transition:
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    background-size 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.VPDoc .vp-doc details.custom-block summary:hover::after {
+  color: var(--vp-c-brand-1);
+  border-color: color-mix(in srgb, var(--vp-c-brand-3) 45%, transparent);
+  background-color: color-mix(in srgb, var(--vp-c-brand-3) 10%, transparent);
+}
+
+.VPDoc .vp-doc details.custom-block[open] summary::after {
+  color: var(--vp-c-brand-1);
+  border-color: color-mix(in srgb, var(--vp-c-brand-3) 40%, transparent);
+  background-color: color-mix(in srgb, var(--vp-c-brand-3) 12%, transparent);
+  transform: rotate(180deg);
+  background-size: 9px 1.5px, 1.5px 0px;
+}
+
+/* Smooth expand/collapse where ::details-content is supported
+   (Chromium 131+ / Safari 18.4+); other browsers toggle instantly. */
+@supports (interpolate-size: allow-keywords) {
+  .VPDoc .vp-doc details.custom-block {
+    interpolate-size: allow-keywords;
+  }
+  .VPDoc .vp-doc details.custom-block::details-content {
+    height: 0;
+    overflow: clip;
+    transition:
+      height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      content-visibility 0.32s allow-discrete;
+  }
+  .VPDoc .vp-doc details.custom-block[open]::details-content {
+    height: auto;
+  }
+}
+
+/* Body spacing lives on the content children (inside ::details-content) so
+   it animates with the reveal instead of snapping in via container padding. */
+.VPDoc .vp-doc details.custom-block > summary + p:first-of-type,
+.VPDoc .vp-doc details.custom-block > summary + ul,
+.VPDoc .vp-doc details.custom-block > summary + ol,
+.VPDoc .vp-doc details.custom-block > summary + div {
+  margin-top: 0.9rem;
+}
+
+.VPDoc .vp-doc details.custom-block > p:last-child,
+.VPDoc .vp-doc details.custom-block > ul:last-child,
+.VPDoc .vp-doc details.custom-block > ol:last-child,
+.VPDoc .vp-doc details.custom-block > div:last-child {
+  margin-bottom: 0.95rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPDoc .vp-doc details.custom-block summary::after,
+  .VPDoc .vp-doc details.custom-block::details-content {
+    transition: none;
+  }
+}
+
+/* Compact body copy inside the collapsible (overrides the 16px doc default). */
+.VPDoc .vp-doc details.custom-block p,
+.VPDoc .vp-doc details.custom-block li {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.VPDoc .vp-doc details.custom-block ul,
+.VPDoc .vp-doc details.custom-block ol {
+  margin: 0.3rem 0;
+}
+
+.VPDoc .vp-doc details.custom-block li + li {
+  margin-top: 0.2rem;
+}
+
+/* Inline code chips track the smaller surrounding text. */
+.VPDoc .vp-doc details.custom-block summary code,
+.VPDoc .vp-doc details.custom-block p code,
+.VPDoc .vp-doc details.custom-block li code {
+  font-size: 0.82em;
+}
+
+/* --- HR --- */
+.VPDoc .vp-doc hr {
+  border: none;
+  border-top: 1px solid var(--vp-c-divider);
+  margin: 2.5rem 0;
+}
+
+/* --- Images ---
+   `.doc-diagram` carries its own frame (see components.css) and is excluded
+   so the two rules can't fight over radius and background. */
+.VPDoc .vp-doc img:not(.doc-diagram) {
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+/* --- Sidebar --- */
+.VPSidebarItem.level-0 > .item > .text {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}
+
+.VPSidebarItem .link {
+  font-family: var(--vp-font-family-base);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.VPSidebarItem.is-active > .item > .link > .text {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+.VPSidebarItem.is-active > .item > .indicator {
+  background: linear-gradient(to bottom, var(--vp-c-brand-2), var(--vp-c-brand-3));
+  width: 3px;
+  border-radius: 2px;
+}
+
+/* --- Aside (right-rail outline) --- */
+.VPDocAside .outline-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  color: var(--vp-c-brand-1);
+}
+
+.VPDocAside .outline-link {
+  font-family: var(--vp-font-family-base);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  padding: 6px 0;
+}
+
+.VPDocAside .outline-marker {
+  background: linear-gradient(to bottom, var(--vp-c-brand-2), var(--vp-c-brand-3));
+  border-radius: 2px;
+}
+
+/* --- Doc footer (edit link + last updated) --- */
+.VPDocFooter {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.VPDocFooter .edit-info,
+.VPDocFooter .edit-link-button,
+.VPDocFooter .last-updated {
+  font-family: var(--vp-font-family-base);
+  font-size: 0.85rem;
+}
+
+/* --- Prev / next pager --- */
+.pager-link {
+  border-radius: 10px;
+  border: 1px solid var(--vp-c-divider) !important;
+  transition: border-color var(--transition-default), transform var(--transition-default);
+}
+
+.pager-link:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  transform: translateY(-2px);
+}
+
+.pager-link .desc {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--vp-c-brand-1);
+  opacity: 0.8;
+}
+
+.pager-link .title {
+  font-family: var(--mg-font-head);
+  font-weight: 600;
+}
+
+/* --- Mobile reading tweaks --- */
+@media (max-width: 768px) {
+  .VPDoc .vp-doc h1 {
+    font-size: 1.85rem;
+  }
+  .VPDoc .vp-doc h2 {
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+  }
+  .VPDoc .vp-doc div[class*='language-'] code {
+    font-size: 0.8rem;
+    padding: 0 1rem !important;
+  }
+  .VPDoc .vp-doc th,
+  .VPDoc .vp-doc td {
+    padding: 0.6rem 0.75rem;
+  }
+}
