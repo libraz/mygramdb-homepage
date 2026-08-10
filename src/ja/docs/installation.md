@@ -45,20 +45,20 @@ sudo systemctl enable --now mygramdb
 docker pull ghcr.io/libraz/mygram-db:latest
 
 docker run -d \
-  -p 11016:11016 \
-  -p 8080:8080 \
+  -p 127.0.0.1:11016:11016 \
+  -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
   ghcr.io/libraz/mygram-db:latest
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.9.0`
+- `ghcr.io/libraz/mygram-db:1.10.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
 
 ::: warning 設定ファイルを用意してから起動
-Dockerで本番運用する場合は、MySQL接続情報、レプリケーション設定、対象テーブル、`network.allow_cidrs` を含む設定ファイルを用意してマウントしてください。単にイメージを起動しただけでは、既存データの初期同期は完了しません。
+Dockerで本番運用する場合は、MySQL接続情報、レプリケーション設定、対象テーブル、`network.allow_cidrs`、`api.admin_token` を含む設定ファイルを用意してマウントしてください。公開ポートからコンテナへ到達できるよう、マウントする設定では `api.tcp.bind: 0.0.0.0`、HTTPを有効にする場合は `api.http.bind: 0.0.0.0` を設定します。上のホスト側ポートはループバックに限定したまま、CIDR許可リストも厳格にしてください。外部公開が必要な場合は、管理トークンを設定したうえでリバースプロキシ経由にしてください。単にイメージを起動しただけでは、既存データの初期同期は完了しません。
 :::
 
 ## DEBパッケージ
@@ -171,5 +171,4 @@ MygramDBはセキュリティのため**root権限での実行を拒否**しま�
 
 - [Dockerデプロイ](/ja/docs/docker-deployment)
 - [運用ガイド](/ja/docs/operations)
-- [v1.8 へのアップグレード](/ja/docs/upgrade-v1.8)
-- [v1.7 へのアップグレード](/ja/docs/migration-v1.7)
+- [v1.10 へのアップグレード](/ja/docs/upgrade-v1.10)

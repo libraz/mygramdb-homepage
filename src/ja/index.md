@@ -100,9 +100,12 @@ MygramDBは起動しただけでは既存データを自動では読み込みま
 :::
 
 ```bash
-docker exec mygramdb mygram-cli -p 11016 SYNC articles
-docker exec mygramdb mygram-cli -p 11016 SYNC STATUS
-echo "SEARCH articles hello world" | nc localhost 11016
+# 1つの対話セッションを開始し、プロンプトで以下のコマンドを入力します。
+docker exec -it mygramdb mygram-cli
+AUTH <API_ADMIN_TOKEN>
+SYNC articles
+SYNC STATUS
+SEARCH articles hello world
 ```
 
 ## クライアントライブラリ

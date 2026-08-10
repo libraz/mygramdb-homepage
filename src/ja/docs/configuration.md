@@ -330,6 +330,8 @@ api:
     enable: false
     bind: "127.0.0.1"
     port: 8080
+    max_connections: 10000
+    trusted_proxies: []
     enable_cors: false
     cors_allow_origin: ""
     max_body_bytes: 16777216
@@ -337,13 +339,34 @@ api:
     write_timeout_sec: 5
   default_limit: 100
   max_query_length: 128
+  admin_token: "replace-with-a-high-entropy-secret"
 ```
 
-TCPとHTTPはデフォルトでループバックにバインドします。`idle_timeout_sec: 0` でTCPアイドル接続の回収を無効にします。保留フレームの上限は、ワーカー待ちの完了済みリクエストを制限します。どちらかの上限の75%で読み取りを止め、キューが減ると再開します。`api.default_limit` と `api.max_query_length` は `SET` で実行時変更できます。ネットワークバインド、HTTPボディサイズ上限、多くの接続設定は再起動が必要です。
+TCPとHTTPはデフォルトでループバックにバインドします。`idle_timeout_sec: 0` でTCPアイドル接続の回収を無効にします。保留フレームの上限は、ワーカー待ちの完了済みリクエストを制限します。どちらかの上限の75%で読み取りを止め、キューが減ると再開します。`api.http.max_connections` はワーカー待ちのソケットを含め、受け付けるHTTP接続数を制限します。`api.http.trusted_proxies` には、ACLとレート制限で `X-Forwarded-For` をクライアントIPとして扱ってよい数値形式のリバースプロキシIPを指定します。プロキシを経由しない場合は空のままにしてください。`api.default_limit` と `api.max_query_length` は `SET` で実行時変更できます。ネットワークバインド、HTTPボディサイズ上限、多くの接続設定は再起動が必要です。
 
 ::: info TCPとHTTPの役割
-TCP APIは検索に加えて `SYNC`、`DUMP`、`SET` などの管理コマンドも扱います。HTTP APIは検索、カウント、ファセット、ドキュメント取得、ヘルスチェック、メトリクスが中心で、管理コマンドは公開しません。
+TCP APIは検索に加えて `SYNC`、`DUMP`、`SET` などの管理コマンドも扱います。HTTP APIは検索、カウント、ファセット、ドキュメント取得、ヘルスチェック、メトリクス、`POST /optimize`を扱います。
 :::
+
+### 管理操作の認証
+
+`api.admin_token` は管理コマンド用の共有シークレットです。設定ファイルまたは `MYGRAM_API_ADMIN_TOKEN` で設定し、十分に長いランダム値を使ってリポジトリには保存しないでください。TCPを非ループバックアドレスにバインドし、Unix socketを設定しない場合は必須です。設定しないとMygramDBは起動を拒否します。
+
+管理コマンドの前にTCP接続を認証します。
+
+```mygram
+AUTH replace-with-a-high-entropy-secret
+SYNC articles
+```
+
+`POST /optimize` には同じトークンをHTTP Bearer認証で渡します。
+
+```bash
+curl -X POST http://127.0.0.1:8080/optimize \
+  -H "Authorization: Bearer $MYGRAM_API_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
 
 ## レート制限
 
@@ -432,10 +455,10 @@ network:
     - "10.0.0.0/8"
 ```
 
-`allow_cidrs` が空または未設定の場合、接続は拒否されます。アクセスが必要なアプリケーションサーバーや運用ネットワークだけを追加してください。MygramDBにはネイティブのTLS/API認証はありません。HTTPを公開する場合はファイアウォール、プライベートネットワーク、リバースプロキシの背後に置いてください。
+`allow_cidrs` が空または未設定の場合、接続は拒否されます。アクセスが必要なアプリケーションサーバーや運用ネットワークだけを追加してください。MygramDBにはネイティブTLSはないため、必要に応じてリバースプロキシやロードバランサーでTLSを終端してください。管理コマンドは `api.admin_token` で認証します。通常の検索エンドポイントはバインドアドレスとCIDR許可リストで保護します。
 
 ::: danger 公開ネットワークへ直接出さない
-MygramDBの検索APIには組み込みのユーザー認証がありません。`0.0.0.0/0` を許可した状態でインターネットに直接公開しないでください。
+MygramDBをインターネットへ直接公開しないでください。`allow_cidrs` に `0.0.0.0/0` または `::/0` を指定し、非ループバックのTCPまたは有効なHTTPをバインドする設定は起動時に拒否されます。制限したCIDRリストを使うか、リスナーをループバックに置いてリバースプロキシの背後で公開してください。
 :::
 
 ## ログ

@@ -137,6 +137,12 @@ SEARCH threads tutorial NOT beginner
 
 **Important:** NOT excludes documents from the result set. Use it carefully with large indexes.
 
+`AND NOT` is accepted as an equivalent exclusion form. It is useful for expression converters that emit every additional condition after `AND`:
+
+```mygram
+SEARCH threads tutorial AND NOT beginner
+```
+
 ---
 
 ## Complex Boolean Queries
@@ -333,7 +339,7 @@ Sort search results using the `SORT` clause.
 ### Syntax
 
 ```mygram
-SEARCH <table> <query> SORT <column> [ASC|DESC]
+SEARCH <table> <query> SORT [BY] <column> [ASC|DESC]
 ```
 
 **Note:** The `ORDER BY` syntax is not supported. Use `SORT` instead.
@@ -341,6 +347,8 @@ SEARCH <table> <query> SORT <column> [ASC|DESC]
 ::: info Not SQL's ORDER BY
 MygramDB has no `ORDER BY` syntax. Use `SORT` to order search results.
 :::
+
+`BY` is optional, so `SORT BY created_at DESC` and `SORT created_at DESC` are equivalent.
 
 ### Default Behavior
 
@@ -357,6 +365,7 @@ SEARCH threads golang
 ```mygram
 SEARCH threads golang SORT id ASC
 SEARCH threads golang SORT id DESC
+SEARCH threads golang SORT BY id DESC
 ```
 
 **Shorthand syntax (recommended):**
@@ -371,6 +380,7 @@ Sort by any indexed filter column:
 
 ```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
+SEARCH threads golang SORT BY created_at DESC LIMIT 10
 SEARCH posts database SORT _score ASC LIMIT 20
 ```
 
@@ -461,7 +471,7 @@ MygramDB rejects queries whose combined expression length (search text + AND/NOT
 
 - **Default:** 128 characters
 - **Config:** `api.max_query_length` (`0` disables the guard)
-- **Error:** `ERROR Query expression length (...) exceeds maximum allowed length...`
+- **Error:** `ERROR 3005 Query expression length (...) exceeds maximum allowed length...`
 
 Keep boolean expressions compact or raise the limit in `config.yaml` if applications require longer filters.
 
@@ -644,37 +654,37 @@ The following will return errors:
 **Empty parentheses:**
 ```mygram
 SEARCH threads ()
-ERROR Invalid query: empty expression in parentheses
+ERROR 3000 Invalid query: empty expression in parentheses
 ```
 
 **Unclosed parentheses:**
 ```mygram
 SEARCH threads (golang AND python
-ERROR Invalid query: unclosed parentheses
+ERROR 3000 Invalid query: unclosed parentheses
 ```
 
 **Extra closing parentheses:**
 ```mygram
 SEARCH threads golang AND python)
-ERROR Invalid query: unexpected closing parenthesis
+ERROR 3000 Invalid query: unexpected closing parenthesis
 ```
 
 **Operator without operands:**
 ```mygram
 SEARCH threads AND
-ERROR Invalid query: operator without operands
+ERROR 3000 Invalid query: operator without operands
 ```
 
 **Trailing operator:**
 ```mygram
 SEARCH threads golang AND
-ERROR Invalid query: trailing operator
+ERROR 3000 Invalid query: trailing operator
 ```
 
 **Unclosed quotes:**
 ```mygram
 SEARCH threads "golang tutorial
-ERROR Invalid query: unclosed quote
+ERROR 3000 Invalid query: unclosed quote
 ```
 
 ### Invalid Filters
@@ -682,13 +692,13 @@ ERROR Invalid query: unclosed quote
 **Non-existent table:**
 ```mygram
 SEARCH nonexistent tech
-ERROR Table not found: nonexistent
+ERROR 4007 Table not found: nonexistent
 ```
 
 **Invalid filter column:**
 ```mygram
 SEARCH articles tech FILTER invalid_column=1
-ERROR Filter column not found: invalid_column
+ERROR 3006 Filter column not found: invalid_column
 ```
 
 ### Invalid Sorting
@@ -696,7 +706,7 @@ ERROR Filter column not found: invalid_column
 **Non-existent column:**
 ```mygram
 SEARCH articles tech SORT nonexistent DESC
-ERROR Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
+ERROR 3007 Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
 ```
 
 Non-existent columns are rejected with an error.

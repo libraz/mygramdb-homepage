@@ -82,6 +82,10 @@ A search query flows through a series of stages:
 
 7. **Sort and paginate** -- Results are sorted by the requested column and sliced to the requested OFFSET/LIMIT.
 
+The pipeline avoids repeating work where the same term appears in several boolean branches. One deduplicated term-information lookup is shared by boolean evaluation, NOT filtering, synonym expansion, and verification. A full document-ID scan is only needed when the expression contains NOT.
+
+Text-heavy stages also have a fixed memory boundary. Candidate text is copied from the DocumentStore in bounded chunks, then the store lock is released before BM25 scoring, term-frequency counting, and text post-filters run. A large candidate set therefore does not require copying a large fraction of the corpus or holding the store lock throughout scoring.
+
 ## verify_text Post-Filter
 
 N-gram indexing is inherently approximate. A query for `"quantum"` generates bi-grams `["qu", "ua", "an", "nt", "tu", "um"]`. Any document containing all six bi-grams is a candidate -- but some candidates are false positives:
@@ -113,7 +117,7 @@ Use `verify_text: all` when exact matching, highlighting, or BM25 `_score` matte
 
 ## Cache and Invalidation
 
-MygramDB caches search results at the query level. The key difference from MySQL's query cache is **invalidation granularity**: MygramDB invalidates at the n-gram level, not the table level.
+MygramDB caches search results at the query level. Its invalidation metadata records the dependencies of each entry, so a row change can remove affected entries without flushing a whole table.
 
 ::: tip What is cache invalidation?
 **Invalidation** is discarding cached results when the underlying data changes, so a stale answer is never served. MygramDB looks at which n-grams a changed row touches and drops only the cached queries that involve them.
@@ -122,7 +126,7 @@ MygramDB caches search results at the query level. The key difference from MySQL
 When a document is inserted, updated, or deleted via binlog replication:
 
 1. The changed document's text is tokenized into n-grams.
-2. Only cached queries whose n-gram sets overlap with the changed n-grams are invalidated.
+2. Entries whose n-gram sets overlap with the change are invalidated. Entries with filters are also found directly when a filter column changes, and text-sensitive entries, such as NOT queries, are found directly when text changes.
 3. Unrelated queries remain cached.
 
 <DocDiagram name="cache-invalidation" alt="A changed row is tokenized into the n-grams qu, ua and an; the reverse index maps them to the cached “quantum” query, which is evicted, while the “algorithm” and “database” entries are kept." />
@@ -132,7 +136,7 @@ When a document is inserted, updated, or deleted via binlog replication:
 
 In practice, this means a single row update only invalidates queries that could be affected by the change. On a table with millions of cached queries, an update might invalidate a handful rather than flushing the entire cache.
 
-The invalidation manager maintains a reverse index: for each n-gram, it tracks which cache entries depend on it. This makes invalidation O(affected entries) rather than O(total cache size).
+The invalidation manager keeps reverse indexes for n-grams, filtered entries, and text-sensitive entries. Each trigger visits only the entries it can affect rather than scanning the entire cache. Cache maintenance follows the same rule: each tick examines a bounded, resumable slice of the LRU list, so expiry and recency work do not take one long exclusive sweep across every entry.
 
 ---
 

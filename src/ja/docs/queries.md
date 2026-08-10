@@ -30,14 +30,14 @@ mygram-cli -h localhost -p 11016
 ## 基本検索
 
 ```mygram
-mygram> SEARCH articles hello world
+127.0.0.1:11016> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
 単一DB構成では `articles` はそのDB内のテーブルとして解決されます。複数DB構成では `<database>.<table>` 形式で指定してください。
 
 ```mygram
-mygram> SEARCH app_db.articles hello world
+127.0.0.1:11016> SEARCH app_db.articles hello world
 ```
 
 ## ブール演算子
@@ -49,27 +49,30 @@ mygram> SEARCH app_db.articles hello world
 ### AND - すべての語句を含む
 
 ```mygram
-mygram> SEARCH articles golang AND tutorial
+127.0.0.1:11016> SEARCH articles golang AND tutorial
 ```
 
 ### OR - いずれかの語句を含む
 
 ```mygram
-mygram> SEARCH articles golang OR python OR rust
+127.0.0.1:11016> SEARCH articles golang OR python OR rust
 ```
 
 ### NOT - 語句を除外
 
 ```mygram
-mygram> SEARCH articles tutorial NOT beginner
+127.0.0.1:11016> SEARCH articles tutorial NOT beginner
+127.0.0.1:11016> SEARCH articles tutorial AND NOT beginner
 ```
 
-`NOT` だけの検索はできません。除外条件は、検索語やフィルタなどの候補集合を絞り込むために使います。
+`AND NOT` はここでの `NOT` と同じ除外条件です。追加条件をすべて `AND` の後に表現するクライアントでも使えます。
+
+先頭の `NOT` も使えますが、候補集合が広くなりやすいため、通常は検索語やフィルタと組み合わせて絞り込みます。
 
 ### 組み合わせ
 
 ```mygram
-mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
+127.0.0.1:11016> SEARCH articles (golang OR python) AND tutorial NOT beginner
 ```
 
 ## フレーズ検索
@@ -77,14 +80,14 @@ mygram> SEARCH articles (golang OR python) AND tutorial NOT beginner
 引用符で囲むと、語句の並びを保ったフレーズとして検索します。
 
 ```mygram
-mygram> SEARCH articles "machine learning"
-mygram> SEARCH articles '機械学習'
+127.0.0.1:11016> SEARCH articles "machine learning"
+127.0.0.1:11016> SEARCH articles '機械学習'
 ```
 
 演算子と組み合わせ：
 
 ```mygram
-mygram> SEARCH articles "web framework" AND (golang OR python)
+127.0.0.1:11016> SEARCH articles "web framework" AND (golang OR python)
 ```
 
 ## フィルタリング
@@ -92,9 +95,9 @@ mygram> SEARCH articles "web framework" AND (golang OR python)
 カラム値でフィルタ：
 
 ```mygram
-mygram> SEARCH articles tech FILTER status = 1
-mygram> SEARCH articles tech FILTER views > 1000
-mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
+127.0.0.1:11016> SEARCH articles tech FILTER status = 1
+127.0.0.1:11016> SEARCH articles tech FILTER views > 1000
+127.0.0.1:11016> SEARCH articles tech FILTER created_at >= 2024-01-01
 ```
 
 ::: warning フィルタ対象カラムは設定が必要
@@ -104,7 +107,7 @@ mygram> SEARCH articles tech FILTER created_at >= 2024-01-01
 複数フィルタ（AND条件）：
 
 ```mygram
-mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
+127.0.0.1:11016> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 ```
 
 ### フィルタ演算子
@@ -123,23 +126,26 @@ mygram> SEARCH articles tech FILTER status = 1 FILTER category_id = 5
 プライマリキーでソート：
 
 ```mygram
-mygram> SEARCH articles golang SORT ASC
-mygram> SEARCH articles golang SORT DESC
+127.0.0.1:11016> SEARCH articles golang SORT ASC
+127.0.0.1:11016> SEARCH articles golang SORT DESC
 ```
 
 カラムでソート：
 
 ```mygram
-mygram> SEARCH articles golang SORT created_at DESC
-mygram> SEARCH articles golang SORT _score ASC
+127.0.0.1:11016> SEARCH articles golang SORT created_at DESC
+127.0.0.1:11016> SEARCH articles golang SORT BY created_at DESC
+127.0.0.1:11016> SEARCH articles golang SORT _score ASC
 ```
+
+`BY` は省略できます。カラムを指定する2つの形式はどちらも有効です。`SORT ASC` と `SORT DESC` は引き続きプライマリキーの並び順を指定する省略形です。
 
 ### 関連度ソート（BM25）
 
 予約カラム `_score` を指定するとBM25関連度でソートできます（v1.6.0以降）：
 
 ```mygram
-mygram> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
+127.0.0.1:11016> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 ```
 
 BM25はクエリ時にIDFとTFを計算します。パラメータは `bm25.k1`（デフォルト `1.2`）と `bm25.b`（デフォルト `0.75`）で調整できます。`SORT _score` を使うには `bm25.enable: true` に加え、保存された正規化テキストからTFを数えるため `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
@@ -149,9 +155,9 @@ BM25はクエリ時にIDFとTFを計算します。パラメータは `bm25.k1`�
 マッチした語句をタグで囲んだスニペットを返却（v1.6.0以降）：
 
 ```mygram
-mygram> SEARCH articles "machine learning" HIGHLIGHT LIMIT 10
-mygram> SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
-mygram> SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
+127.0.0.1:11016> SEARCH articles "machine learning" HIGHLIGHT LIMIT 10
+127.0.0.1:11016> SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
+127.0.0.1:11016> SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 ```
 
 | オプション | デフォルト | 範囲 | 説明 |
@@ -167,8 +173,8 @@ HIGHLIGHTの使用には `verify_text` を `"ascii"` または `"all"` に設定
 Levenshtein編集距離の範囲内で語句をマッチ（v1.6.0以降）：
 
 ```mygram
-mygram> SEARCH articles "machne" FUZZY LIMIT 10
-mygram> SEARCH articles "databse" FUZZY 2 LIMIT 10
+127.0.0.1:11016> SEARCH articles "machne" FUZZY LIMIT 10
+127.0.0.1:11016> SEARCH articles "databse" FUZZY 2 LIMIT 10
 ```
 
 距離 `1`（デフォルト）は1編集操作（挿入／削除／置換）以内、`2` は2編集操作以内でマッチします。候補は長さの差で事前フィルタされるため、オーバーヘッドは抑えられます。
@@ -178,8 +184,8 @@ mygram> SEARCH articles "databse" FUZZY 2 LIMIT 10
 フィルタカラムの値を件数付きで集計（v1.6.0以降）：
 
 ```mygram
-mygram> FACET articles status
-mygram> FACET articles category "search text" FILTER status = 1 LIMIT 10
+127.0.0.1:11016> FACET articles status
+127.0.0.1:11016> FACET articles category "search text" FILTER status = 1 LIMIT 10
 ```
 
 レスポンス（件数の降順）：
@@ -205,8 +211,8 @@ v1.7.0以降、FACETはHTTPでも `POST /tables/{identity}/facet` から利用�
 ## ページネーション
 
 ```mygram
-mygram> SEARCH articles golang LIMIT 10
-mygram> SEARCH articles golang LIMIT 10 OFFSET 20
+127.0.0.1:11016> SEARCH articles golang LIMIT 10
+127.0.0.1:11016> SEARCH articles golang LIMIT 10 OFFSET 20
 ```
 
 ## カウントクエリ
@@ -214,7 +220,7 @@ mygram> SEARCH articles golang LIMIT 10 OFFSET 20
 IDなしでカウントのみ取得：
 
 ```mygram
-mygram> COUNT articles golang AND tutorial
+127.0.0.1:11016> COUNT articles golang AND tutorial
 OK COUNT 42
 ```
 
@@ -223,25 +229,25 @@ OK COUNT 42
 ### 最新のGoチュートリアルを検索
 
 ```mygram
-mygram> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
+127.0.0.1:11016> SEARCH articles golang AND tutorial FILTER status = 1 SORT created_at DESC LIMIT 20
 ```
 
 ### データベースに関する人気記事
 
 ```mygram
-mygram> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT _score DESC LIMIT 10
+127.0.0.1:11016> SEARCH posts (mysql OR postgresql) AND performance FILTER views > 1000 SORT _score DESC LIMIT 10
 ```
 
 ### 関連度順＋ハイライト付き
 
 ```mygram
-mygram> SEARCH articles "machine learning" SORT _score DESC HIGHLIGHT LIMIT 10
+127.0.0.1:11016> SEARCH articles "machine learning" SORT _score DESC HIGHLIGHT LIMIT 10
 ```
 
 ### カテゴリ内のアクティブユーザー数
 
 ```mygram
-mygram> COUNT users tech FILTER status = 1 FILTER category_id = 5
+127.0.0.1:11016> COUNT users tech FILTER status = 1 FILTER category_id = 5
 ```
 
 ## HTTP API

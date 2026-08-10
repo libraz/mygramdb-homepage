@@ -124,30 +124,32 @@ replication:
 
 Use the `SYNC` command to manually trigger snapshot synchronization:
 
-```bash
-# Trigger snapshot sync for a table
-mygram-cli SYNC articles
+The production examples below assume `api.admin_token` is configured. If it is empty, `AUTH` is not required; non-loopback deployments should configure a token.
 
-# In a multi-database configuration
-mygram-cli SYNC app_db.articles
-
-# Check sync progress
-mygram-cli SYNC STATUS
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC app_db.articles
+OK SYNC STARTED table=app_db.articles
+127.0.0.1:11016> SYNC STATUS
 ```
+
+Use `SYNC articles` instead in a single-database configuration.
 
 **See [SYNC Command Guide](/docs/sync-command) for detailed usage.**
 
-### Legacy Behavior
+### Automatic startup snapshot
 
 To restore automatic snapshot building on startup:
 
 ```yaml
 replication:
-  auto_initial_snapshot: true   # Restore legacy behavior
+  auto_initial_snapshot: true
   start_from: "snapshot"
 ```
 
-In v1.8.0 and later, automatic startup snapshots require `start_from: "snapshot"` for both single-table and multi-table deployments.
+When automatic startup snapshots are enabled, use `start_from: "snapshot"` for both single-table and multi-table deployments.
 
 **Benefits of manual sync:**
 - Prevents unexpected MySQL load during server startup
@@ -157,7 +159,7 @@ In v1.8.0 and later, automatic startup snapshots require `start_from: "snapshot"
 
 ### Multi-table and Multi-database Snapshot Consistency
 
-In v1.7.0 and later, every table has an effective identity of `<database>.<table>`. If all configured tables are in one database, bare names such as `articles` remain accepted. When the configuration spans two or more databases, use qualified names in `SYNC`, `SEARCH`, and all client APIs.
+Every table has an effective identity of `<database>.<table>`. If all configured tables are in one database, bare names such as `articles` remain accepted. When the configuration spans two or more databases, use qualified names in `SYNC`, `SEARCH`, and all client APIs.
 
 When replication is enabled and more than one table is configured, the initial snapshot uses one `START TRANSACTION WITH CONSISTENT SNAPSHOT` across the configured tables and captures a shared GTID. This keeps related tables aligned at the same MySQL point-in-time before binlog streaming resumes.
 
@@ -328,14 +330,13 @@ Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VA
 
 ### Check Replication Status
 
-Use the CLI or TCP protocol:
+Use one authenticated CLI connection:
 
-```bash
-# Using CLI
-./build/bin/mygram-cli REPLICATION STATUS
-
-# Using telnet
-echo "REPLICATION STATUS" | nc localhost 11016
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> REPLICATION STATUS
 ```
 
 Response:
@@ -352,16 +353,22 @@ END
 
 Stop binlog replication (index becomes read-only):
 
-```bash
-./build/bin/mygram-cli REPLICATION STOP
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> REPLICATION STOP
 ```
 
 ### Start Replication
 
 Resume binlog replication:
 
-```bash
-./build/bin/mygram-cli REPLICATION START
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> REPLICATION START
 ```
 
 ## Troubleshooting
@@ -405,7 +412,8 @@ binlog_format = ROW
 - Increase `replication.queue_size` in config
 - Add more MygramDB replicas or reduce upstream write pressure. `build.parallelism`
   is reserved / not yet enforced by the current snapshot loader.
-- Add more MygramDB replicas
+
+Use `replication_seconds_since_last_applied` together with MySQL write activity and the reader state. The timestamp advances with the applied GTID, so a large value means no event has been applied recently; it does not by itself prove a lagging reader when the source is idle. `/health/ready` returns `503` when replication is unavailable, while `INFO` exposes the same overall readiness and `data_initialized` state.
 
 ### "Lost connection to MySQL server during query"
 
@@ -425,7 +433,16 @@ replication:
 
 1. Stop MygramDB
 2. Update config file to match new schema
-3. Restart MygramDB (will rebuild snapshot)
+3. Restart MygramDB
+4. Run `SYNC` to rebuild the affected table
+
+### Recovering from an undecodable binlog event
+
+If replication stops with error code `2017`, the stream encountered an event this build cannot decode, such as an XA prepare event or a compressed MariaDB event. Changing the server setting that produced it does not remove the already-written event, so starting again from the old GTID stops at the same place.
+
+Run `SYNC` for the table that is most important first, wait for it to complete with `replication=STARTED`, then run `SYNC` for every other replicated table. That first SYNC restarts the shared reader from the new snapshot marker and skips the undecodable interval. A table that you do not rebuild keeps its prior state for writes from that skipped interval.
+
+For every other replication failure, SYNC uses the drained position rather than skipping an interval. See [SYNC command](/docs/sync-command#error-2017-undecodable-binlog-event) for the command sequence.
 
 ## Best Practices
 

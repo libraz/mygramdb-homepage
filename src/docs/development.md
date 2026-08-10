@@ -239,11 +239,8 @@ make test-large-dump
 # Default MySQL 8.4 suite
 make e2e-test
 
-# MySQL 8.4/9.4 and MariaDB 10.11/11.4 matrix
+# MySQL 8.4/9.7 and MariaDB 10.11/11.4 matrix
 make e2e-matrix
-
-# Dedicated two-server MySQL failover suite
-make e2e-failover
 ```
 
 See the [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e)
@@ -260,10 +257,16 @@ cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
 cmake --build build-asan -j
 ctest --test-dir build-asan -L CONCURRENCY -LE LOAD --output-on-failure
 
-# Randomized parser and dump-header harness
-cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON
+# Standalone randomized parser and dump-header harness. This driver works with
+# any supported compiler and uses the iteration count as its input.
+cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON -DFUZZER_ENGINE=standalone
 cmake --build build-fuzz --target binary_input_fuzz -j
 ./build-fuzz/bin/binary_input_fuzz 100000
+
+# Coverage-guided libFuzzer build. Use a Clang toolchain that provides libFuzzer.
+cmake -S . -B build-libfuzzer -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON -DFUZZER_ENGINE=libfuzzer
+cmake --build build-libfuzzer --target binary_input_fuzz -j
+./build-libfuzzer/bin/binary_input_fuzz -runs=100000
 ```
 
 ## Troubleshooting

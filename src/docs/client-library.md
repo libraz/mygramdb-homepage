@@ -1,6 +1,6 @@
 ---
 title: libmygramclient - MygramDB C/C++ Client Library
-description: libmygramclient is a C/C++ client library for MygramDB. Modern C++17 API, C API for bindings, search expression parser, Node.js node-gyp example, thread safety, and error handling.
+description: libmygramclient is the installable C/C++ client SDK bundled with MygramDB. It provides CMake and pkg-config integration, C++17 and C APIs, typed errors, and search-expression helpers.
 head:
   - - meta
     - name: keywords
@@ -11,7 +11,7 @@ head:
 
 ## Overview
 
-libmygramclient is a C/C++ client library for connecting to and querying MygramDB servers. It provides both a modern C++ API and a C API suitable for bindings (e.g., node-gyp).
+libmygramclient is the C/C++ client SDK bundled with MygramDB. It connects to and queries MygramDB over its TCP protocol, and provides a C++17 API plus a C API for native integrations and language bindings. Installing MygramDB installs the headers, libraries, CMake package, and pkg-config metadata together.
 
 ::: info Before you start
 This library is a thin client for the MygramDB TCP protocol. Query grammar and result semantics are identical to the server side, so read the [Query Syntax Guide](/docs/query-syntax) alongside this page.
@@ -38,9 +38,7 @@ The library is built automatically with MygramDB:
 make
 ```
 
-This creates:
-- `build/lib/libmygramclient.a` - Static library
-- `build/lib/libmygramclient.dylib` (macOS) or `libmygramclient.so` (Linux) - Shared library
+This creates both `libmygramclient.a` and the platform shared library. CMake exposes them as `MygramDB::client_static` and `MygramDB::client_shared`.
 
 ## Installation
 
@@ -48,14 +46,14 @@ This creates:
 sudo make install
 ```
 
-This installs headers to `/usr/local/include/mygramdb/` and libraries to `/usr/local/lib/`. The C++ header currently depends on MygramDB core headers, so build C++ applications from a MygramDB source checkout rather than treating the installed header as a standalone SDK.
+This installs headers under `<prefix>/include/mygramdb`, libraries under `<prefix>/lib` (or the platform library directory), a `MygramDBClient` CMake package, and `mygramclient.pc`. Set your build tool's prefix or `PKG_CONFIG_PATH` when installing to a non-default location.
 
 ## C++ API
 
 ### Basic Usage
 
 ```cpp
-#include "client/mygramclient.h"
+#include <mygramdb/mygramclient.h>
 #include <iostream>
 
 using namespace mygramdb::client;
@@ -93,14 +91,34 @@ int main() {
 }
 ```
 
-### Compiling with libmygramclient
+### Consume the installed SDK
 
 ::: tip If linking fails
 When `libmygramclient` is installed outside the standard prefixes, you may need `-I` and `-L` at compile time and `LD_LIBRARY_PATH` (Linux) or `DYLD_LIBRARY_PATH` (macOS) at run time.
 :::
 
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(myapp LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+find_package(MygramDBClient CONFIG REQUIRED)
+
+add_executable(myapp myapp.cpp)
+target_link_libraries(myapp PRIVATE MygramDB::client_static)
+```
+
+Build it with the installation prefix when required:
+
 ```bash
-g++ -std=c++17 -I./src -L./build/lib -o myapp myapp.cpp -lmygramclient
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/mygramdb-prefix
+cmake --build build
+```
+
+Use `MygramDB::client_shared` when the application must link to the shared library. For a C or C++ build system that uses pkg-config, `mygramclient` supplies the include directory, library, and private thread dependency:
+
+```bash
+cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 ```
 
 ### Advanced Search
@@ -142,13 +160,15 @@ Holding one client per worker or thread and reusing it beats reconnecting for ev
 ```cpp
 SearchOptions options;
 options.limit = 50;
+options.offset = 20;
 options.sort_column = "created_at";
 options.sort_desc = true;
 options.filters = {{"status", FilterOp::kEqual, "active"}};
 options.fuzzy_distance = 1;
 options.highlight = HighlightOptions{"<strong>", "</strong>", 200, 3};
+options.query_mode = QueryMode::kBoolean;
 
-auto result = client.Search("app_db.articles", "technology", options);
+auto result = client.Search("app_db.articles", "technology OR programming", options);
 if (!result) {
     std::cerr << result.error().message() << "\n";
 }
@@ -162,6 +182,21 @@ if (result) {
     std::cout << "Total matches: " << result->count << "\n";
 } else {
     std::cerr << "Count failed: " << result.error().message() << "\n";
+}
+```
+
+### Facet pagination
+
+`Facet` returns one page of values in `facets`. `total_count` is the number of distinct facet values before `offset` and `limit`, so it is suitable for pagination controls.
+
+```cpp
+auto response = client.Facet("app_db.articles", "category", "technology", 10,
+                             {}, {}, {}, 20);
+if (response) {
+    std::cout << response->total_count << " distinct categories\n";
+    for (const auto& facet : response->facets) {
+        std::cout << facet.value << ": " << facet.count << "\n";
+    }
 }
 ```
 
@@ -188,7 +223,37 @@ if (result) {
 }
 ```
 
+### Administrative authentication
+
+In v1.10, administrative methods use connection-scoped authentication. `ClientConfig` has no `admin_token` field: after connecting, send `AUTH` on that same `MygramClient` and require the exact `OK AUTHENTICATED` response before `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, or `EnableDebug`/`DisableDebug`. A successful raw send only means a response was received. Authenticate again after every reconnect. Search, count, get, and facet operations do not require this authentication.
+
+```cpp
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
+const char* token = std::getenv("MYGRAM_API_ADMIN_TOKEN");
+if (token == nullptr) {
+    std::cerr << "MYGRAM_API_ADMIN_TOKEN is not set\n";
+    return 1;
+}
+
+auto auth = client.SendCommand(std::string("AUTH ") + token);
+if (!auth) {
+    std::cerr << "Admin authentication request failed: " << auth.error().message() << "\n";
+    return 1;
+}
+if (*auth != "OK AUTHENTICATED") {
+    std::cerr << "Admin authentication was rejected\n";
+    return 1;
+}
+// Do not log the token or the AUTH command.
+auto optimized = client.Optimize("app_db.articles");
+```
+
 ### Debug Mode
+
+Debug mode is administrative. This example assumes that the same `client` was authenticated as in the preceding section.
 
 ```cpp
 // Enable debug mode
@@ -299,7 +364,9 @@ int main() {
         .timeout_ms = 5000,
         .recv_buffer_size = 65536,
         .unix_socket_path = NULL,
-        .dump_save_timeout_ms = 600000
+        .dump_save_timeout_ms = 600000,
+        .max_response_bytes = 64ULL * 1024ULL * 1024ULL,
+        .connect_timeout_ms = 1000
     };
 
     // Create client
@@ -342,40 +409,93 @@ int main() {
 ### Compiling C Programs
 
 ```bash
-gcc -o myapp myapp.c -lmygramclient
+cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
+```
+
+### Administrative authentication
+
+In v1.10, administrative authentication is scoped to one connected `MygramClient_C`. Before administrative methods, send `AUTH` with `mygramclient_send_command` and require the exact `OK AUTHENTICATED` response; a `0` return only means a raw response was received and clears the last error. Use `mygramclient_get_last_error` only when the return value is nonzero. Repeat it after reconnecting. This applies to the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, and `EnableDebug`/`DisableDebug`, but not to search, count, get, or facet operations. Free the response with `mygramclient_free_string` and never log the token or command.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+const char* token = getenv("MYGRAM_API_ADMIN_TOKEN");
+if (token == NULL) {
+    fprintf(stderr, "MYGRAM_API_ADMIN_TOKEN is not set\n");
+    return 1;
+}
+char* auth_command = malloc(strlen("AUTH ") + strlen(token) + 1);
+char* response = NULL;
+if (auth_command == NULL) return 1;
+sprintf(auth_command, "AUTH %s", token);
+int rc = mygramclient_send_command(client, auth_command, &response);
+free(auth_command);
+if (rc != 0) {
+    mygramclient_free_string(response);
+    fprintf(stderr, "Admin authentication request failed: %s\n",
+            mygramclient_get_last_error(client));
+    return 1;
+}
+int authenticated = response != NULL && strcmp(response, "OK AUTHENTICATED") == 0;
+mygramclient_free_string(response);
+if (!authenticated) {
+    fprintf(stderr, "Admin authentication was rejected\n");
+    return 1;
+}
 ```
 
 ### Advanced Search (C API)
 
-For new code, use `MygramSearchOptions_C` and `mygramclient_search_with_options`. Zero-initialize the struct and set `struct_size`; its typed filters support `=`, `!=`, `>`, `>=`, `<`, and `<=`, and `fuzzy_distance` is `1` or `2`.
+For new code, use `MygramSearchOptions_C` and `mygramclient_search_with_options`. Zero-initialize the structure and set `struct_size`; its typed filters support `=`, `!=`, `>`, `>=`, `<`, and `<=`, and `fuzzy_distance` is `1` or `2`. Set `query_mode` to `MYGRAM_QUERY_BOOLEAN` to send a boolean expression instead of a literal query.
 
-`MygramClientConfigV2_C` is the preferred configuration for new C programs. Set `unix_socket_path` to use a Unix socket (it takes precedence over TCP host and port), and use `dump_save_timeout_ms` to set the total polling deadline for asynchronous `DUMP SAVE`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain ABI-compatible.
+`MygramClientConfigV2_C` is the preferred configuration for new C programs. `timeout_ms` is the ordinary operation deadline; `connect_timeout_ms` is the connection deadline and falls back to `timeout_ms` when zero. `max_response_bytes` limits a response frame and defaults to 64 MiB when zero. The dedicated `dump_*_timeout_ms` and `optimize_timeout_ms` fields use the client defaults when zero or unavailable in an older structure. Set `unix_socket_path` to use a Unix socket; it takes precedence over TCP host and port.
+
+Both `MygramClientConfigV2_C` and `MygramSearchOptions_C` are append-only, size-aware structures. Set `struct_size` to the size your caller knows. The library ignores later fields and supplies their defaults, which lets an older binary use a newer library safely. V2 configurations also set `version` to `MYGRAMCLIENT_CONFIG_V2_VERSION`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain available for ABI compatibility.
 
 ```c
-const char* and_terms[] = {"AI"};
-const char* not_terms[] = {"old"};
-const char* filter_keys[] = {"status", "category"};
-const char* filter_values[] = {"active", "tech"};
+MygramFilter_C filters[] = {
+    {.key = "status", .op = MYGRAM_FILTER_EQ, .value = "active"},
+};
+MygramSearchOptions_C options = {0};
+options.struct_size = sizeof(options);
+options.limit = 50;
+options.offset = 20;
+options.filters = filters;
+options.filter_count = 1;
+options.query_mode = MYGRAM_QUERY_BOOLEAN;
 
-MygramSearchResult_C* result = NULL;
-int ret = mygramclient_search_advanced(
-    client,
-    "app_db.articles",    // database-qualified table
-    "technology",         // query
-    50,                   // limit
-    0,                    // offset
-    and_terms, 1,         // AND terms
-    not_terms, 1,         // NOT terms
-    filter_keys, filter_values, 2,  // filters
-    "created_at",         // order by
-    1,                    // descending
-    &result
-);
-
-if (ret == 0) {
-    // Process results
-    mygramclient_free_search_result(result);
+MygramSearchResultWithHighlights_C* result = NULL;
+if (mygramclient_search_with_options(client, "app_db.articles",
+        "technology OR programming", &options, &result) == 0) {
+    mygramclient_free_search_result_with_highlights(result);
 }
+```
+
+Use `mygramclient_facet_paged(client, table, column, query, limit, offset, &result)` for a facet page. Its `result->total_count` is the total number of distinct values before pagination; release it with `mygramclient_free_facet_result`.
+
+### C expression diagnostics
+
+The C parser and converter have `_ex` variants for errors that need to be shown to a user. They initialize output pointers to `NULL`; on failure, `diagnostic` receives an allocated message when available. Release every returned string with `mygramclient_free_string`.
+
+```c
+MygramParsedExpression_C* parsed = NULL;
+char* diagnostic = NULL;
+if (mygramclient_parse_search_expression_ex("+", &parsed, &diagnostic) != 0) {
+    fprintf(stderr, "%s\n", diagnostic ? diagnostic : "invalid expression");
+}
+mygramclient_free_parsed_expression(parsed);
+mygramclient_free_string(diagnostic);
+
+char* raw_query = NULL;
+diagnostic = NULL;
+if (mygramclient_convert_search_expression_ex("go OR rust", &raw_query,
+                                               &diagnostic) == 0) {
+    /* raw_query is valid input to mygramclient_search_raw(). */
+}
+mygramclient_free_string(raw_query);
+mygramclient_free_string(diagnostic);
 ```
 
 ## Node.js Bindings Example
@@ -467,10 +587,12 @@ NODE_API_MODULE(mygramdb, Init)
 #### ClientConfig
 - `host` - Server hostname (default: "127.0.0.1")
 - `port` - Server port (default: 11016)
-- `timeout_ms` - Connection timeout (default: 5000)
+- `timeout_ms` - Ordinary operation timeout (default: 5000)
+- `connect_timeout_ms` - Connect timeout; `0` uses `timeout_ms`
 - `recv_buffer_size` - Receive buffer size (default: 65536)
+- `max_response_bytes` - Maximum response frame; `0` uses the 64 MiB default
 - `unix_socket_path` - Unix socket path; when set, it takes precedence over TCP
-- `dump_save_timeout_ms` - Total polling deadline for asynchronous `DUMP SAVE`
+- `dump_save_timeout_ms`, `dump_load_timeout_ms`, `dump_verify_timeout_ms`, `optimize_timeout_ms` - Operation-specific deadlines; `0` uses `timeout_ms`
 
 #### SearchResponse
 - `results` - Vector of SearchResult
@@ -478,7 +600,11 @@ NODE_API_MODULE(mygramdb, Init)
 - `debug` - Optional debug information
 
 #### Error
-- `message` - Error message string
+- `code()` - Typed `mygram::utils::ErrorCode`; client failures use the 7000 range
+- `message()` and `context()` - Error text and optional context
+- `to_string()` - Formatted error text including the numeric code
+
+When the server responds with `ERROR <code> ...`, the client preserves a parseable numeric code in the typed error. A response without a numeric token is reported as `kClientServerError`.
 
 ### C API Functions
 
@@ -507,7 +633,11 @@ Functions return `mygram::utils::Expected<T, Error>`. Check the result before ac
 ```cpp
 auto result = client.Search(...);
 if (!result) {
-    // Handle error: result.error().message()
+    const auto& error = result.error();
+    std::cerr << error.to_string() << "\n";
+    if (error.code() == mygram::utils::ErrorCode::kClientTimeout) {
+        // Reconnect or apply the application's retry policy.
+    }
 } else {
     const auto& resp = *result;
     // Use resp
@@ -516,7 +646,7 @@ if (!result) {
 
 ### C API
 
-Functions return 0 on success, -1 on error. Use `mygramclient_get_last_error()` to retrieve the error message.
+Functions return `0` on success and `-1` on error. Use `mygramclient_get_last_error()` for the message and `mygramclient_get_last_error_code()` for the numeric MygramDB error code. A successful operation clears the last error state.
 
 ## License
 

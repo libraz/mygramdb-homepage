@@ -33,8 +33,8 @@ The benchmark tables, charts, environment, and measured memory use are rendered 
 2. **Compressed posting lists**: Hybrid Delta encoding + Roaring bitmaps
 3. **Optimized intersections**: SIMD-accelerated bitmap operations
 4. **Sorting**: `SORT` validates the primary key and configured filter columns before ordering results
-5. **verify_text**: Post-filter eliminates false positives without sacrificing speed
-6. **No cache warmup**: Always ready, consistent performance
+5. **verify_text**: Post-filter eliminates false positives when exactness matters
+6. **Targeted cache invalidation**: A row change visits only cache entries whose indexed dependencies can be affected
 
 ## Performance Characteristics
 
@@ -56,6 +56,17 @@ The benchmark tables, charts, environment, and measured memory use are rendered 
 
 **MygramDB does NOT scale with:**
 - Dataset size beyond available RAM (in-memory only)
+
+### Current Execution Paths
+
+Several details keep large queries and busy caches from turning into a broad scan or a long lock hold:
+
+- Candidate filtering walks a posting list and the sorted candidate list once, so its work is proportional to the candidates and postings it visits.
+- Candidate text is materialized in bounded chunks. The DocumentStore lock is released before BM25 scoring, term-frequency counting, and text post-filters.
+- A deduplicated term-information lookup is reused across boolean evaluation, NOT filtering, synonym expansion, and verification. Expressions without NOT skip the full document-ID scan.
+- Filter column names are interned once per store, and per-document values use compact vectors keyed by the interned IDs.
+- Cache invalidation has separate reverse indexes for n-gram, filter, and text-sensitive dependencies. LRU maintenance resumes from a bounded slice on each tick instead of sweeping the full cache under one exclusive lock.
+- Per-table statistics are aggregated into a bounded snapshot for `INFO`, `/metrics`, and Prometheus, rather than locking every table while formatting each scrape.
 
 ## Optimization Tips
 
@@ -181,8 +192,10 @@ DUMP SAVE /path/to/snapshot.dmp
 Schedule regular snapshots:
 ```bash
 # Daily snapshot
-0 2 * * * echo "DUMP SAVE /backup/mygramdb-$(date +\%Y\%m\%d).dmp" | mygram-cli
+0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE /backup/mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
 ```
+
+This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unnecessary only when `api.admin_token` is empty; configure a token for non-loopback deployments.
 
 ## Troubleshooting
 
@@ -264,23 +277,28 @@ make bench-up    # Start MySQL with Wikipedia dataset
 make bench-run   # Execute benchmark suite
 ```
 
-To benchmark with your own data:
+To benchmark with your own data, start the server:
 
 ```bash
-# 1. Start MygramDB with your MySQL
 ./mygramdb -c config.yaml
+```
 
-# 2. Wait for initial indexing
-# Check logs for "Indexed N rows"
+With automatic snapshots disabled, use the same authenticated CLI connection to start the sync, check its status, enable debugging, and run the test queries:
 
-# 3. Enable debug mode
-echo "DEBUG ON" | mygram-cli
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC table
+127.0.0.1:11016> SYNC STATUS
+127.0.0.1:11016> DEBUG ON
+127.0.0.1:11016> SEARCH table common_term LIMIT 100
+127.0.0.1:11016> COUNT table common_term
+```
 
-# 4. Run test queries
-echo "SEARCH table common_term LIMIT 100" | mygram-cli
-echo "COUNT table common_term" | mygram-cli
+Compare the results with MySQL:
 
-# 5. Compare with MySQL
+```bash
 mysql -e "SELECT COUNT(*) FROM table WHERE MATCH(column) AGAINST('common_term')"
 mysql -e "SELECT id FROM table WHERE MATCH(column) AGAINST('common_term') ORDER BY id LIMIT 100"
 ```

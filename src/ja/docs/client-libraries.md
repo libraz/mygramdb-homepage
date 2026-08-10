@@ -1,6 +1,6 @@
 ---
 title: Node.js / Python / Go クライアントライブラリ
-description: MygramDB公式クライアントライブラリの使い方。Node.js、Python、Goのインストール、検索、Raw Boolean検索、FACET、HIGHLIGHT、SYNC、v1.7の複数DB対応。
+description: MygramDB公式クライアントライブラリの使い方。Node.js、Python、Goと同梱C/C++ SDKのインストール、検索、Raw Boolean検索、FACET、HIGHLIGHT、SYNC、複数DB対応。
 head:
   - - meta
     - name: keywords
@@ -12,16 +12,17 @@ head:
 MygramDBには、TCPプロトコルを直接扱う公式クライアントライブラリがあります。アプリケーションから検索・カウント・ドキュメント取得・FACET・同期操作を呼び出す場合は、HTTP APIを自前で組むより各言語のクライアントを使うと実装を小さくできます。
 
 ::: info このページで扱うライブラリ
-このページはアプリケーション向けの Node.js / Python / Go クライアントを扱います。MygramDB本体に同梱されるC/C++ライブラリは [libmygramclient](/ja/docs/client-library) を参照してください。
+このページはアプリケーション向けの Node.js / Python / Go クライアントと、同梱C/C++ SDKの位置付けを扱います。C/C++ API、CMakeパッケージ、pkg-configの使い方は [libmygramclient](/ja/docs/client-library) を参照してください。
 :::
 
 ## 対応状況
 
 | 言語 | パッケージ | 要件 | 特徴 |
 |------|------------|------|------|
-| Node.js | `mygramdb-client` v1.4.0 | Node.js 22+ | TypeScript型定義、純JavaScript実装、任意のネイティブバインディング |
-| Python | `mygramdb-client` v1.3.0 | Python 3.9+ | asyncio、外部依存なし、dataclass型 |
+| Node.js | `mygramdb-client` | Node.js 22+ | TypeScript型定義、純JavaScript実装、任意のネイティブバインディング |
+| Python | `mygramdb-client` | Python 3.9+ | asyncio、外部依存なし、dataclass型 |
 | Go | `github.com/libraz/go-mygram-client` | Go 1.23+ | 標準ライブラリのみ、`context.Context` 対応、並行利用可能 |
+| C / C++ | 同梱の `libmygramclient` | C11 / C++17 | CとC++ API、`MygramDB::client_static` / `MygramDB::client_shared`、`mygramclient.pc` を含むインストール済みSDK |
 
 ::: warning 検索対象データは先に同期してください
 クライアントライブラリはMygramDBサーバーへコマンドを送るための薄いラッパーです。既存データがまだ読み込まれていない場合は、先に `SYNC <table>` を実行してください。詳しくは [SYNCコマンド](/ja/docs/sync-command) を参照してください。
@@ -34,6 +35,10 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 - `OR` や括弧を含むブール式は、検索式パーサーで変換して `searchRaw()` / `SearchRaw()` / `search_raw()` に渡します。
 - BM25関連度ソート、ハイライト、ファジー検索、FACETはサーバー側の設定にも依存します。
 - `SET`、`SHOW VARIABLES`、`SYNC` などの管理系操作はTCP経由で実行されます。
+
+::: warning 管理系コマンドには認証が必要です
+`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には認証が必要です。すでに接続済みのクライアントでは、実行前に `MYGRAM_API_ADMIN_TOKEN` を使って `AUTH` を送信してください。認証は基底のTCP接続ごとに設定されるため、再接続のたびに繰り返す必要があります。自動再接続でも認証状態は保持されないので、再接続後の次の管理系操作の前に認証してください。`search`、`count`、`get`、`facet`、`INFO` は認証不要です。
+:::
 
 ::: info 用語補足
 **Raw Boolean検索**は、`AND` / `OR` / `NOT` / 括弧を含む検索式を、サーバーのクエリパーサーにそのまま渡す検索方法です。`search()` が組み立てる単純検索では表現しにくい `python OR (ruby AND rails)` のような条件に使います。
@@ -131,6 +136,16 @@ const facets = await client.facet('articles', 'category', {
 ### ランタイム変数とSYNC
 
 ```ts
+const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
+if (!adminToken) {
+  throw new Error('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
+}
+
+const authResponse = await client.sendCommand(`AUTH ${adminToken}`)
+if (authResponse !== 'OK AUTHENTICATED') {
+  throw new Error('MygramDB authentication failed')
+}
+
 await client.setVariable('logging.level', 'info')
 console.log(await client.showVariables('logging%'))
 
@@ -202,6 +217,7 @@ asyncio.run(main())
 
 ```python
 import asyncio
+import os
 from mygramdb_client import ClientConfig, FacetOptions, MygramClient, SearchOptions
 
 async def main():
@@ -217,6 +233,14 @@ async def main():
             'category',
             FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
         )
+
+        admin_token = os.environ.get('MYGRAM_API_ADMIN_TOKEN')
+        if not admin_token:
+            raise RuntimeError('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
+
+        auth_response = await client.send_command(f'AUTH {admin_token}')
+        if auth_response != 'OK AUTHENTICATED':
+            raise RuntimeError('MygramDB authentication failed')
 
         await client.set_variable('logging.level', 'info')
         print(await client.show_variables('logging%'))
@@ -288,7 +312,7 @@ resp, _ = client.SearchRawWithHighlights(
 fmt.Println(resp.Results)
 ```
 
-### BM25 / HIGHLIGHT / FUZZY / FACET / SYNC
+### BM25 / HIGHLIGHT / FUZZY / FACET
 
 ```go
 ranked, _ := client.Search("articles", "machine learning", mygram.SearchOptions{
@@ -325,15 +349,62 @@ facets, _ := client.Facet("articles", "category", mygram.FacetOptions{
 	Limit:   10,
 })
 fmt.Println(facets.Results)
+```
 
-_ = client.SetVariable("logging.level", "info")
-vars, _ := client.ShowVariables("logging%")
-fmt.Println(vars)
+### ランタイム変数とSYNC
 
-_, _ = client.Sync("app_db.articles")
-status, _ := client.SyncStatus()
-fmt.Println(status)
-_, _ = client.SyncStop("app_db.articles")
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	mygram "github.com/libraz/go-mygram-client"
+)
+
+func main() {
+	adminToken := os.Getenv("MYGRAM_API_ADMIN_TOKEN")
+	if adminToken == "" {
+		log.Fatal("MYGRAM_API_ADMIN_TOKEN is required for administrative commands")
+	}
+
+	client := mygram.NewClient("localhost:11016")
+	defer client.Close()
+	if err := client.Connect(); err != nil {
+		log.Fatal(err)
+	}
+
+	authResponse, err := client.SendCommand("AUTH " + adminToken)
+	if err != nil {
+		log.Fatal("MygramDB authentication command failed")
+	}
+	if authResponse != "OK AUTHENTICATED" {
+		log.Fatal("MygramDB authentication failed")
+	}
+
+	if err := client.SetVariable("logging.level", "info"); err != nil {
+		log.Fatal(err)
+	}
+	vars, err := client.ShowVariables("logging%")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(vars)
+
+	if _, err := client.Sync("app_db.articles"); err != nil {
+		log.Fatal(err)
+	}
+	status, err := client.SyncStatus()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(status)
+	if _, err := client.SyncStop("app_db.articles"); err != nil {
+		log.Fatal(err)
+	}
+}
 ```
 
 ::: tip Goクライアントの並行利用

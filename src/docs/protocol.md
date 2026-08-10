@@ -29,6 +29,15 @@ Or use the CLI client:
 ./build/bin/mygram-cli -h localhost -p 11016
 ```
 
+When `api.admin_token` is configured, authenticate once on each TCP connection before issuing an administrative command. If it is empty, `AUTH` is not required; production deployments reachable beyond loopback should configure a token.
+
+```mygram
+AUTH <token>
+OK AUTHENTICATED
+```
+
+The authenticated state belongs to that connection. An invalid token returns `ERROR 7 Authentication failed` and clears any earlier authenticated state. Tokens are not logged.
+
 ## Command Format
 
 ::: tip Choosing TCP or HTTP
@@ -36,6 +45,8 @@ The TCP protocol suits `mygram-cli` and administrative commands. For web applica
 :::
 
 Commands are text-based, one command per line. Responses are terminated with newline.
+
+`SEARCH`, `COUNT`, `GET`, and `FACET` do not require authentication. When an administrative token is configured, `AUTH` is required for configuration commands, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` commands. A request made before authentication returns `ERROR 7 Administrative command requires AUTH`.
 
 Table references accept the database-qualified form `` `database.table` ``. For example, a table named
 `articles` in database `app_db` is addressed as `app_db.articles`. In a single-database deployment (only
@@ -136,7 +147,7 @@ OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
 
 Not found:
 ```mygram
-ERROR Document not found
+ERROR 8 Document not found
 ```
 
 ---
@@ -161,6 +172,8 @@ OK INFO
 # Server
 version: 1.0.0
 uptime_seconds: 3600
+data_initialized: true
+readiness: ready
 
 # Stats
 total_commands_processed: 10000
@@ -429,7 +442,7 @@ Save complete snapshot to single binary file (`.dmp`). This command runs **async
 
 **Syntax:**
 ```mygram
-DUMP SAVE [<filepath>] [--with-stats]
+DUMP SAVE [<filepath>]
 ```
 
 **Response:**
@@ -440,10 +453,10 @@ Use DUMP STATUS to monitor progress
 
 **Example:**
 ```mygram
-DUMP SAVE /backup/mygramdb.dmp --with-stats
+DUMP SAVE /backup/mygramdb.dmp
 ```
 
-Use `DUMP STATUS` to monitor progress and check completion.
+Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown `DUMP SAVE` flag.
 
 ### DUMP LOAD
 
@@ -695,9 +708,9 @@ OK SYNC STARTED table=<table_name>
 ### Response (Error)
 
 ```mygram
-ERROR SYNC already in progress for table '<table_name>'
-ERROR Memory critically low. Cannot start SYNC. Check system memory.
-ERROR Table '<table_name>' not found in configuration
+ERROR 4011 SYNC already in progress for table '<table_name>'
+ERROR 4012 Memory critically low. Cannot start SYNC. Check system memory.
+ERROR 4010 Table '<table_name>' not found in configuration
 ```
 
 ### Behavior
@@ -724,12 +737,12 @@ Cancellation is asynchronous. Use `SYNC STATUS` until the operation reports `CAN
 
 ### Example
 
-```bash
-# Using CLI
-mygram-cli SYNC articles
-
-# Using telnet
-echo "SYNC articles" | nc localhost 11016
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC articles
+OK SYNC STARTED table=articles
 ```
 
 ---
@@ -782,12 +795,12 @@ status=IDLE message="No sync operation performed"
 
 ### Example
 
-```bash
-# Using CLI
-mygram-cli SYNC STATUS
-
-# Using telnet
-echo "SYNC STATUS" | nc localhost 11016
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC STATUS
+table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
 ```
 
 ### See Also
@@ -863,17 +876,17 @@ OK OPTIMIZED terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
 
 Already optimizing:
 ```mygram
-ERROR Another OPTIMIZE operation is already in progress
+ERROR 6030 Another OPTIMIZE operation is already in progress
 ```
 
 Memory critically low:
 ```mygram
-ERROR Memory critically low. Cannot start optimization: available=1.50 GB total=8.00 GB
+ERROR 6030 Memory critically low. Cannot start optimization: available=1.50 GB total=8.00 GB
 ```
 
 Insufficient memory:
 ```mygram
-ERROR Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
+ERROR 6030 Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
 ```
 
 ---
@@ -1016,6 +1029,8 @@ SET <variable> = <value> [, <variable2> = <value2> ...]
 SHOW VARIABLES [LIKE '<pattern>']
 ```
 
+The compact form is also valid: `SET api.default_limit=50`. It can be mixed with comma-separated assignments.
+
 `SHOW VARIABLES LIKE` accepts exactly one pattern.
 
 ### Responses
@@ -1041,18 +1056,20 @@ SHOW VARIABLES [LIKE '<pattern>']
 
 ## Error Response
 
-All errors follow this format:
+New servers format errors as a numeric code followed by a message:
 
 ```mygram
-ERROR <error_message>
+ERROR <numeric-code> <message>
 ```
 
 Examples:
 ```mygram
-ERROR Unknown command
-ERROR Table not found: products
-ERROR Invalid GTID format
+ERROR 7 Administrative command requires AUTH
+ERROR 4007 Table not found: products
+ERROR 3006 Invalid filter
 ```
+
+Clients that need to work with older servers should also accept the legacy `ERROR <message>` form. A response is coded only when the first payload token is a complete, non-zero decimal `uint16` value; otherwise the whole payload is the legacy message.
 
 ---
 
@@ -1080,7 +1097,15 @@ The command is passed as positional arguments — there is no `-c` flag. Quote t
 
 ```bash
 ./build/bin/mygram-cli SEARCH articles "hello world"
-./build/bin/mygram-cli "SET logging.level = 'debug'"
+```
+
+Administrative commands need an authenticated interactive connection when `api.admin_token` is configured:
+
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SET logging.level = 'debug'
 ```
 
 ### Command-line Options
@@ -1108,7 +1133,7 @@ Available commands:
   GET <db.table> <primary_key>
   INFO              - Show server statistics
   CONFIG            - Show current configuration
-  SET <variable> = <value> [, ...]         - Change runtime variables
+  SET <variable>[ = ]<value> [, ...]       - Change runtime variables
   SHOW VARIABLES [LIKE <pattern>]         - Show runtime variables
   FACET <db.table> <column> [text] [FILTER <col=val>...] [LIMIT <n>]
                     - Compute facet counts

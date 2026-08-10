@@ -100,9 +100,12 @@ MygramDB does not load existing rows just by starting the process. Run `SYNC art
 :::
 
 ```bash
-docker exec mygramdb mygram-cli -p 11016 SYNC articles
-docker exec mygramdb mygram-cli -p 11016 SYNC STATUS
-echo "SEARCH articles hello world" | nc localhost 11016
+# Start one interactive session, then enter these commands at its prompt.
+docker exec -it mygramdb mygram-cli
+AUTH <API_ADMIN_TOKEN>
+SYNC articles
+SYNC STATUS
+SEARCH articles hello world
 ```
 
 ## Client Libraries

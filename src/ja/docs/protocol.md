@@ -29,9 +29,20 @@ telnet localhost 11016
 ./build/bin/mygram-cli -h localhost -p 11016
 ```
 
+`api.admin_token` が設定されている場合は、管理コマンドを送る前に TCP 接続ごとに一度認証します。空の場合は `AUTH` は不要ですが、ループバック以外から到達できる本番デプロイではトークンを設定してください。
+
+```mygram
+AUTH <token>
+OK AUTHENTICATED
+```
+
+認証状態はその接続だけに保持されます。無効なトークンは `ERROR 7 Authentication failed` を返し、それまでの認証状態も解除します。トークンはログに残りません。
+
 ## コマンドフォーマット
 
 コマンドはテキストベースで、1行に1コマンドです。レスポンスは改行で終了します。
+
+`SEARCH`、`COUNT`、`GET`、`FACET` は認証不要です。管理トークンを設定している場合、設定コマンド、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には `AUTH` が必要です。認証前の管理コマンドは `ERROR 7 Administrative command requires AUTH` を返します。
 
 テーブル参照は DB 修飾形式 `` `database.table` `` を受け付けます。たとえば `app_db` データベースの
 `articles` テーブルは `app_db.articles` と指定します。単一データベース構成（設定されている個別の
@@ -136,7 +147,7 @@ OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
 
 見つからない場合：
 ```mygram
-ERROR Document not found
+ERROR 8 Document not found
 ```
 
 ---
@@ -161,6 +172,8 @@ OK INFO
 # Server
 version: 1.0.0
 uptime_seconds: 3600
+data_initialized: true
+readiness: ready
 
 # Stats
 total_commands_processed: 10000
@@ -429,7 +442,7 @@ DUMPコマンドファミリーは、整合性検証を備えた統一的なス�
 
 **構文:**
 ```mygram
-DUMP SAVE [<filepath>] [--with-stats]
+DUMP SAVE [<filepath>]
 ```
 
 **レスポンス:**
@@ -440,10 +453,10 @@ Use DUMP STATUS to monitor progress
 
 **例:**
 ```mygram
-DUMP SAVE /backup/mygramdb.dmp --with-stats
+DUMP SAVE /backup/mygramdb.dmp
 ```
 
-`DUMP STATUS` で進捗を監視し、完了を確認できます。
+`DUMP STATUS` で進捗を監視し、完了を確認できます。`--with-stats` は文法から削除されており、指定すると未知の `DUMP SAVE` フラグとして拒否されます。
 
 ### DUMP LOAD
 
@@ -758,17 +771,17 @@ OK OPTIMIZED terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
 
 すでに最適化中の場合：
 ```mygram
-ERROR Another OPTIMIZE operation is already in progress
+ERROR 6030 Another OPTIMIZE operation is already in progress
 ```
 
 メモリが危機的に低い場合：
 ```mygram
-ERROR Memory critically low. Cannot start optimization: available=1.50 GB total=8.00 GB
+ERROR 6030 Memory critically low. Cannot start optimization: available=1.50 GB total=8.00 GB
 ```
 
 メモリ不足の場合：
 ```mygram
-ERROR Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
+ERROR 6030 Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
 ```
 
 ---
@@ -911,6 +924,8 @@ SET <variable> = <value> [, <variable2> = <value2> ...]
 SHOW VARIABLES [LIKE '<pattern>']
 ```
 
+`SET api.default_limit=50` のように、空白を入れない形式も使えます。カンマで区切った複数代入にも混在させられます。
+
 `SHOW VARIABLES LIKE` に指定できるパターンはちょうど1つです。
 
 ### レスポンス
@@ -936,18 +951,20 @@ SHOW VARIABLES [LIKE '<pattern>']
 
 ## エラーレスポンス
 
-すべてのエラーは以下の形式に従います：
+新しいサーバーは、数値コードの後にメッセージを続ける形式でエラーを返します。
 
 ```mygram
-ERROR <error_message>
+ERROR <numeric-code> <message>
 ```
 
 例：
 ```mygram
-ERROR Unknown command
-ERROR Table not found: products
-ERROR Invalid GTID format
+ERROR 7 Administrative command requires AUTH
+ERROR 4007 Table not found: products
+ERROR 3006 Invalid filter
 ```
+
+古いサーバーとも通信するクライアントは、従来の `ERROR <message>` 形式も受け付けてください。ペイロード先頭のトークンが 0 以外の10進の符号なし16ビット整数だけで構成される場合だけコードとして解釈し、それ以外ではペイロード全体を従来形式のメッセージとして扱います。
 
 ---
 
@@ -975,7 +992,15 @@ OK RESULTS 5 1 2 3 4 5
 
 ```bash
 ./build/bin/mygram-cli SEARCH articles "hello world"
-./build/bin/mygram-cli "SET logging.level = 'debug'"
+```
+
+`api.admin_token` を設定している場合、管理コマンドは認証済みの対話接続で実行します。
+
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SET logging.level = 'debug'
 ```
 
 ### コマンドラインオプション
@@ -1003,7 +1028,7 @@ Available commands:
   GET <db.table> <primary_key>
   INFO              - Show server statistics
   CONFIG            - Show current configuration
-  SET <variable> = <value> [, ...]         - Change runtime variables
+  SET <variable>[ = ]<value> [, ...]       - Change runtime variables
   SHOW VARIABLES [LIKE <pattern>]         - Show runtime variables
   FACET <db.table> <column> [text] [FILTER <col=val>...] [LIMIT <n>]
                     - Compute facet counts

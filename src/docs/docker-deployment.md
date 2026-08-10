@@ -36,7 +36,8 @@ nano .env
 Change the following default values in `.env`:
 
 - `MYSQL_ROOT_PASSWORD` - MySQL root password
-- `MYSQL_PASSWORD` - MySQL replication user password
+- `MYSQL_PASSWORD` - MySQL replication user password; Compose requires it, and the entrypoint requires it when generating a configuration
+- `API_ADMIN_TOKEN` - high-entropy secret for administrative commands; Compose rejects an unset value and the entrypoint rejects the sample placeholder
 - `REPLICATION_SERVER_ID` - Unique server ID for this MygramDB instance
 :::
 
@@ -83,7 +84,7 @@ In production, managing an explicit `config.yaml` makes changes easier to review
 MYSQL_HOST=mysql                    # MySQL host
 MYSQL_PORT=3306                     # MySQL port
 MYSQL_USER=repl_user                # MySQL user
-MYSQL_PASSWORD=your_password        # MySQL password
+MYSQL_PASSWORD=your_password        # Required MySQL password
 MYSQL_DATABASE=mydb                 # Database name
 MYSQL_USE_GTID=true                 # Use GTID-based replication
 ```
@@ -155,42 +156,38 @@ MYSQL_SSL_VERIFY_SERVER_CERT=true
 
 #### API Server
 
-::: warning About API_BIND=0.0.0.0
-`API_BIND=0.0.0.0` makes the server reachable from outside the container. Always restrict sources with `NETWORK_ALLOW_CIDRS` or `network.allow_cidrs` in the config file, and add a reverse proxy or firewall where appropriate.
+::: info Host bind and container bind are separate
+The Compose file publishes TCP and HTTP ports on `127.0.0.1` on the host. Inside the Docker network, it uses `API_CONTAINER_BIND` and `API_HTTP_CONTAINER_BIND` (both default to `0.0.0.0`) because a container must listen on its own interface. Do not replace the host-side loopback mappings with public mappings unless a reverse proxy or firewall is part of the design.
 :::
 
 ```bash
-API_BIND=0.0.0.0                    # Bind address
+API_BIND=127.0.0.1                  # Directly launched server bind address
 API_PORT=11016                      # API port
 API_HTTP_ENABLE=true
-API_HTTP_BIND=0.0.0.0
+API_HTTP_BIND=127.0.0.1
 API_HTTP_PORT=8080
+API_ADMIN_TOKEN=CHANGE_ME_GENERATE_RANDOM_SECRET
+# Compose-only container listeners; host ports stay bound to 127.0.0.1
+API_CONTAINER_BIND=0.0.0.0
+API_HTTP_CONTAINER_BIND=0.0.0.0
 API_RATE_LIMIT_ENABLE=false
 API_RATE_LIMIT_CAPACITY=100
 API_RATE_LIMIT_REFILL_RATE=10
 API_RATE_LIMIT_MAX_CLIENTS=10000
 ```
 
+`API_ADMIN_TOKEN` is required by Compose because the container listener is non-loopback. Generate it with `openssl rand -hex 32`. Administrative TCP commands require `AUTH <token>` on the connection; `POST /optimize` requires `Authorization: Bearer <token>`.
+
 #### Network Configuration
 
 ```bash
-# Network ACL (Access Control List)
-# IMPORTANT: Configure this for security in production environments
-NETWORK_ALLOW_CIDRS=0.0.0.0/0       # Allowed IP ranges (comma-separated)
-
-# Examples:
-# Development (allow all):
-# NETWORK_ALLOW_CIDRS=0.0.0.0/0
-
-# Production (restrict to specific networks):
-# NETWORK_ALLOW_CIDRS=10.0.0.0/8,172.16.0.0/12
-
-# Production (single application server):
-# NETWORK_ALLOW_CIDRS=192.168.1.100/32
+# The Docker bridge presents published-port clients as its gateway.
+# 172.16.0.0/12 covers Docker's default bridge pool; narrow this when possible.
+NETWORK_ALLOW_CIDRS=127.0.0.1/32,172.16.0.0/12
 ```
 
 ::: warning
-If `NETWORK_ALLOW_CIDRS` is not set or empty, **all connections will be denied** by default. Always configure this setting.
+`NETWORK_ALLOW_CIDRS` is mandatory in Compose. Do not use `0.0.0.0/0` or `::/0` with a non-loopback API bind: MygramDB rejects that configuration at startup. For a custom container network, set only the application and operator CIDRs that need access.
 :::
 
 #### Logging
@@ -281,12 +278,17 @@ MYSQL_PORT=3306
 MYSQL_USER=repl_user
 MYSQL_PASSWORD=strong_secure_password_here
 
+# Generate with `openssl rand -hex 32`, then paste the output here.
+API_ADMIN_TOKEN=CHANGE_ME_GENERATE_RANDOM_SECRET
+NETWORK_ALLOW_CIDRS=127.0.0.1/32,172.16.0.0/12
+
 # Production memory settings
 MEMORY_HARD_LIMIT_MB=16384
 MEMORY_SOFT_TARGET_MB=8192
 
-# Production API settings
+# Production API settings. Compose publishes these ports only on localhost.
 API_PORT=11016
+API_HTTP_PORT=8080
 
 # Production logging
 LOG_LEVEL=info
@@ -388,8 +390,8 @@ docker exec -i mygramdb_mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} mydb < back
 
 # Restore and explicitly load a MygramDB dump
 docker cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
-docker exec mygramdb mygram-cli "DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp"
-docker exec mygramdb mygram-cli "DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp"
+docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 ```
 
 ## Troubleshooting

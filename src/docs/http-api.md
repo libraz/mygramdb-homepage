@@ -24,10 +24,14 @@ api:
   tcp:
     bind: "127.0.0.1"
     port: 11016
+  admin_token: "replace-with-a-secret"
   http:
     enable: true          # Enable HTTP server
     bind: "127.0.0.1"     # Bind address (default: localhost only)
     port: 8080            # HTTP port (default: 8080)
+    max_connections: 10000 # Includes sockets waiting for an HTTP worker
+    max_body_bytes: 16777216 # Request-body cap (16 MiB by default)
+    trusted_proxies: []   # Numeric reverse-proxy IPs allowed to supply X-Forwarded-For
     enable_cors: false    # Optional: enable only when exposing to browsers
     cors_allow_origin: "" # Optional origin allowed when CORS is enabled
 ```
@@ -36,13 +40,15 @@ api:
 TCP/HTTP servers bind to loopback by default. If you must expose them publicly, explicitly set `api.tcp.bind`/`api.http.bind`, configure `network.allow_cidrs` to the exact IP ranges that should connect, and keep TLS/API authentication in front of MygramDB (e.g., reverse proxy). CORS is disabled by default and should only be enabled with a trusted origin.
 :::
 
+`api.http.max_connections` caps admitted HTTP sockets, including sockets waiting for an HTTP worker. `api.http.max_body_bytes` rejects oversized POST bodies with `413 Payload Too Large` before routing; the default is 16 MiB. `api.http.trusted_proxies` is an allowlist of numeric proxy IP addresses. MygramDB honors `X-Forwarded-For` only when the direct TCP peer exactly matches that list; it ignores a forwarding header sent directly by any other client. ACL runs before rate limiting, and both use that trusted client identity.
+
 ::: info What is CORS?
 **CORS** is the browser mechanism that permits a page to call an API on another domain. Server-to-server traffic does not need it. Enable it only when a browser calls MygramDB directly, and restrict it to a trusted origin.
 :::
 
 ## API Endpoints
 
-All responses are in JSON format with `Content-Type: application/json`. Table routes use a single
+Handler-generated responses except `/metrics` return JSON with `Content-Type: application/json`; `/metrics` returns Prometheus text. CORS preflight `OPTIONS` requests return `204 No Content` without a body. Table routes use a single
 identity segment `/tables/{identity}`, where `{identity}` is the database-qualified name `` `database.table` ``
 (for example, table `articles` in database `app_db` is addressed as `/tables/app_db.articles`). In a
 single-database deployment (only one distinct database is configured), a bare `table` name also works
@@ -109,6 +115,7 @@ HTTP treats `q` as literal text by default. For example, `"AND"` and `"LIMIT"` a
 - **AND operator**: `"tech AND AI AND machine learning"`
 - **OR operator**: `"(mysql OR postgresql) AND performance"`
 - **NOT operator**: `"news NOT sports"`
+- **AND NOT form**: `"news AND NOT sports"` (equivalent exclusion)
 - **Combined**: `"tech AND AI NOT old"`
 
 Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`. `q` never accepts those control clauses; in literal mode, text such as `LIMIT` or `SORT` remains part of the search text.
@@ -143,7 +150,8 @@ Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzz
 
 ```json
 {
-  "error": "Missing required field: q"
+  "error": "Missing required field: q",
+  "error_code": 3000
 }
 ```
 
@@ -151,7 +159,8 @@ Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzz
 
 ```json
 {
-  "error": "Internal error: database connection failed"
+  "error": "Internal server error",
+  "error_code": 5
 }
 ```
 
@@ -258,11 +267,25 @@ Content-Type: application/json
 }
 ```
 
-### HTTP Surface Limits
+### HTTP Surface
 
-The HTTP API exposes search, count, document lookup, health, metrics, replication status, and redacted configuration
-inspection. Administrative commands such as `SET`, `SHOW VARIABLES`, `SYNC`, and `DUMP` remain available through the
-TCP/CLI protocol and are not exposed as HTTP routes.
+The HTTP API exposes search, count, document lookup, health, metrics, replication status, redacted configuration inspection, and `POST /optimize`. `SET`, `SHOW VARIABLES`, `SYNC`, and `DUMP` remain TCP/CLI commands and have no HTTP route.
+
+### POST /optimize
+
+Compacts posting lists for one table or every configured table. Send a JSON object with an optional qualified `table` name; an empty object optimizes every table.
+
+```http
+POST /optimize HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"table":"app_db.articles"}
+```
+
+`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header; otherwise it returns `401`, sets `WWW-Authenticate: Bearer`, and includes `error_code: 7`. The token comparison is constant-time. No other HTTP route accepts a Bearer token as an administrative session.
+
+Successful requests return `200` with `{ "status": "ok", "result": "OPTIMIZED ..." }`. The body accepts only `table`; an unknown field or a non-string table is a `400` request error.
 
 ### GET /tables/{identity}/{primary_key}
 
@@ -290,7 +313,8 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 
 ```json
 {
-  "error": "Document not found"
+  "error": "Document not found",
+  "error_code": 8
 }
 ```
 
@@ -538,7 +562,7 @@ Liveness probe. Returns `200 OK` while the HTTP server process is running, even 
 
 ### GET /health/ready
 
-Readiness probe for traffic gating. Returns `200 OK` only when the node can accept search traffic. Returns `503 Service Unavailable` while a dump load or table synchronization is in progress, or when configured replication is unavailable. In v1.8.0 and later, table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
+Readiness probe for traffic gating. Returns `200 OK` only when initial data is loaded, the server is not loading, no `SYNC` is running, and configured replication is available. Its JSON body includes `data_initialized`, `loading`, and `status` (`"ready"` or `"not_ready"`); it returns `503 Service Unavailable` when these conditions are not met. Table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
 
 ::: tip Choosing between live and ready
 On Kubernetes, wire `/health/live` to the liveness probe and `/health/ready` to the readiness probe. `live` answers "should this process be restarted"; `ready` answers "may search traffic be sent here".
@@ -546,7 +570,7 @@ On Kubernetes, wire `/health/live` to the liveness probe and `/health/ready` to 
 
 ### GET /health/detail
 
-Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions. Unlike `/health/live` and `/health/ready`, this endpoint is subject to the CIDR allow list.
+Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions. Every HTTP route, including `/health`, `/health/live`, and `/health/ready`, is subject to the CIDR allow list.
 
 ### GET /config
 
@@ -611,20 +635,21 @@ GET /replication/status HTTP/1.1
 
 ```json
 {
-  "error": "Replication not configured"
+  "error": "Replication not configured",
+  "error_code": 4
 }
 ```
 
 ## CORS Support
 
-Set `api.http.enable_cors: true` to turn on CORS (Cross-Origin Resource Sharing) headers for browser clients, then specify the trusted origin via `api.http.cors_allow_origin`. An empty configured origin becomes `*`, so do not enable CORS without setting a trusted origin. Keep CORS disabled when the API is not accessed directly from browsers.
+Set `api.http.enable_cors: true` to turn on CORS (Cross-Origin Resource Sharing) headers for browser clients, then specify the trusted origin via `api.http.cors_allow_origin`. If the origin is empty, MygramDB keeps CORS disabled and sends no wildcard origin. Keep CORS disabled when the API is not accessed directly from browsers.
 
 **CORS Headers:**
 
 ```
 Access-Control-Allow-Origin: https://app.example.com
 Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type
+Access-Control-Allow-Headers: Content-Type, Authorization
 ```
 
 ## Usage Examples
@@ -721,13 +746,16 @@ for doc in data['results']:
 
 ## Error Handling
 
-All error responses follow this format:
+Handler-generated error responses follow this format:
 
 ```json
 {
-  "error": "Error message description"
+  "error": "Error message description",
+  "error_code": 3000
 }
 ```
+
+`error_code` is the machine-readable MygramDB error code. Branch on it when client behavior depends on the cause rather than matching the human-readable `error` string. An oversized request body is rejected with `413 Payload Too Large` by the HTTP server before routing, so clients must rely on the status code rather than a JSON body or `error_code` for that response.
 
 **HTTP Status Codes:**
 
@@ -735,8 +763,10 @@ All error responses follow this format:
 |------|-------------|
 | 200 | Success |
 | 400 | Bad Request (invalid input) |
+| 401 | Unauthorized (missing or invalid Bearer token for `/optimize`) |
 | 403 | Forbidden (source IP is not allowed) |
 | 404 | Not Found (document doesn't exist) |
+| 413 | Payload Too Large (request body exceeds `api.http.max_body_bytes`) |
 | 429 | Too Many Requests (rate limit exceeded) |
 | 500 | Internal Server Error |
 | 503 | Service unavailable, feature not enabled, replication unavailable, or table synchronization in progress |

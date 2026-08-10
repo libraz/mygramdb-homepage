@@ -210,9 +210,9 @@ In multi-database deployments, qualify the route as `/tables/app_db.articles/sea
 
 ### Is there TLS or authentication?
 
-No TLS or authentication on the search API. Access control is IP-based via `NETWORK_ALLOW_CIDRS` (CIDR allowlist). The MySQL replication connection supports SSL/TLS for secure binlog transfer.
+MygramDB has no native TLS; terminate TLS at a reverse proxy or load balancer when needed. The MySQL replication connection supports SSL/TLS for secure binlog transfer.
 
-MygramDB is designed to run inside a private network, behind a reverse proxy or firewall — the same model as Memcached or Redis without AUTH. If you need TLS termination, put it behind nginx or a load balancer.
+Administrative TCP commands require `AUTH <token>` after `api.admin_token` is configured. The HTTP administrative endpoint, `POST /optimize`, requires `Authorization: Bearer <token>`. Search endpoints are controlled by the listener bind address and `NETWORK_ALLOW_CIDRS`; keep the service on a private network or behind a reverse proxy or firewall.
 
 ## Deployment and Monitoring
 
@@ -267,7 +267,7 @@ Aware of the trade-off. The author believes Rust replacing C++ is a matter of ti
 
 ### How mature is the project?
 
-Development started in November 2025. The current version is 1.9.0. The 1.6 line added BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, synonym expansion, V2 dumps, and MariaDB binlog replication. The 1.7 line added database-qualified table identity, multi-database indexing, HTTP `/tables/{identity}/...` routes, HTTP FACET, boolean search parity, multi-table consistent snapshots, and GTID-coordinated dumps. The 1.9 line adds typed C/C++ search options, stronger replication-value fidelity, and fail-closed schema validation. The project has been used in production on a high-traffic service (details under NDA).
+Development started in November 2025. MygramDB is used in production on a high-traffic service (details under NDA).
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 

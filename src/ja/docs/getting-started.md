@@ -71,6 +71,7 @@ api:
   http:
     enable: true
     port: 8080
+  admin_token: "replace-with-a-high-entropy-secret"
 
 # localhostからの接続を許可
 network:
@@ -84,6 +85,10 @@ network:
 
 ::: info 用語補足
 **CIDR** はIPアドレスの範囲指定です。`127.0.0.1/32` はローカルホストのみ、`10.0.0.0/8` は `10.` で始まるプライベートネットワーク全体を意味します。
+:::
+
+::: tip 管理トークンはファイル外で渡す
+本番設定では、YAMLファイルに書き込む代わりに `MYGRAM_API_ADMIN_TOKEN` でシークレットを渡してください。TCPを非ループバックアドレスで待ち受け、Unix socketを使わない場合は必須です。
 :::
 
 ## サービスを開始
@@ -102,10 +107,13 @@ mygram-cli -h localhost -p 11016
 接続後、まず初回同期を実行します。`SYNC` はMySQLの既存行を読み込み、検索インデックスを作成します。
 
 ```mygram
-mygram> SYNC articles
+127.0.0.1:11016> AUTH replace-with-a-high-entropy-secret
+OK AUTHENTICATED
+
+127.0.0.1:11016> SYNC articles
 OK SYNC STARTED articles
 
-mygram> SYNC STATUS
+127.0.0.1:11016> SYNC STATUS
 OK SYNC STATUS
 ...
 ```
@@ -113,7 +121,7 @@ OK SYNC STATUS
 同期が完了したら検索クエリを実行します。
 
 ```mygram
-mygram> SEARCH articles hello world
+127.0.0.1:11016> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
@@ -132,5 +140,4 @@ OK RESULTS 3 101 205 387
 - [設定リファレンス（詳細）](/ja/docs/configuration)
 - [MySQLレプリケーション](/ja/docs/replication)
 - [運用ガイド](/ja/docs/operations)
-- [v1.9 へのアップグレード](/ja/docs/upgrade-v1.9)
-- [v1.7 へのアップグレード](/ja/docs/migration-v1.7)
+- [v1.10 へのアップグレード](/ja/docs/upgrade-v1.10)

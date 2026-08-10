@@ -34,8 +34,8 @@ head:
 2. **圧縮転置リスト**: ハイブリッド Delta エンコーディング + Roaring ビットマップ
 3. **最適化された交差演算**: SIMD アクセラレーション付きビットマップ演算
 4. **ソート**: `SORT` はプライマリキーと設定済みフィルタカラムを検証してから結果を並べ替える
-5. **キャッシュウォームアップ不要**: インデックスをメモリ上に保持するため、ディスクキャッシュの状態に左右されにくい
-6. **verify_text**: 偽陽性除去をポストフィルタで行える。正確性は上がるが、保持テキスト分のメモリを使う
+5. **verify_text**: 正確性が必要な場合に、ポストフィルタで偽陽性を除去できる。保持テキスト分のメモリは使う
+6. **対象を絞ったキャッシュ無効化**: 行が変わったとき、その依存関係が影響を受けうるキャッシュエントリだけを調べる
 
 ## パフォーマンス特性
 
@@ -57,6 +57,17 @@ head:
 
 **MygramDB がスケールしないもの:**
 - 利用可能なRAMを超えるデータセットサイズ（インメモリのみ）
+
+### 現行の実行経路
+
+大きなクエリやキャッシュの負荷で、広い走査や長いロック保持が起きないように、検索と保守は次の構造を使います。
+
+- 候補フィルタはポスティングリストとソート済み候補リストをそれぞれ1回だけ進めるため、処理量は調べた候補数とポスティング数に比例します。
+- 候補テキストは上限付きのチャンクで取り出します。BM25スコアリング、出現頻度の集計、テキストのポストフィルタを始める前にDocumentStoreのロックを解放します。
+- 重複を除いた term info の参照結果を、論理式の評価、NOTの除外、同義語の展開、照合で共有します。NOTを含まない式では、全DocIDを走査しません。
+- フィルタカラム名はストアごとに1回だけインターンし、ドキュメントごとの値はそのカラム ID をキーにしたコンパクトなベクトルで持ちます。
+- キャッシュ無効化には、N-gram、フィルタ、テキスト変化に敏感な依存関係ごとの逆引きインデックスがあります。LRU保守は1回の排他ロックでキャッシュ全体を走査せず、各 tick で上限付きの範囲から再開します。
+- テーブルごとの統計は上限付きスナップショットへ集約し、`INFO`、`/metrics`、Prometheusへ返します。スクレイプのたびに全テーブルをロックしません。
 
 ## 最適化のヒント
 
@@ -173,8 +184,10 @@ DUMP SAVE /path/to/snapshot.dmp
 定期的なスナップショットをスケジュール:
 ```bash
 # 毎日のスナップショット
-0 2 * * * echo "DUMP SAVE /backup/mygramdb-$(date +\%Y\%m\%d).dmp" | mygram-cli
+0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE /backup/mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
 ```
+
+この cron の例では `AUTH` と `DUMP SAVE` を1つの接続に送ります。`api.admin_token` が空の場合だけ `AUTH` は不要です。非ループバックのデプロイではトークンを設定してください。
 
 ## トラブルシューティング
 
@@ -260,26 +273,28 @@ make bench-up
 make bench-run
 ```
 
-独自データでベンチマークする場合:
+独自データでベンチマークする場合は、サーバーを起動します:
 
 ```bash
-# 1. MySQL で MygramDB を起動
 ./mygramdb -c config.yaml
+```
 
-# 2. 初期同期を実行
-echo "SYNC table" | mygram-cli
+自動スナップショットを無効にしている場合は、同じ認証済み CLI 接続で同期を開始し、状態を確認してデバッグを有効にし、テストクエリを実行します:
 
-# 3. 同期完了を待つ
-echo "SYNC STATUS" | mygram-cli
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC table
+127.0.0.1:11016> SYNC STATUS
+127.0.0.1:11016> DEBUG ON
+127.0.0.1:11016> SEARCH table common_term LIMIT 100
+127.0.0.1:11016> COUNT table common_term
+```
 
-# 4. デバッグモードを有効化
-echo "DEBUG ON" | mygram-cli
+MySQL と比較します:
 
-# 5. テストクエリを実行
-echo "SEARCH table common_term LIMIT 100" | mygram-cli
-echo "COUNT table common_term" | mygram-cli
-
-# 6. MySQL と比較
+```bash
 mysql -e "SELECT COUNT(*) FROM table WHERE MATCH(column) AGAINST('common_term')"
 mysql -e "SELECT id FROM table WHERE MATCH(column) AGAINST('common_term') ORDER BY id LIMIT 100"
 ```

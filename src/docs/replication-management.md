@@ -1,202 +1,50 @@
 ---
-title: MygramDB Replication Management - Auto Stop/Restart Coordination
-description: How MygramDB coordinates MySQL replication across DUMP SAVE/LOAD, SYNC, and MySQL failover. Automatic stop/restart, manual control blocking, state flags, and GTID preservation.
-head:
-  - - meta
-    - name: keywords
-      content: MygramDB replication management, automatic replication, DUMP SAVE, DUMP LOAD, SYNC, GTID consistency, replication blocking
+title: MygramDB Replication Management
+description: How MygramDB coordinates replication around DUMP, SYNC, maintenance operations, and source changes.
 ---
 
 # Replication Management
 
-::: info What this page covers
-"Management" here means how MygramDB automatically pauses and resumes its own replication around `DUMP SAVE`, `DUMP LOAD`, `SYNC`, and MySQL failover. It is not a feature for managing MySQL primary promotion or your replica topology.
-:::
+## Scope
 
-This document describes how MygramDB manages MySQL replication across different operations.
+This page describes MygramDB's own replication lifecycle. It does not manage MySQL promotion or replica topology. MygramDB reads from the endpoint in its startup configuration; changing that endpoint requires a configuration change and restart.
 
-## Overview
+## Coordination around maintenance
 
-MygramDB automatically manages replication start/stop to ensure data consistency during critical operations. Manual replication control is blocked when automatic management is in progress.
+`DUMP SAVE`, `DUMP LOAD`, scheduled snapshots, and `SYNC` coordinate with the single binlog reader. The server pauses and drains replication where an operation needs a consistent position, then restores it after the operation succeeds or fails. A pause during a long dump can increase lag behind MySQL.
 
-## Automatic Replication Management
+| Operation | Replication behavior | Reader impact |
+| --- | --- | --- |
+| `DUMP SAVE` | Pauses for a consistent saved GTID, then resumes. | Search remains available; lag can grow while saving. |
+| `DUMP LOAD` | Pauses before replacing state; on success it uses the dump GTID before restoring replication. | Restored data is installed atomically; readiness also requires replication to be available. |
+| `SYNC` | Drains the shared reader, builds one table off to the side, then restarts. | A single reader serves every configured table, so normal restarts use the drained position. |
+| `OPTIMIZE` | Holds the shared maintenance slot. | Run it separately from dumps and SYNC. |
 
-### DUMP SAVE Operations
+The long-running operations share one slot. A new request while another is active fails as busy; wait for the active operation to reach a terminal status.
 
-::: tip Searching during DUMP SAVE
-`DUMP SAVE` writes a snapshot to disk. Search requests keep working, but replication is paused for the duration, so a long save temporarily increases the lag behind MySQL.
-:::
+## Source endpoint changes
 
-When executing `DUMP SAVE`:
+`mysql.host` and `mysql.port` are immutable runtime variables. `SET` returns an immutable-variable error. To change sources, edit the configuration, validate it with `mygramdb -t <config>`, and restart.
 
-1. **Pre-operation**: If replication is running, it is automatically stopped
-   - Sets `replication_paused_for_dump` flag to `true`
-   - Logs: `"Stopped replication before DUMP SAVE (will auto-restart after completion)"`
+An automatic reconnect stays on the configured endpoint. If that endpoint resolves to a MySQL server with a different source UUID, MygramDB rejects it instead of following it. Investigate the promotion or endpoint change, update the configuration when appropriate, and restart against the intended source.
 
-2. **During operation**: Dump file is created with consistent snapshot
+## Readiness while replication is paused
 
-3. **Post-operation**: Replication is automatically restarted (regardless of save success/failure)
-   - Clears `replication_paused_for_dump` flag
-   - Logs: `"Auto-restarted replication after DUMP SAVE"` (on success)
-   - Logs: `"replication_restart_failed"` event (on failure, but DUMP SAVE still succeeds)
+Temporary maintenance pauses do not by themselves mean the reader has failed. `/health/ready` and `INFO` account for the operation in progress. They remain not ready for an active `SYNC` or dump load, for uninitialized data, and for a replication reader that is neither running nor starting once no coordinated pause applies.
 
-**Rationale**: DUMP SAVE creates a consistent snapshot. Stopping replication ensures no binlog events are processed during the snapshot creation, maintaining GTID consistency with the dumped data.
+After a successful `DUMP LOAD`, restored tables count as initialized even if restarting replication fails; the data is present, but readiness remains false until replication is available. Use the health reason and replication error to decide whether to repair the MySQL connection, credentials, GTID history, or schema.
 
-### DUMP LOAD Operations
+## Operator checklist
 
-::: warning DUMP LOAD replaces, it does not merge
-`DUMP LOAD` discards the current index and document store before reading the dump file. Loading the wrong file replaces your live search data, so verify the file path, the target environment, and the GTID inside the dump first.
-:::
+1. Before maintenance, check `/health/ready`, `INFO`, and the active `SYNC` or dump status.
+2. Run one long operation at a time.
+3. After it completes, confirm replication is running and readiness is `ready`.
+4. For a source move, change configuration and restart; never issue runtime endpoint `SET` commands.
+5. If replication stopped on error `2017`, follow the special recovery in [Replication](/docs/replication#recovering-from-an-undecodable-binlog-event).
 
-When executing `DUMP LOAD`:
+## See also
 
-1. **Pre-operation**: If replication is running, it is automatically stopped
-   - Sets `replication_paused_for_dump` flag to `true`
-   - Logs: `"Stopped replication before DUMP LOAD (will auto-restart after completion)"`
-
-2. **During operation**: All data is cleared and reloaded from dump file
-
-3. **Post-operation**: Replication is restarted only if it was running before the load
-   - If load succeeded and dump contains GTID: Uses the loaded GTID position
-   - Clears `replication_paused_for_dump` flag
-   - Logs: `"Auto-restarted replication after DUMP LOAD"` with new GTID (on success)
-
-**Rationale**: DUMP LOAD replaces all data. Running replication during load would cause:
-- Data corruption (applying binlog events to incomplete data)
-- GTID inconsistency (current position doesn't match loaded data)
-
-### SYNC Operations
-
-::: info What is a full resynchronization?
-A **full resynchronization** re-reads the target MySQL table from the beginning and rebuilds MygramDB's search data. Unlike normal replication, which applies only the deltas arriving over the binlog, its read load on MySQL is proportional to the number of rows.
-:::
-
-When executing `SYNC` for a table:
-
-1. **Pre-operation**: SYNC operation checks if replication is running
-   - If running with different GTID, replication is stopped
-   - Performs full table synchronization
-
-2. **Post-operation**: Replication is automatically started after SYNC completes
-   - Managed by `SyncOperationManager`
-
-**Rationale**: SYNC performs full table scan and rebuild. Replication must be stopped to avoid applying incremental changes while full sync is in progress.
-
-### SET VARIABLES mysql.host / mysql.port
-
-When changing MySQL connection settings:
-
-1. **Candidate validation**: MygramDB connects to and validates the new MySQL server before disturbing the live connection or replication reader.
-
-2. **Handoff**: Only after validation succeeds does MygramDB stop the reader, save its drained GTID, and replace the connection.
-
-3. **Post-operation**: Replication restarts from the saved GTID. If the later handoff fails, MygramDB restores the old connection and restarts its reader.
-
-**Rationale**: Candidate validation keeps a failed failover from needlessly interrupting production replication.
-
-## Manual Replication Control Blocking
-
-### REPLICATION START Blocking
-
-Manual `REPLICATION START` is blocked in the following scenarios:
-
-| Scenario | Flag Checked | Error Message |
-|----------|--------------|---------------|
-| MySQL reconnection in progress | `mysql_reconnecting` | "Cannot start replication while MySQL reconnection is in progress. Replication will automatically restart after reconnection completes." |
-| DUMP SAVE/LOAD in progress | `replication_paused_for_dump` | "Cannot start replication while DUMP SAVE/LOAD is in progress. Replication will automatically restart after DUMP completes." |
-| DUMP SAVE in progress | `read_only` | "Cannot start replication while DUMP SAVE is in progress. Please wait for save to complete." |
-| DUMP LOAD in progress | `loading` | "Cannot start replication while DUMP LOAD is in progress. Please wait for load to complete." |
-| SYNC in progress | `sync_manager->IsAnySyncing()` | "Cannot start replication while SYNC is in progress. SYNC will automatically start replication when complete." |
-
-### SET VARIABLES Blocking
-
-Changing `mysql.host` or `mysql.port` is blocked during SYNC:
-
-```
-Cannot change 'mysql.host' while SYNC is in progress. Please wait for SYNC to complete.
-```
-
-## State Flags
-
-### `mysql_reconnecting` (atomic&lt;bool&gt;)
-
-- **Purpose**: Indicates MySQL reconnection is in progress (when changing mysql.host/port)
-- **Set to `true`**: At start of reconnection
-- **Set to `false`**: After reconnection completes (success or failure)
-- **Used by**:
-  - The reconnection handler to manage automatic reconnection
-  - The replication handler to block manual `REPLICATION START`
-
-### `replication_paused_for_dump` (atomic&lt;bool&gt;)
-
-- **Purpose**: Indicates replication was automatically paused for DUMP operation
-- **Set to `true`**: Before DUMP SAVE/LOAD when stopping replication
-- **Set to `false`**: After DUMP SAVE/LOAD when restarting replication
-- **Used by**:
-  - The dump handler to manage automatic pause/resume
-  - The replication handler to block manual `REPLICATION START`
-
-### `read_only` (atomic&lt;bool&gt;)
-
-- **Purpose**: Indicates DUMP SAVE is in progress (read-only mode)
-- **Blocks**: REPLICATION START, DUMP LOAD, concurrent DUMP SAVE
-
-### `loading` (atomic&lt;bool&gt;)
-
-- **Purpose**: Indicates DUMP LOAD is in progress
-- **Blocks**: REPLICATION START, DUMP SAVE, concurrent DUMP LOAD, OPTIMIZE
-
-## Structured Logging Events
-
-All replication state changes are logged with structured events:
-
-```cpp
-// Replication paused
-StructuredLog()
-    .Event("replication_paused")
-    .Field("operation", "dump_save")
-    .Field("reason", "automatic_pause_for_consistency")
-    .Info();
-
-// Replication resumed
-StructuredLog()
-    .Event("replication_resumed")
-    .Field("operation", "dump_load")
-    .Field("reason", "automatic_restart_after_completion")
-    .Field("gtid", gtid)
-    .Info();
-
-// Restart failed (operation still succeeds)
-StructuredLog()
-    .Event("replication_restart_failed")
-    .Field("operation", "dump_save")
-    .Field("error", error_message)
-    .Error();
-```
-
-## Summary
-
-| Operation | Replication Management | Manual Control |
-|-----------|------------------------|----------------|
-| DUMP SAVE | Auto-stop → Auto-restart | Blocked during operation |
-| DUMP LOAD | Auto-stop → Auto-restart with new GTID | Blocked during operation |
-| SYNC | Auto-stop → Auto-restart after completion | Blocked during SYNC |
-| SET mysql.host/port | Auto-stop → Reconnect → Auto-restart | Manual REPLICATION START blocked during reconnection |
-| REPLICATION START | N/A | Blocked during DUMP/SYNC/MySQL reconnection |
-
-All automatic replication management ensures data consistency and GTID integrity across operations.
-
-## Key Design Decisions
-
-1. **Auto-restart on all code paths**: Replication is restarted whether operations succeed or fail (with error logging on failure)
-2. **Flag-based blocking**: All blocking uses atomic flags checked at operation start
-3. **User-friendly error messages**: All blocking errors explain why and suggest waiting for auto-restart
-4. **GTID preservation**: All operations maintain GTID continuity across stop/restart cycles
-5. **No manual intervention during automatic operations**: Users cannot manually restart replication when auto-management is in progress
-
-## See Also
-
-- [Replication Guide](/docs/replication) - MySQL replication setup
-- [Snapshot Guide](/docs/snapshot) - DUMP SAVE/LOAD/VERIFY commands
-- [SYNC Command Guide](/docs/sync-command) - Manual snapshot synchronization
-- [Operations Guide](/docs/operations) - Runtime variables and MySQL failover
+- [Operations](/docs/operations)
+- [Replication](/docs/replication)
+- [Snapshot and dump recovery](/docs/snapshot)
+- [SYNC command](/docs/sync-command)

@@ -13,6 +13,8 @@ head:
 
 `SYNC` コマンドは、MySQL から MygramDB へのスナップショット同期を手動で開始するためのコマンドです。起動時の自動同期を無効にしておくと、MySQLプライマリへ読み取り負荷をかけるタイミングを運用側で決められます。
 
+本番向けの例では `api.admin_token` を使用します。空なら `AUTH` は不要ですが、非ループバックのデプロイではトークンを設定してください。
+
 ::: info 用語補足
 **スナップショット同期**は、MySQLの対象テーブルをSELECTで読み取り、その時点の内容からMygramDBの検索インデックスを作る処理です。完了後は、取得したGTIDからbinlogレプリケーションを開始して差分を追いかけます。
 :::
@@ -31,19 +33,19 @@ replication:
   start_from: "snapshot"
 ```
 
-### 以前と同じ動作（起動時の自動スナップショット）
+### 起動時の自動スナップショット
 
 以前の自動スナップショット動作に戻す場合：
 
 ```yaml
 replication:
   enable: true
-  auto_initial_snapshot: true   # 起動時の自動スナップショットを有効化
+  auto_initial_snapshot: true
   server_id: 12345
   start_from: "snapshot"
 ```
 
-v1.8.0以降、`auto_initial_snapshot: true` を使う場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` が必要です。
+`auto_initial_snapshot` を有効にする場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` を使ってください。
 
 ## コマンド
 
@@ -63,16 +65,15 @@ SYNC <table_name>
 `<table_name>` は単一DB構成では修飾なしのテーブル名を指定できます。複数DB構成では `<database>.<table>` を使ってください。
 
 **例:**
-```bash
-# CLI を使用
-mygram-cli SYNC articles
-
-# 複数DB構成
-mygram-cli SYNC app_db.articles
-
-# telnet/nc を使用
-echo "SYNC articles" | nc localhost 11016
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC app_db.articles
+OK SYNC STARTED table=app_db.articles
 ```
+
+単一DB構成では `SYNC articles` を使います。
 
 **レスポンス（成功）:**
 ```mygram
@@ -91,7 +92,7 @@ ERROR Table 'products' not found in configuration
 - 開始後すぐにレスポンスを返す
 - MySQL の SELECT クエリからスナップショットをビルド
 - スナップショット時点の GTID を取得
-- 完了時にレプリケーションをドレインし、他テーブルのコミットを飛ばさないよう保存済みGTIDから再開
+- 完了時にレプリケーションをドレインし、通常は他テーブルのコミットを飛ばさないようドレイン済み GTID から再開
 
 ### SYNC STOP - 同期をキャンセル
 
@@ -115,12 +116,11 @@ SYNC STATUS
 ```
 
 **例:**
-```bash
-# CLI を使用
-mygram-cli SYNC STATUS
-
-# telnet/nc を使用
-echo "SYNC STATUS" | nc localhost 11016
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC STATUS
 ```
 
 **レスポンス例:**
@@ -161,13 +161,13 @@ status=IDLE message="No sync operation performed"
 
 ### レプリケーションステータス値
 
-- **STARTED**: 保存済みGTIDからbinlogレプリケーションを再開（成功）
+- **STARTED**: スナップショット後に binlog レプリケーションを再開（成功）
 - **DISABLED**: 設定でレプリケーションが無効
 - **FAILED**: スナップショットは成功したがレプリケーションの開始に失敗（ログを確認）
 
 次の図は、SYNCのライフサイクル全体を示します。メモリ健全性チェックに始まり、スナップショット構築中はテーブル読み取りが拒否されること、完了後のレプリケーション自動再開、そして終了状態と、SYNCと相互排他になる操作の関係です。
 
-<DocDiagram name="sync-lifecycle" alt="SYNCはメモリ健全性チェックを経てMySQLのSELECTからスナップショットを構築し、その間テーブル読み取りは拒否されます。保存済みGTIDからレプリケーションを自動再開し、開始・無効・失敗のいずれかで完了、失敗、キャンセルに至ります。実行中はOPTIMIZEやDUMPと相互排他です。" />
+<DocDiagram name="sync-lifecycle" alt="SYNC はメモリ健全性チェックを経て MySQL の SELECT からスナップショットを構築し、その間テーブル読み取りは拒否されます。その後レプリケーションを再開し、開始・無効・失敗のいずれかで完了、失敗、キャンセルに至ります。実行中は OPTIMIZE や DUMP と相互排他です。" />
 
 ## コマンドの競合
 
@@ -183,7 +183,7 @@ status=IDLE message="No sync operation performed"
 
 ### SYNC開始を拒否する実行中操作
 
-v1.8.1以降、`SYNC`、`DUMP SAVE`、`DUMP LOAD`、`OPTIMIZE`、自動スナップショットは1つの操作枠を共有します。これらのいずれかが実行中は新しい `SYNC` が拒否されるため、完了後に再実行してください。
+`SYNC`、`DUMP SAVE`、`DUMP LOAD`、`OPTIMIZE`、自動スナップショットは 1 つの操作枠を共有します。これらのいずれかが実行中は新しい `SYNC` が拒否されるため、完了後に再実行してください。
 
 ### SYNC 中に許可される操作
 
@@ -204,22 +204,21 @@ TCP/CLIとHTTPのテーブル読み取り（search、count、facet、ドキュ�
 ### シナリオ 1: 新規サーバーの起動
 
 ```bash
-# 1. MygramDB を起動（auto_initial_snapshot=false）
 ./mygramdb --config config.yaml
+```
 
-# 2. サーバーはスナップショットをビルドせずに起動（MySQL 負荷なし）
-# ログ: "Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)"
+サーバーはスナップショットをビルドせずに起動します（ログ: `Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)`）。準備できたら、認証済みの CLI 接続を1つ使って同期を開始し、進捗を確認します。
 
-# 3. 準備ができたら手動で SYNC を開始
-mygram-cli SYNC articles
-
-# 4. 進捗を監視
-mygram-cli SYNC STATUS
-# 出力: table=articles status=IN_PROGRESS progress=5000/10000 rows (50.0%) rate=2000 rows/s
-
-# 5. 完了を待つ
-mygram-cli SYNC STATUS
-# 出力: table=articles status=COMPLETED rows=10000 time=5.0s gtid=uuid:456 replication=STARTED
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC articles
+OK SYNC STARTED table=articles
+127.0.0.1:11016> SYNC STATUS
+table=articles status=IN_PROGRESS progress=5000/10000 rows (50.0%) rate=2000 rows/s
+127.0.0.1:11016> SYNC STATUS
+table=articles status=COMPLETED rows=10000 time=5.0s gtid=uuid:456 replication=STARTED
 ```
 
 ### シナリオ 2: マルチテーブル同期
@@ -239,29 +238,29 @@ replication:
   auto_initial_snapshot: false
 ```
 
-```bash
-# 1つのテーブルを同期し、完了を確認してから次のテーブルを開始します。
-mygram-cli SYNC articles
-# SYNC STATUS で articles が COMPLETED になったことを確認します。
-mygram-cli SYNC products
-# SYNC STATUS で products が COMPLETED になったことを確認します。
-mygram-cli SYNC users
+1つのテーブルを同期し、`SYNC STATUS` が `COMPLETED` を返すまで待ってから、同じ認証済み CLI 接続で次のテーブルを開始します。
 
-# 複数DBのテーブル識別子
-mygram-cli SYNC app_db.articles
-
-# すべての同期ステータスを確認
-mygram-cli SYNC STATUS
-# 最後の SYNC 完了後の出力:
-# table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=STARTED
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC articles
+127.0.0.1:11016> SYNC STATUS
+127.0.0.1:11016> SYNC products
+127.0.0.1:11016> SYNC STATUS
+127.0.0.1:11016> SYNC users
+127.0.0.1:11016> SYNC STATUS
+table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=STARTED
 ```
+
+複数DBのテーブル識別子には `SYNC app_db.articles` を使います。
 
 ### シナリオ 3: 計画的メンテナンス
 
 ```bash
 # オフピーク時間帯（例: 午前2時）に SYNC をスケジュール
 # cron に追加:
-0 2 * * * echo "SYNC articles" | nc localhost 11016
+0 2 * * * printf 'AUTH \%s\nSYNC articles\n' "$MYGRAM_API_ADMIN_TOKEN" | mygram-cli
 ```
 
 ## グレースフルシャットダウン
@@ -347,6 +346,26 @@ INFO: TCP server stopped
 - MySQL の GTID が有効か確認: `SHOW VARIABLES LIKE 'gtid_mode';`
 - binlog フォーマットが ROW か確認: `SHOW VARIABLES LIKE 'binlog_format';`
 - レプリケーションユーザーの権限を確認: `SHOW GRANTS FOR 'repl_user'@'%';`
+
+### エラー `2017`: デコードできない binlog イベント
+
+XA prepare イベント、MariaDB の圧縮イベント、MySQL の `TRANSACTION_PAYLOAD_EVENT`（トランザクション圧縮）、`PARTIAL_UPDATE_ROWS_EVENT`（部分 JSON 行更新）は、生成元のサーバー設定を変えた後も binlog に残ります。古い位置から通常どおり再開すると同じイベントを再生するため、レプリケーションは再び停止します。
+
+レプリケーションがエラーコード `2017` で停止した場合は、まず最も重要なテーブルに `SYNC` を実行します。MygramDB はそのテーブルを再構築し、スナップショットマーカーから共有ストリームを再開して、デコードできない区間を越えます。続いて、他のすべてのレプリケーション対象テーブルにも一つずつ `SYNC` を実行してください。最初の復旧で共有ストリームが前進するため、再構築しないテーブルには、飛ばした区間の書き込みが反映されません。
+
+`api.admin_token` を設定している場合は、復旧手順全体を1つの認証済み CLI 接続で実行してください。認証状態は接続単位であり、別々の `mygram-cli` プロセスには引き継がれません。次のテーブルの `SYNC` を実行する前に、`SYNC STATUS` が `COMPLETED` と `replication=STARTED` を返すまで待ちます。
+
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC app_db.articles
+127.0.0.1:11016> SYNC STATUS
+127.0.0.1:11016> SYNC app_db.products
+127.0.0.1:11016> SYNC STATUS
+```
+
+他の停止理由では、SYNC はドレイン済み位置から再開します。そのため、関係のないテーブルのコミットを飛ばしません。
 
 ## 関連項目
 

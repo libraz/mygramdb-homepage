@@ -71,6 +71,7 @@ api:
   http:
     enable: true
     port: 8080
+  admin_token: "replace-with-a-high-entropy-secret"
 
 # Allow connections from localhost
 network:
@@ -84,6 +85,10 @@ The `allow_cidrs` setting is required. Without it, all connections are denied. A
 
 ::: info What is CIDR?
 **CIDR** is a notation for a range of IP addresses. `127.0.0.1/32` means localhost only; `10.0.0.0/8` means the whole private network starting with `10.`.
+:::
+
+::: tip Keep the admin token outside the file when practical
+For a production configuration, provide the secret as `MYGRAM_API_ADMIN_TOKEN` instead of committing it to the YAML file. It is required when TCP listens on a non-loopback address without a Unix socket.
 :::
 
 ## Start the Service
@@ -104,17 +109,20 @@ mygram-cli -h localhost -p 11016
 Once connected, start `SYNC` and wait for it to complete:
 
 ```mygram
-mygram> SYNC articles
+127.0.0.1:11016> AUTH replace-with-a-high-entropy-secret
+OK AUTHENTICATED
+
+127.0.0.1:11016> SYNC articles
 OK SYNC STARTED table=articles
 
-mygram> SYNC STATUS
+127.0.0.1:11016> SYNC STATUS
 ...
 ```
 
 Then run a search query:
 
 ```mygram
-mygram> SEARCH articles hello world
+127.0.0.1:11016> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
@@ -133,5 +141,4 @@ Check synchronization with `SYNC STATUS`, confirm MySQL actually has rows contai
 - [Full Configuration Reference](/docs/configuration)
 - [MySQL Replication](/docs/replication)
 - [Operations Guide](/docs/operations)
-- [Upgrade to v1.9](/docs/upgrade-v1.9)
-- [Upgrade to v1.7](/docs/migration-v1.7)
+- [Upgrade to v1.10](/docs/upgrade-v1.10)

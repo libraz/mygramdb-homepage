@@ -1,6 +1,6 @@
 ---
 title: libmygramclient - MygramDB C/C++ クライアントライブラリ
-description: libmygramclientはMygramDB用のC/C++クライアントライブラリ。C++17 API、バインディング用のC API、検索式パーサー、Node.js node-gypの例、スレッド安全性、エラー処理。
+description: libmygramclientはMygramDBに同梱されるインストール可能なC/C++クライアントSDKです。CMakeとpkg-configの統合、C++17とCのAPI、型付きエラー、検索式ヘルパーを提供します。
 head:
   - - meta
     - name: keywords
@@ -11,7 +11,7 @@ head:
 
 ## 概要
 
-libmygramclientは、MygramDBサーバーに接続してクエリを実行するためのC/C++クライアントライブラリです。C++17 APIと、node-gypなどの言語バインディングから呼びやすいC APIの両方を提供します。
+libmygramclientは、MygramDBに同梱されるC/C++クライアントSDKです。TCPプロトコルでMygramDBに接続してクエリを実行します。C++17 APIと、ネイティブ統合や言語バインディング向けのC APIを提供します。MygramDBをインストールすると、ヘッダー、ライブラリ、CMakeパッケージ、pkg-configメタデータも一緒に入ります。
 
 ::: info 読み始める前に
 このライブラリはMygramDBのTCPプロトコルを扱う薄いクライアントです。検索の文法や結果の意味はサーバー側と同じなので、クエリの詳細は[クエリ構文ガイド](/ja/docs/query-syntax)も併せて参照してください。
@@ -38,10 +38,7 @@ libmygramclientは、MygramDBサーバーに接続してクエリを実行する
 make
 ```
 
-これにより以下が作成されます：
-
-- `build/lib/libmygramclient.a` - 静的ライブラリ
-- `build/lib/libmygramclient.dylib` (macOS) または `libmygramclient.so` (Linux) - 共有ライブラリ
+これにより `libmygramclient.a` と、プラットフォーム向けの共有ライブラリが作成されます。CMakeでは `MygramDB::client_static` と `MygramDB::client_shared` として公開されます。
 
 ## インストール
 
@@ -49,14 +46,14 @@ make
 sudo make install
 ```
 
-ヘッダーファイルは `/usr/local/include/mygramdb/` に、ライブラリは `/usr/local/lib/` にインストールされます。現在のC++ヘッダーはMygramDBコアのヘッダーにも依存するため、単独のSDKとしては使えません。C++アプリケーションはMygramDBのソースチェックアウトからビルドしてください。
+ヘッダーは `<prefix>/include/mygramdb` に、ライブラリは `<prefix>/lib`（またはプラットフォームのライブラリディレクトリ）にインストールされます。さらに `MygramDBClient` CMakeパッケージと `mygramclient.pc` も入ります。標準外の場所へインストールした場合は、ビルドツールのprefixまたは `PKG_CONFIG_PATH` を設定してください。
 
 ## C++ API
 
 ### 基本的な使い方
 
 ```cpp
-#include "client/mygramclient.h"
+#include <mygramdb/mygramclient.h>
 #include <iostream>
 
 using namespace mygramdb::client;
@@ -94,15 +91,31 @@ int main() {
 }
 ```
 
-### libmygramclientを使ってコンパイル
+### インストール済みSDKを使う
 
-```bash
-g++ -std=c++17 -I./src -L./build/lib -o myapp myapp.cpp -lmygramclient
+```cmake
+cmake_minimum_required(VERSION 3.15)
+project(myapp LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+find_package(MygramDBClient CONFIG REQUIRED)
+
+add_executable(myapp myapp.cpp)
+target_link_libraries(myapp PRIVATE MygramDB::client_static)
 ```
 
-::: tip リンクで失敗する場合
-`libmygramclient` を標準以外の場所にインストールした場合は、コンパイル時に `-I` と `-L`、実行時に `LD_LIBRARY_PATH`（Linux）または `DYLD_LIBRARY_PATH`（macOS）が必要になることがあります。
-:::
+必要ならインストール先を指定してビルドします。
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/mygramdb-prefix
+cmake --build build
+```
+
+共有ライブラリへリンクする場合は `MygramDB::client_shared` を使います。CまたはC++のビルドシステムでpkg-configを使う場合、`mygramclient` がインクルードディレクトリ、ライブラリ、privateなスレッド依存を設定します。
+
+```bash
+cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
+```
 
 ### 高度な検索
 
@@ -135,13 +148,15 @@ auto result = client.Search(
 ```cpp
 SearchOptions options;
 options.limit = 50;
+options.offset = 20;
 options.sort_column = "created_at";
 options.sort_desc = true;
 options.filters = {{"status", FilterOp::kEqual, "active"}};
 options.fuzzy_distance = 1;
 options.highlight = HighlightOptions{"<strong>", "</strong>", 200, 3};
+options.query_mode = QueryMode::kBoolean;
 
-auto result = client.Search("app_db.articles", "technology", options);
+auto result = client.Search("app_db.articles", "technology OR programming", options);
 if (!result) {
     std::cerr << result.error().message() << "\n";
 }
@@ -163,6 +178,21 @@ if (result) {
     std::cout << "合計マッチ数: " << result->count << "\n";
 } else {
     std::cerr << "Count失敗: " << result.error().message() << "\n";
+}
+```
+
+### FACETのページネーション
+
+`Facet` は値の1ページを `facets` に返します。`total_count` は `offset` と `limit` を適用する前の異なるfacet値の総数なので、ページネーションの表示に使えます。
+
+```cpp
+auto response = client.Facet("app_db.articles", "category", "technology", 10,
+                             {}, {}, {}, 20);
+if (response) {
+    std::cout << response->total_count << "件の異なるカテゴリ\n";
+    for (const auto& facet : response->facets) {
+        std::cout << facet.value << ": " << facet.count << "\n";
+    }
 }
 ```
 
@@ -189,7 +219,37 @@ if (result) {
 }
 ```
 
+### 管理操作の認証
+
+v1.10 では、管理操作の認証は接続単位です。`ClientConfig` に `admin_token` フィールドはありません。接続後、同じ `MygramClient` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してから `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` を呼び出してください。rawコマンドの送信成功は、レスポンスを受信したことだけを意味します。再接続後は毎回認証し直します。検索、count、get、facet 操作にはこの認証は不要です。
+
+```cpp
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
+const char* token = std::getenv("MYGRAM_API_ADMIN_TOKEN");
+if (token == nullptr) {
+    std::cerr << "MYGRAM_API_ADMIN_TOKEN が設定されていません\n";
+    return 1;
+}
+
+auto auth = client.SendCommand(std::string("AUTH ") + token);
+if (!auth) {
+    std::cerr << "管理操作の認証リクエストに失敗: " << auth.error().message() << "\n";
+    return 1;
+}
+if (*auth != "OK AUTHENTICATED") {
+    std::cerr << "管理操作の認証が拒否されました\n";
+    return 1;
+}
+// トークンや AUTH コマンドをログに出力しないでください。
+auto optimized = client.Optimize("app_db.articles");
+```
+
 ### デバッグモード
+
+デバッグモードは管理操作です。この例では、直前のセクションと同じ `client` で認証済みであることを前提にしています。
 
 ```cpp
 // デバッグモード有効化
@@ -300,7 +360,9 @@ int main() {
         .timeout_ms = 5000,
         .recv_buffer_size = 65536,
         .unix_socket_path = NULL,
-        .dump_save_timeout_ms = 600000
+        .dump_save_timeout_ms = 600000,
+        .max_response_bytes = 64ULL * 1024ULL * 1024ULL,
+        .connect_timeout_ms = 1000
     };
 
     // クライアント作成
@@ -343,40 +405,93 @@ int main() {
 ### Cプログラムのコンパイル
 
 ```bash
-gcc -o myapp myapp.c -lmygramclient
+cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
+```
+
+### 管理操作の認証
+
+v1.10 では、管理操作の認証は接続済みの `MygramClient_C` ごとに必要です。管理操作の前に `mygramclient_send_command` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してください。`0` の戻り値はrawレスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は戻り値が0以外の場合にだけ使用してください。再接続後も繰り返してください。これは `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` に対応するC APIに適用され、検索、count、get、facet 操作には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+const char* token = getenv("MYGRAM_API_ADMIN_TOKEN");
+if (token == NULL) {
+    fprintf(stderr, "MYGRAM_API_ADMIN_TOKEN が設定されていません\n");
+    return 1;
+}
+char* auth_command = malloc(strlen("AUTH ") + strlen(token) + 1);
+char* response = NULL;
+if (auth_command == NULL) return 1;
+sprintf(auth_command, "AUTH %s", token);
+int rc = mygramclient_send_command(client, auth_command, &response);
+free(auth_command);
+if (rc != 0) {
+    mygramclient_free_string(response);
+    fprintf(stderr, "管理操作の認証リクエストに失敗: %s\n",
+            mygramclient_get_last_error(client));
+    return 1;
+}
+int authenticated = response != NULL && strcmp(response, "OK AUTHENTICATED") == 0;
+mygramclient_free_string(response);
+if (!authenticated) {
+    fprintf(stderr, "管理操作の認証が拒否されました\n");
+    return 1;
+}
 ```
 
 ### 高度な検索（C API）
 
-新しいコードでは `MygramSearchOptions_C` と `mygramclient_search_with_options` を使ってください。構造体はゼロ初期化し、`struct_size` を設定します。型付きフィルタは `=`、`!=`、`>`、`>=`、`<`、`<=`、`fuzzy_distance` は `1` または `2` を使えます。
+新しいコードでは `MygramSearchOptions_C` と `mygramclient_search_with_options` を使ってください。構造体はゼロ初期化し、`struct_size` を設定します。型付きフィルタは `=`、`!=`、`>`、`>=`、`<`、`<=`、`fuzzy_distance` は `1` または `2` を使えます。Boolean式をリテラル検索ではなくそのまま送るには、`query_mode` を `MYGRAM_QUERY_BOOLEAN` にします。
 
-新しいCプログラムでは `MygramClientConfigV2_C` を使います。`unix_socket_path` を設定するとUnixソケットを使い、TCPのhost/portより優先されます。`dump_save_timeout_ms` は非同期 `DUMP SAVE` を待つ合計期限です。従来の `MygramClientConfig_C` と `mygramclient_create()` はABI互換のままです。
+新しいCプログラムでは `MygramClientConfigV2_C` を使います。`timeout_ms` は通常操作の期限です。`connect_timeout_ms` は接続の期限で、0なら `timeout_ms` を使います。`max_response_bytes` はレスポンスフレームの上限で、0なら64 MiBが既定です。`dump_*_timeout_ms` と `optimize_timeout_ms` は操作別の期限で、0または古い構造体にない場合はクライアントの既定値を使います。`unix_socket_path` を設定するとUnixソケットを使い、TCPのhost/portより優先されます。
+
+`MygramClientConfigV2_C` と `MygramSearchOptions_C` は末尾追加を前提にしたサイズ認識構造体です。呼び出し側が知っているサイズを `struct_size` に設定してください。ライブラリは後ろのフィールドを無視して既定値を使うので、古いバイナリも新しいライブラリを安全に利用できます。V2設定では `version` に `MYGRAMCLIENT_CONFIG_V2_VERSION` も設定します。従来の `MygramClientConfig_C` と `mygramclient_create()` はABI互換のために残っています。
 
 ```c
-const char* and_terms[] = {"AI"};
-const char* not_terms[] = {"old"};
-const char* filter_keys[] = {"status", "category"};
-const char* filter_values[] = {"active", "tech"};
+MygramFilter_C filters[] = {
+    {.key = "status", .op = MYGRAM_FILTER_EQ, .value = "active"},
+};
+MygramSearchOptions_C options = {0};
+options.struct_size = sizeof(options);
+options.limit = 50;
+options.offset = 20;
+options.filters = filters;
+options.filter_count = 1;
+options.query_mode = MYGRAM_QUERY_BOOLEAN;
 
-MygramSearchResult_C* result = NULL;
-int ret = mygramclient_search_advanced(
-    client,
-    "app_db.articles",    // DB 修飾テーブル名
-    "technology",         // クエリ
-    50,                   // 上限
-    0,                    // オフセット
-    and_terms, 1,         // AND条件
-    not_terms, 1,         // NOT条件
-    filter_keys, filter_values, 2,  // フィルター
-    "created_at",         // ソート列
-    1,                    // 降順
-    &result
-);
-
-if (ret == 0) {
-    // 結果を処理
-    mygramclient_free_search_result(result);
+MygramSearchResultWithHighlights_C* result = NULL;
+if (mygramclient_search_with_options(client, "app_db.articles",
+        "technology OR programming", &options, &result) == 0) {
+    mygramclient_free_search_result_with_highlights(result);
 }
+```
+
+FACETのページには `mygramclient_facet_paged(client, table, column, query, limit, offset, &result)` を使います。`result->total_count` はページネーション前の異なる値の総数です。結果は `mygramclient_free_facet_result` で解放してください。
+
+### Cの検索式診断
+
+Cのパーサーと変換関数には、利用者へエラーを表示したい場合の `_ex` 版があります。出力ポインターは最初に `NULL` へ初期化されます。失敗時は可能な場合に `diagnostic` へ確保済みのメッセージが入ります。返された文字列はすべて `mygramclient_free_string` で解放してください。
+
+```c
+MygramParsedExpression_C* parsed = NULL;
+char* diagnostic = NULL;
+if (mygramclient_parse_search_expression_ex("+", &parsed, &diagnostic) != 0) {
+    fprintf(stderr, "%s\n", diagnostic ? diagnostic : "invalid expression");
+}
+mygramclient_free_parsed_expression(parsed);
+mygramclient_free_string(diagnostic);
+
+char* raw_query = NULL;
+diagnostic = NULL;
+if (mygramclient_convert_search_expression_ex("go OR rust", &raw_query,
+                                               &diagnostic) == 0) {
+    /* raw_queryはmygramclient_search_raw()へ渡せます。 */
+}
+mygramclient_free_string(raw_query);
+mygramclient_free_string(diagnostic);
 ```
 
 ## Node.jsバインディングの例
@@ -469,10 +584,12 @@ NODE_API_MODULE(mygramdb, Init)
 
 - `host` - サーバーホスト名（デフォルト: "127.0.0.1"）
 - `port` - サーバーポート（デフォルト: 11016）
-- `timeout_ms` - 接続タイムアウト（デフォルト: 5000）
+- `timeout_ms` - 通常操作のタイムアウト（デフォルト: 5000）
+- `connect_timeout_ms` - 接続タイムアウト。`0`なら `timeout_ms` を使用
 - `recv_buffer_size` - 受信バッファサイズ（デフォルト: 65536）
+- `max_response_bytes` - 最大レスポンスフレーム。`0`なら64 MiBを使用
 - `unix_socket_path` - Unixソケットのパス。設定時はTCPより優先
-- `dump_save_timeout_ms` - 非同期 `DUMP SAVE` のポーリング期限
+- `dump_save_timeout_ms`、`dump_load_timeout_ms`、`dump_verify_timeout_ms`、`optimize_timeout_ms` - 操作別の期限。`0`なら `timeout_ms` を使用
 
 #### SearchResponse
 
@@ -482,7 +599,11 @@ NODE_API_MODULE(mygramdb, Init)
 
 #### Error
 
-- `message` - エラーメッセージ文字列
+- `code()` - 型付きの `mygram::utils::ErrorCode`。クライアントエラーは7000番台
+- `message()` と `context()` - エラーテキストと任意のコンテキスト
+- `to_string()` - 数値コードを含む整形済みエラーテキスト
+
+サーバーが `ERROR <code> ...` を返した場合、数値コードを解析できれば型付きエラーに保持します。数値トークンがない応答は `kClientServerError` として扱います。
 
 ### C API関数
 
@@ -512,7 +633,11 @@ NODE_API_MODULE(mygramdb, Init)
 ```cpp
 auto result = client.Search(...);
 if (!result) {
-    // エラー処理: result.error().message()
+    const auto& error = result.error();
+    std::cerr << error.to_string() << "\n";
+    if (error.code() == mygram::utils::ErrorCode::kClientTimeout) {
+        // アプリケーションの再接続またはリトライ方針を適用します。
+    }
 } else {
     const auto& resp = *result;
     // respを使用
@@ -521,7 +646,7 @@ if (!result) {
 
 ### C API
 
-関数は成功時に0、エラー時に-1を返します。エラーメッセージの取得には `mygramclient_get_last_error()` を使用してください。
+関数は成功時に `0`、エラー時に `-1` を返します。メッセージは `mygramclient_get_last_error()`、数値のMygramDBエラーコードは `mygramclient_get_last_error_code()` で取得します。成功した操作は最後のエラー状態をクリアします。
 
 ## ライセンス
 

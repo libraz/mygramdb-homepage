@@ -1,429 +1,89 @@
 ---
-title: MygramDB Snapshot Commands - DUMP SAVE, LOAD, VERIFY
-description: Back up and restore MygramDB state with DUMP SAVE/LOAD/VERIFY/INFO. Binary snapshot format, CRC32 integrity checks, GTID-based recovery, retention policy, and troubleshooting.
-head:
-  - - meta
-    - name: keywords
-      content: MygramDB snapshot, DUMP SAVE, DUMP LOAD, DUMP VERIFY, backup restore, CRC32 integrity, GTID recovery, dmp file
+title: MygramDB Snapshot and Dump Recovery
+description: Save, verify, restore, and load MygramDB dumps safely, including startup restore, provenance checks, format compatibility, and restore memory limits.
 ---
 
-# Snapshot Commands
+# Snapshot and Dump Recovery
 
-MygramDB provides snapshot commands for backing up and restoring your database state. Snapshots capture the entire database including all indexed data, configuration, and replication position (GTID).
+## What a dump contains
 
-::: info "Snapshot" and "dump"
-This page uses the two terms interchangeably. Both mean the in-memory MygramDB search index written out to a file.
-:::
+A dump is a binary copy of MygramDB's indexed data, configuration compatibility metadata, and replication position. It is a recovery artifact, not a MySQL backup. Keep a MySQL backup and its binlogs independently.
 
-## Overview
+`DUMP SAVE` always writes the current dump format. The reader accepts format 1 and format 2. Dumps with compatibility metadata version 1 remain readable; current metadata also records the MySQL source server UUID. A newer, unsupported dump format is rejected.
 
-A snapshot is a single binary file (`.dmp`) that contains:
-- Complete database state (all tables, documents, and indexes)
-- Configuration settings
-- Replication position (GTID) for seamless recovery
-- Integrity checksums (CRC32) for corruption detection
+## Save a dump
 
-In v1.7.0 and later, snapshot metadata preserves each table's database name. This is required for multi-database deployments where `app_db.articles` and `archive_db.articles` may coexist in one MygramDB instance.
-
-::: tip Not a MySQL backup
-A MygramDB dump exists to bring MygramDB back quickly. It is not a backup of MySQL. Protecting the source data remains a separate MySQL-side responsibility.
-:::
-
-## Commands
-
-### DUMP SAVE - Create Snapshot
-
-Save the current database state to a snapshot file.
-
-**Syntax:**
 ```mygram
-DUMP SAVE [<filepath>] [--with-stats]
+DUMP SAVE
+DUMP SAVE /var/lib/mygramdb/dumps/before-maintenance.dmp
 ```
 
-**Parameters:**
-- `<filepath>` (optional): Path where the snapshot file will be saved
-- `--with-stats` (optional): Include performance statistics in the snapshot
+`DUMP SAVE` has no `--with-stats` option. A command containing that flag is invalid.
 
-**Examples:**
-```mygram
--- Basic snapshot
-DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp
+Saving pauses and drains replication to record a consistent GTID, then resumes it. Search stays available, but replication lag may grow during a large save. `SYNC`, `DUMP LOAD`, `OPTIMIZE`, and scheduled snapshots cannot run at the same time.
 
--- Snapshot with statistics
-DUMP SAVE /var/lib/mygramdb/dumps/mygramdb.dmp --with-stats
-```
+## Verify and inspect before restoring
 
-**Response:**
-```mygram
-OK DUMP_STARTED /var/lib/mygramdb/dumps/mygramdb.dmp
-```
-
-### DUMP LOAD - Restore Snapshot
-
-Load a snapshot file and restore the database state.
-
-**Syntax:**
-```mygram
-DUMP LOAD <filepath>
-```
-
-**Parameters:**
-- `<filepath>`: Path to the snapshot file to load
-
-**Examples:**
-```mygram
-DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp
-```
-
-**Response:**
-```mygram
-OK LOADED /var/lib/mygramdb/dumps/mygramdb.dmp
-```
-
-::: warning
-- Loading a snapshot **replaces** all current data.
-- The database will resume replication from the GTID stored in the snapshot.
-- All tables must be configured in the current config file.
-- For multi-database deployments, configured table identities must match the dump metadata (`<database>.<table>`).
-- MygramDB does **not** automatically load dump files on startup. To restore from a dump after a restart, start MygramDB, run `DUMP VERIFY`, then run `DUMP LOAD`.
-- v1.9 writes dump format v2 and still loads v1 and v2 dump files. Its embedded document-store payload is v3 and retains pre-normalization text for accurate highlighting.
-:::
-
-### DUMP VERIFY - Check Integrity
-
-Verify the integrity of a snapshot file without loading it.
-
-**Syntax:**
-```mygram
-DUMP VERIFY <filepath>
-```
-
-**Parameters:**
-- `<filepath>`: Path to the snapshot file to verify
-
-**Examples:**
 ```mygram
 DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp
-```
-
-**Response (Success):**
-```mygram
-OK DUMP_VERIFIED /var/lib/mygramdb/dumps/mygramdb.dmp
-```
-
-**Response (Failure):**
-```mygram
-ERROR CRC mismatch: file may be corrupted
-expected: 0x12345678
-actual: 0x87654321
-```
-
-### DUMP INFO - Show Snapshot Metadata
-
-Display metadata about a snapshot file without loading it.
-
-**Syntax:**
-```mygram
-DUMP INFO <filepath>
-```
-
-**Parameters:**
-- `<filepath>`: Path to the snapshot file
-
-**Examples:**
-```mygram
 DUMP INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 ```
 
-**Response:**
-```mygram
-OK DUMP_INFO /var/lib/mygramdb/dumps/mygramdb.dmp
-version: 2
-gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10
-tables: 2
-flags: 24
-file_size: 1234567
-timestamp: 1672531200
-has_statistics: true
-END
-```
+`DUMP VERIFY` checks file and section integrity without changing live data. `DUMP INFO` exposes the file format, GTID, table count, flags, size, and timestamp. Verify the intended file before a manual load, but remember that integrity alone does not prove it belongs to this MySQL source.
 
-## Integrity Protection
+For format 2 dumps, verification streams CRC data and refuses a section larger than `dump.restore_max_section_mb`. Restore also stages data within `dump.restore_memory_budget_mb` before replacing live tables. Defaults are 2048 MiB per encoded section and 4096 MiB aggregate staging memory. Set both limits for the capacity of the host and the largest trusted dump; a limit rejection protects the process from unbounded allocation.
 
-### CRC32 Checksums
-
-All snapshot files include CRC32 checksums at multiple levels:
-- **File-level CRC**: Detects any corruption in the entire file
-- **Section-level CRC**: Validates individual sections (config, statistics, index, document store)
-
-::: info What is CRC32?
-**CRC32** is a short check value used to detect whether a file has been damaged. It is not cryptographic tamper detection, but it reliably catches truncated files and disk corruption.
-:::
-
-### File Size Validation
-
-The snapshot header includes the expected file size:
-- Detects incomplete writes
-- Catches network transfer failures
-- Identifies truncated files
-
-### Verification Workflow
-
-Always verify snapshot integrity before loading:
+## Manual restore
 
 ```mygram
--- 1. Verify integrity
 DUMP VERIFY mygramdb.dmp
-
--- 2. Check metadata
 DUMP INFO mygramdb.dmp
-
--- 3. Load if everything looks good
 DUMP LOAD mygramdb.dmp
 ```
 
-## Error Handling
+`DUMP LOAD` replaces the live index and document store. It pauses replication, validates the dump before replacement, sets the loaded GTID, rebuilds search statistics, clears the query cache, and then restores replication. A successful load marks all restored tables initialized, but readiness remains false if replication cannot restart.
 
-### CRC Mismatch
+The load rejects a dump whose indexed-table compatibility settings do not match, whose MySQL host, port, or database differs from the configured source, or whose recorded source UUID differs from the running source. When a running source UUID is known, a dump that does not record one is rejected. Replacing a non-empty replication position with a dump that has no GTID is also refused.
 
-If CRC verification fails, the snapshot file is corrupted:
+## Startup restore
 
-```mygram
-ERROR CRC32 mismatch: expected 0x12345678, got 0x87654321 (file may be corrupted)
-```
-
-**Actions:**
-1. Do not load the corrupted snapshot
-2. Try restoring from a backup copy
-3. Check disk health if corruption occurs frequently
-
-### File Truncation
-
-If the file size doesn't match the expected size:
-
-```mygram
-ERROR File size mismatch: expected 1234567 bytes, got 1000000 bytes (file may be truncated or corrupted)
-```
-
-**Actions:**
-1. The file was not completely written
-2. Retry the SAVE operation
-3. Check available disk space
-
-### Version Mismatch
-
-If the snapshot version is too new:
-
-```mygram
-ERROR Snapshot file version 3 is newer than supported version 2
-```
-
-**Actions:**
-1. Upgrade MygramDB to a newer version
-2. Or use a snapshot created with a compatible version
-
-## Best Practices
-
-### Automatic Snapshots
-
-MygramDB supports automatic periodic snapshots for continuous backup:
+Set `dump.load_on_startup: true` to restore exactly `dump.dir/default_filename` during startup.
 
 ```yaml
-# config.yaml
-dump:
-  dir: /var/lib/mygramdb/dumps    # Directory for dump files
-  interval_sec: 600                 # Auto-save every 10 minutes (0 = disabled)
-  retain: 3                         # Keep last 3 auto-saved dumps
-```
-
-**Features:**
-- Automatic snapshots are saved with timestamp-based filenames (`auto_YYYYMMDD_HHMMSS.dmp`)
-- Old auto-saved files are automatically cleaned up based on `retain` count
-- Manual snapshots (via `DUMP SAVE`) are not affected by auto-cleanup
-- Directory permissions are verified on startup
-- Auto-saved snapshots are backup files only; they are not automatically restored when the server starts.
-
-### Manual Backups
-
-You can also schedule manual snapshots for disaster recovery:
-
-```bash
-# Example: Daily backup script
-#!/bin/bash
-DATE=$(date +%Y%m%d)
-echo "DUMP SAVE /var/lib/mygramdb/dumps/manual_${DATE}.dmp --with-stats" | mygram-cli
-```
-
-### Retention Policy
-
-Keep multiple snapshot versions:
-
-```yaml
-# config.yaml
 dump:
   dir: /var/lib/mygramdb/dumps
   default_filename: mygramdb.dmp
-  interval_sec: 600      # Save every 10 minutes
-  retain: 3              # Keep last 3 snapshots
+  load_on_startup: true
+  restore_memory_budget_mb: 4096
+  restore_max_section_mb: 2048
 ```
 
-### Verify Before Loading
+At startup MygramDB verifies the configured MySQL source and validates the dump's table compatibility, host, port, database, source UUID, and GTID. With replication enabled, a startup dump must contain a GTID. On success, MygramDB restores the dump, marks its tables initialized, then starts replication from the dump GTID and catches up.
 
-Always verify integrity before loading:
+If the default file is missing, corrupt, incompatible, from another source, or cannot be checked, MygramDB logs the failed startup restore and falls back to the normal MySQL initial snapshot. Treat that fallback as a signal to investigate the dump; it can place a full-table read load on MySQL.
 
-```bash
-# Verify first
-echo "DUMP VERIFY mygramdb.dmp" | mygram-cli
-
-# Then load
-echo "DUMP LOAD mygramdb.dmp" | mygram-cli
-```
-
-### Secure Storage
-
-Snapshots contain sensitive data:
-- MySQL connection credentials
-- All document content
-- Replication position
-
-**Recommendations:**
-1. Set file permissions to 600 (owner read/write only)
-2. Store snapshots on encrypted volumes
-3. Use secure transfer protocols (SFTP, SCP) for remote storage
-4. Audit access logs
-
-### Monitor Snapshot Size
-
-Track snapshot file sizes over time:
-
-```bash
-# Check snapshot metadata
-echo "DUMP INFO mygramdb.dmp" | mygram-cli
-```
-
-If snapshot size grows unexpectedly:
-- Check for index bloat
-- Review document retention policies
-- Consider data archival
-
-## Performance Characteristics
-
-### SAVE Performance
-
-| Documents | Avg Text Length | Save Time | File Size |
-|-----------|----------------|-----------|-----------|
-| 100K | 100 bytes | ~1-2 sec | ~20 MB |
-| 1M | 100 bytes | ~10-15 sec | ~200 MB |
-| 10M | 100 bytes | ~2-3 min | ~2 GB |
-
-### LOAD Performance
-
-| Documents | Avg Text Length | Load Time |
-|-----------|----------------|-----------|
-| 100K | 100 bytes | ~2-3 sec |
-| 1M | 100 bytes | ~15-20 sec |
-| 10M | 100 bytes | ~3-5 min |
-
-*Performance varies based on hardware, disk I/O, and data characteristics*
-
-## Configuration
-
-Dump behavior can be configured in `config.yaml`:
+## Retention and storage
 
 ```yaml
 dump:
-  # Directory for dump files
-  dir: /var/lib/mygramdb/dumps
-
-  # Default filename when not specified (for manual DUMP SAVE commands)
-  default_filename: mygramdb.dmp
-
-  # Automatic dump interval in seconds (0 = disabled)
-  interval_sec: 600  # Auto-save every 10 minutes
-
-  # Number of auto-saved dumps to retain (manual dumps are not affected)
-  retain: 3  # Keep last 3 auto-saved dumps
+  interval_sec: 600
+  retain: 3
 ```
 
-**Startup Checks:**
-- MygramDB verifies dump directory permissions on startup
-- If the directory doesn't exist, it will be created automatically
-- If the directory is not writable, the server will fail to start with an error
-
-## Replication Recovery
-
-Recovery from a dump is operator-driven. MygramDB does not scan
-`dump.dir` or load the newest dump during startup. Start the server first,
-verify the intended dump file, and then run `DUMP LOAD`.
-
-When `DUMP LOAD` completes, MygramDB resumes replication only if it was running before the load:
-
-1. **GTID Extraction**: Reads replication position from snapshot
-2. **BinlogReader Resume**: Continues from the stored GTID
-3. **Catch-up**: Processes any missed transactions
-4. **Normal Operation**: Returns to real-time replication
-
-**Example:**
-
-```mygram
-# 1. Server crashes at GTID 1-100
-# 2. Restart MygramDB
-# 3. Verify and load snapshot from GTID 1-80
-DUMP VERIFY mygramdb.dmp
-DUMP LOAD mygramdb.dmp
-
-# 4. If replication was running before the load, MygramDB processes transactions 81-100
-# 5. Otherwise start replication explicitly after confirming the loaded state
-```
+Scheduled dumps use timestamped filenames and retention applies to those automatic files. Manual `DUMP SAVE` files are not removed by this retention. Dumps contain indexed content and connection metadata, so restrict access, store them on protected storage, and test a restore in an isolated environment.
 
 ## Troubleshooting
 
-### "Failed to open snapshot file"
+| Symptom | Action |
+| --- | --- |
+| CRC or truncated-file error | Do not load it. Restore another verified copy and investigate the storage or transfer path. |
+| Unsupported format | Use a MygramDB build that supports the dump format, or choose a compatible dump. |
+| Source or UUID mismatch | Do not override it. Use a dump from the configured source, or deliberately change configuration and restart before recovery. |
+| Restore limit exceeded | Increase the configured limit only after validating the file and provisioning enough memory. |
+| Restore succeeds but readiness is false | Read the replication error in `/health/ready` or `INFO`; the data is installed but replication needs repair. |
 
-**Cause:** File doesn't exist or insufficient permissions
+## See also
 
-**Solution:**
-```bash
-# Check file exists
-ls -l /path/to/snapshot.dmp
-
-# Check permissions
-chmod 600 /path/to/snapshot.dmp
-```
-
-### "Invalid snapshot version"
-
-**Cause:** Snapshot created with incompatible MygramDB version
-
-**Solution:**
-- Check MygramDB version compatibility
-- Use snapshots created with the same major version
-
-### "Table not found in config"
-
-**Cause:** Snapshot contains tables not defined in current config
-
-**Solution:**
-- Update `config.yaml` to include all tables from the snapshot
-- Or create a new snapshot with the current configuration
-
-### "CRC mismatch during load"
-
-**Cause:** Snapshot file is corrupted
-
-**Solution:**
-1. Run DUMP VERIFY to identify corrupted section
-2. Restore from backup copy
-3. Check disk health and network reliability
-
-## Related Commands
-
-- **SEARCH**: Query indexed documents
-- **STATUS**: Check database status and replication position
-- **CONFIG RELOAD**: Reload configuration without restart
-
-## See Also
-
-- [Configuration Guide](/docs/configuration)
-- [Replication Setup](/docs/replication)
-- [Performance Tuning](/docs/performance)
+- [Operations](/docs/operations)
+- [Replication management](/docs/replication-management)
+- [SYNC command](/docs/sync-command)

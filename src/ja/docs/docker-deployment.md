@@ -36,7 +36,8 @@ nano .env
 `.env` 内の以下のデフォルト値を変更してください：
 
 - `MYSQL_ROOT_PASSWORD` - MySQL root パスワード
-- `MYSQL_PASSWORD` - MySQL レプリケーションユーザーのパスワード
+- `MYSQL_PASSWORD` - MySQL レプリケーションユーザーのパスワード。Composeでは必須で、設定を生成する場合はコンテナのentrypointでも必須です
+- `API_ADMIN_TOKEN` - 管理操作用の十分に長いランダムなシークレット。Composeは未設定値を、entrypointはサンプルのプレースホルダーを拒否します
 - `REPLICATION_SERVER_ID` - この MygramDB インスタンスの一意なサーバーID
 :::
 
@@ -83,7 +84,7 @@ docker-compose down -v
 MYSQL_HOST=mysql                    # MySQL ホスト
 MYSQL_PORT=3306                     # MySQL ポート
 MYSQL_USER=repl_user                # MySQL ユーザー
-MYSQL_PASSWORD=your_password        # MySQL パスワード
+MYSQL_PASSWORD=your_password        # 必須の MySQL パスワード
 MYSQL_DATABASE=mydb                 # データベース名
 MYSQL_USE_GTID=true                 # GTID ベースのレプリケーションを使用
 ```
@@ -155,20 +156,38 @@ MygramDBのメモリ設定だけでは、プロセスの使用量を強制的に
 
 #### APIサーバー
 
+::: info ホスト側のbindとコンテナ側のbindは別です
+ComposeはTCPとHTTPのポートをホストの `127.0.0.1` に公開します。一方、コンテナは自身のネットワークインターフェースで待ち受ける必要があるため、`API_CONTAINER_BIND` と `API_HTTP_CONTAINER_BIND`（どちらもデフォルトは `0.0.0.0`）を使います。リバースプロキシやファイアウォールを設計に含めない限り、ホスト側のループバック公開を全インターフェース公開へ変更しないでください。
+:::
+
 ```bash
-API_BIND=0.0.0.0                    # バインドアドレス
+API_BIND=127.0.0.1                  # 直接起動するサーバーのbindアドレス
 API_PORT=11016                      # APIポート
 API_HTTP_ENABLE=true
-API_HTTP_BIND=0.0.0.0
+API_HTTP_BIND=127.0.0.1
 API_HTTP_PORT=8080
+API_ADMIN_TOKEN=CHANGE_ME_GENERATE_RANDOM_SECRET
+# Compose専用のコンテナ内リスナー。ホスト側ポートは127.0.0.1に限定されます
+API_CONTAINER_BIND=0.0.0.0
+API_HTTP_CONTAINER_BIND=0.0.0.0
 API_RATE_LIMIT_ENABLE=false
 API_RATE_LIMIT_CAPACITY=100
 API_RATE_LIMIT_REFILL_RATE=10
 API_RATE_LIMIT_MAX_CLIENTS=10000
 ```
 
-::: warning API_BIND=0.0.0.0 の扱い
-`API_BIND=0.0.0.0` はコンテナ外から接続できるようにする設定です。必ず `NETWORK_ALLOW_CIDRS` または設定ファイルの `network.allow_cidrs` で接続元を絞り、必要ならリバースプロキシやファイアウォールを併用してください。
+`API_ADMIN_TOKEN` はコンテナ内リスナーが非ループバックであるため、Composeでは必須です。`openssl rand -hex 32` で生成してください。TCPの管理コマンドには接続後に `AUTH <token>` が必要です。`POST /optimize` には `Authorization: Bearer <token>` を渡します。
+
+#### ネットワーク設定
+
+```bash
+# Docker bridgeでは、公開ポートへの接続元がゲートウェイアドレスに見えます。
+# 172.16.0.0/12はDockerの標準bridgeプールを含みます。可能なら狭めてください。
+NETWORK_ALLOW_CIDRS=127.0.0.1/32,172.16.0.0/12
+```
+
+::: warning
+Composeでは `NETWORK_ALLOW_CIDRS` が必須です。非ループバックのAPI bindと `0.0.0.0/0` または `::/0` を組み合わせると、MygramDBは起動時に設定を拒否します。独自のコンテナネットワークでは、アクセスが必要なアプリケーションと運用ネットワークのCIDRだけを指定してください。
 :::
 
 #### ロギング
@@ -259,12 +278,17 @@ MYSQL_PORT=3306
 MYSQL_USER=repl_user
 MYSQL_PASSWORD=強力で安全なパスワード
 
+# `openssl rand -hex 32` で生成した値を貼り付けます
+API_ADMIN_TOKEN=CHANGE_ME_GENERATE_RANDOM_SECRET
+NETWORK_ALLOW_CIDRS=127.0.0.1/32,172.16.0.0/12
+
 # 本番メモリ設定
 MEMORY_HARD_LIMIT_MB=16384
 MEMORY_SOFT_TARGET_MB=8192
 
-# 本番 API 設定
+# 本番 API 設定。Composeはこれらのポートをlocalhostだけに公開します
 API_PORT=11016
+API_HTTP_PORT=8080
 
 # 本番ロギング
 LOG_LEVEL=info
@@ -370,8 +394,8 @@ docker exec -i mygramdb_mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} mydb < back
 
 # MygramDBダンプをコピーして明示的に読み込む
 docker cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
-docker exec mygramdb mygram-cli "DUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp"
-docker exec mygramdb mygram-cli "DUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp"
+docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 ```
 
 ## トラブルシューティング

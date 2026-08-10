@@ -42,21 +42,21 @@ sudo systemctl enable --now mygramdb
 ## Docker
 
 ::: warning Prepare a config file before starting
-For production use under Docker, mount a config file containing the MySQL connection, replication settings, target tables, and `network.allow_cidrs`. Simply starting the image does not complete the initial sync of existing data.
+For production use under Docker, mount a config file containing the MySQL connection, replication settings, target tables, `network.allow_cidrs`, and `api.admin_token`. The mounted config must set `api.tcp.bind: 0.0.0.0` and, when HTTP is enabled, `api.http.bind: 0.0.0.0` so the published ports can reach the container. Keep the loopback host mappings below and a restrictive CIDR allowlist; expose the service through a reverse proxy only after setting an admin token. Simply starting the image does not complete the initial sync of existing data.
 :::
 
 ```bash
 docker pull ghcr.io/libraz/mygram-db:latest
 
 docker run -d \
-  -p 11016:11016 \
-  -p 8080:8080 \
+  -p 127.0.0.1:11016:11016 \
+  -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml \
   ghcr.io/libraz/mygram-db:latest
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.9.0`
+- `ghcr.io/libraz/mygram-db:1.10.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
@@ -171,5 +171,4 @@ MygramDB **refuses to run as root** for security. Always run it as a dedicated n
 
 - [Docker Deployment](/docs/docker-deployment)
 - [Operations Guide](/docs/operations)
-- [Upgrade to v1.8](/docs/upgrade-v1.8)
-- [Upgrade to v1.7](/docs/migration-v1.7)
+- [Upgrade to v1.10](/docs/upgrade-v1.10)

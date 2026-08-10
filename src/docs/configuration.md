@@ -330,6 +330,8 @@ api:
     enable: false
     bind: "127.0.0.1"
     port: 8080
+    max_connections: 10000
+    trusted_proxies: []
     enable_cors: false
     cors_allow_origin: ""
     max_body_bytes: 16777216
@@ -337,13 +339,34 @@ api:
     write_timeout_sec: 5
   default_limit: 100
   max_query_length: 128
+  admin_token: "replace-with-a-high-entropy-secret"
 ```
 
-TCP and HTTP bind to loopback by default. `idle_timeout_sec: 0` disables TCP idle reaping. The pending-frame limits cap completed requests waiting for a worker; reads pause at 75% of either limit and resume after the queue drains. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
+TCP and HTTP bind to loopback by default. `idle_timeout_sec: 0` disables TCP idle reaping. The pending-frame limits cap completed requests waiting for a worker; reads pause at 75% of either limit and resume after the queue drains. `api.http.max_connections` caps admitted HTTP connections, including sockets waiting for workers. `api.http.trusted_proxies` is a list of numeric reverse-proxy IP addresses whose `X-Forwarded-For` value may determine the client identity for ACLs and rate limiting; leave it empty unless requests arrive through those proxies. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
 
 ::: info What TCP and HTTP each handle
-The TCP API serves search plus administrative commands such as `SYNC`, `DUMP`, and `SET`. The HTTP API covers search, count, facet, document lookup, health, and metrics; it exposes no administrative commands.
+The TCP API serves search plus administrative commands such as `SYNC`, `DUMP`, and `SET`. The HTTP API covers search, count, facet, document lookup, health, metrics, and `POST /optimize`.
 :::
+
+### Administrative authentication
+
+`api.admin_token` is a shared secret for administrative commands. Set it in the configuration file or through `MYGRAM_API_ADMIN_TOKEN`; use a high-entropy value and keep it out of source control. When TCP binds to a non-loopback address and no Unix socket is configured, the token is mandatory or MygramDB refuses to start.
+
+Authenticate a TCP connection before administrative commands:
+
+```mygram
+AUTH replace-with-a-high-entropy-secret
+SYNC articles
+```
+
+`POST /optimize` requires the same token as an HTTP Bearer credential:
+
+```bash
+curl -X POST http://127.0.0.1:8080/optimize \
+  -H "Authorization: Bearer $MYGRAM_API_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
 
 ## Rate Limiting
 
@@ -432,10 +455,10 @@ network:
     - "10.0.0.0/8"
 ```
 
-If `allow_cidrs` is empty or omitted, connections are denied. Add only the application server and operator networks that need access. MygramDB does not provide native TLS or API authentication; put it behind a firewall, private network, or reverse proxy when exposing HTTP.
+If `allow_cidrs` is empty or omitted, connections are denied. Add only the application server and operator networks that need access. MygramDB has no native TLS, so terminate TLS at a reverse proxy or load balancer when needed. Administrative commands use `api.admin_token`; ordinary search endpoints remain protected by the bind address and CIDR allowlist.
 
 ::: danger Never expose it directly to a public network
-The MygramDB search API has no built-in user authentication. Do not publish it to the internet with `0.0.0.0/0` allowed.
+Do not publish MygramDB directly to the internet. A configuration with `0.0.0.0/0` or `::/0` in `allow_cidrs` and a non-loopback TCP or enabled HTTP bind is rejected at startup. Use a restrictive CIDR list, or keep the listener on loopback behind a reverse proxy.
 :::
 
 ## Logging

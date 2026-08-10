@@ -4,6 +4,7 @@ import benchmark from '../src/data/benchmark-v1.9.0.json'
 
 const siteUrl = 'https://mygramdb.libraz.net'
 const githubUrl = 'https://github.com/libraz/mygram-db'
+const latestVersion = '1.10.0'
 
 // JSON-LD: SoftwareApplication schema
 const softwareApplicationJsonLd = {
@@ -20,7 +21,7 @@ const softwareApplicationJsonLd = {
   description: 'In-memory full-text search engine with real-time MySQL binlog replication.',
   url: siteUrl,
   downloadUrl: githubUrl,
-  softwareVersion: benchmark.run.mygramdbVersion,
+  softwareVersion: latestVersion,
   author: {
     '@type': 'Person',
     name: 'libraz'
@@ -151,9 +152,9 @@ export default defineConfig({
           { text: '比較', link: '/ja/comparison' },
           { text: 'FAQ', link: '/ja/faq' },
           {
-            text: 'v1.9.0',
+            text: `v${latestVersion}`,
             items: [
-              { text: 'リリースノート', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.9.0.md' },
+              { text: 'リリースノート', link: `https://github.com/libraz/mygram-db/blob/main/docs/releases/v${latestVersion}.md` },
               { text: '変更履歴', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
             ]
           }
@@ -204,6 +205,7 @@ export default defineConfig({
             {
               text: 'アップグレード',
               items: [
+                { text: 'v1.10 へのアップグレード', link: '/ja/docs/upgrade-v1.10' },
                 { text: 'v1.9 へのアップグレード', link: '/ja/docs/upgrade-v1.9' },
                 { text: 'v1.8 へのアップグレード', link: '/ja/docs/upgrade-v1.8' },
                 { text: 'v1.7 へのアップグレード', link: '/ja/docs/migration-v1.7' }
@@ -223,9 +225,9 @@ export default defineConfig({
       { text: 'Comparison', link: '/comparison' },
       { text: 'FAQ', link: '/faq' },
       {
-        text: 'v1.9.0',
+        text: `v${latestVersion}`,
         items: [
-          { text: 'Release Notes', link: 'https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.9.0.md' },
+          { text: 'Release Notes', link: `https://github.com/libraz/mygram-db/blob/main/docs/releases/v${latestVersion}.md` },
           { text: 'Changelog', link: 'https://github.com/libraz/mygram-db/blob/main/CHANGELOG.md' }
         ]
       }
@@ -277,6 +279,7 @@ export default defineConfig({
         {
           text: 'Upgrading',
           items: [
+            { text: 'Upgrade to v1.10', link: '/docs/upgrade-v1.10' },
             { text: 'Upgrade to v1.9', link: '/docs/upgrade-v1.9' },
             { text: 'Upgrade to v1.8', link: '/docs/upgrade-v1.8' },
             { text: 'Upgrade to v1.7', link: '/docs/migration-v1.7' }

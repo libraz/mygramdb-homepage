@@ -24,10 +24,14 @@ api:
   tcp:
     bind: "127.0.0.1"
     port: 11016
+  admin_token: "replace-with-a-secret"
   http:
     enable: true          # HTTPサーバーを有効化
     bind: "127.0.0.1"     # バインドアドレス（デフォルト: ローカルホストのみ）
     port: 8080            # HTTPポート（デフォルト: 8080）
+    max_connections: 10000 # HTTP ワーカー待ちのソケットも含む
+    max_body_bytes: 16777216 # リクエスト本文上限（既定は16 MiB）
+    trusted_proxies: []   # X-Forwarded-For を信頼する数値形式のプロキシ IP
     enable_cors: false    # ブラウザ公開時のみ有効化
     cors_allow_origin: "" # CORS有効時は許可するOriginを指定
 ```
@@ -36,13 +40,15 @@ api:
 デフォルトでは TCP/HTTP サーバーはループバックにのみバインドします。公開する必要がある場合は `api.tcp.bind` / `api.http.bind` を明示的に設定し、`network.allow_cidrs` で許可 IP を厳密に指定し、MygramDB の前段に TLS/認証付きリバースプロキシ等を配置してください。CORS はデフォルトで無効であり、信頼できるOriginに限定して使用します。
 :::
 
+`api.http.max_connections` は、HTTP ワーカーを待つソケットも含めて受け入れる接続数を制限します。`api.http.max_body_bytes` を超える POST 本文は、ルーティング前に `413 Payload Too Large` で拒否されます。既定値は 16 MiB です。`api.http.trusted_proxies` には数値形式のプロキシ IP アドレスを列挙します。MygramDB は直接の TCP 接続元がこの一覧と完全一致した場合だけ `X-Forwarded-For` を信頼し、それ以外のクライアントが直接付けたヘッダーは無視します。ACL はレート制限より先に評価され、どちらもこの条件を満たしたクライアント識別子を使います。
+
 ::: info 用語補足
 **CORS** はブラウザが別ドメインのAPIを呼ぶための仕組みです。サーバー間通信では通常不要です。ブラウザから直接MygramDBを呼ぶ場合だけ、信頼できるOriginに限定して有効化してください。
 :::
 
 ## API エンドポイント
 
-すべてのレスポンスは `Content-Type: application/json` のJSON形式です。テーブルルートは単一の
+ハンドラーが生成するレスポンスは、`/metrics` を除き `Content-Type: application/json` の JSON を返します。`/metrics` は Prometheus テキストを返します。CORS プリフライトの `OPTIONS` リクエストは本文なしの `204 No Content` を返します。テーブルルートは単一の
 識別子セグメント `/tables/{identity}` を使用します。`{identity}` は DB 修飾名 `` `database.table` ``
 です（たとえば `app_db` データベースの `articles` テーブルは `/tables/app_db.articles` と指定します）。
 単一データベース構成（設定されている個別のデータベースが1つだけ）の場合は、修飾なしの `table` 名も
@@ -109,6 +115,7 @@ HTTPでは、既定で `q` をリテラルな検索テキストとして扱い�
 - **AND演算子**: `"tech AND AI AND machine learning"`
 - **OR演算子**: `"(mysql OR postgresql) AND performance"`
 - **NOT演算子**: `"news NOT sports"`
+- **AND NOT形式**: `"news AND NOT sports"`（同じ除外条件）
 - **組み合わせ**: `"tech AND AI NOT old"`
 
 `limit`、`offset`、`sort`、`filters`、`highlight`、`fuzzy` はJSONフィールドで指定してください。`q` にこれらの制御句は書けません。リテラルモードでは `LIMIT` や `SORT` のような文字列も検索テキストの一部として扱われます。
@@ -143,7 +150,8 @@ HTTPでは、既定で `q` をリテラルな検索テキストとして扱い�
 
 ```json
 {
-  "error": "Missing required field: q"
+  "error": "Missing required field: q",
+  "error_code": 3000
 }
 ```
 
@@ -151,7 +159,8 @@ HTTPでは、既定で `q` をリテラルな検索テキストとして扱い�
 
 ```json
 {
-  "error": "Internal error: database connection failed"
+  "error": "Internal server error",
+  "error_code": 5
 }
 ```
 
@@ -260,8 +269,23 @@ Content-Type: application/json
 
 ### HTTP API の公開範囲
 
-HTTP API は検索、カウント、ドキュメント取得、ヘルス、メトリクス、レプリケーションステータス、機密値を伏せた設定の参照を公開します。
-`SET`、`SHOW VARIABLES`、`SYNC`、`DUMP` などの管理コマンドは引き続き TCP/CLI プロトコルで利用でき、HTTP ルートとしては公開されません。
+HTTP API は検索、カウント、ドキュメント取得、ヘルス、メトリクス、レプリケーションステータス、機密値を伏せた設定の参照、`POST /optimize` を公開します。`SET`、`SHOW VARIABLES`、`SYNC`、`DUMP` は TCP/CLI コマンドであり、HTTP ルートはありません。
+
+### POST /optimize
+
+1つのテーブル、または設定済みの全テーブルのポスティングリストを最適化します。JSON オブジェクトに任意の修飾済み `table` 名を指定します。空のオブジェクトは全テーブルを対象にします。
+
+```http
+POST /optimize HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"table":"app_db.articles"}
+```
+
+`Content-Type` は `application/json` でなければなりません。`api.admin_token` が空でない場合、このエンドポイントには正確な `Authorization: Bearer <token>` ヘッダーが必要です。満たさない場合は `WWW-Authenticate: Bearer` と `error_code: 7` を含む `401` を返します。トークンは定数時間で比較します。ほかの HTTP ルートで Bearer トークンを管理セッションとして使うことはできません。
+
+成功時は `{ "status": "ok", "result": "OPTIMIZED ..." }` を含む `200` を返します。本文で受け付けるフィールドは `table` だけです。未知のフィールドまたは文字列以外のテーブル名は `400` のリクエストエラーになります。
 
 ### GET /tables/{identity}/{primary_key}
 
@@ -289,7 +313,8 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 
 ```json
 {
-  "error": "Document not found"
+  "error": "Document not found",
+  "error_code": 8
 }
 ```
 
@@ -537,7 +562,7 @@ GET /health HTTP/1.1
 
 ### GET /health/ready
 
-トラフィック制御用のレディネスプローブです。検索トラフィックを受け付けられる場合のみ `200 OK` を返します。DUMP LOAD 中、テーブル同期中、または設定済みレプリケーションが利用不可の場合は `503 Service Unavailable` を返します。v1.8.0以降、テーブル読み取りルート（search、count、facet、ドキュメントGET）も対象テーブルの同期中は `503` を返します。
+トラフィック制御用のレディネスプローブです。初期データの読み込みが完了し、サーバーがロード中ではなく、`SYNC` が実行中ではなく、設定済みレプリケーションを利用できる場合だけ `200 OK` を返します。JSON 本文には `data_initialized`、`loading`、`status`（`"ready"` または `"not_ready"`）が含まれます。条件を満たさない場合は `503 Service Unavailable` を返します。テーブル読み取りルート（search、count、facet、ドキュメントGET）も、対象テーブルの同期中は `503` を返します。
 
 ::: tip live と ready の使い分け
 Kubernetesでは `/health/live` をLiveness Probe、`/health/ready` をReadiness Probeに使ってください。`live` は「プロセスを再起動すべきか」、`ready` は「検索トラフィックを流してよいか」を見るためのものです。
@@ -545,7 +570,7 @@ Kubernetesでは `/health/live` をLiveness Probe、`/health/ready` をReadiness
 
 ### GET /health/detail
 
-詳細な監視スナップショットです。`"status": "healthy"` または `"status": "degraded"` を含む `200 OK` を返します。ロードバランサーのレディネス判定にはこのエンドポイントではなく `/health/ready` を使用してください。`/health/live` と `/health/ready` 以外と同様に、CIDR許可リストの対象です。
+詳細な監視スナップショットです。`"status": "healthy"` または `"status": "degraded"` を含む `200 OK` を返します。ロードバランサーのレディネス判定にはこのエンドポイントではなく `/health/ready` を使用してください。`/health`、`/health/live`、`/health/ready` を含め、すべての HTTP ルートが CIDR 許可リストの対象です。
 
 ### GET /config
 
@@ -610,20 +635,21 @@ GET /replication/status HTTP/1.1
 
 ```json
 {
-  "error": "Replication not configured"
+  "error": "Replication not configured",
+  "error_code": 4
 }
 ```
 
 ## CORS サポート
 
-ブラウザから直接アクセスする場合は `api.http.enable_cors: true` を設定し、`api.http.cors_allow_origin` に信頼できるOriginを指定します。Originを空のままにすると `*` になるため、信頼できるOriginを指定せずにCORSを有効化しないでください。不要な場合は CORS を無効のままにしてください。
+ブラウザから直接アクセスする場合は `api.http.enable_cors: true` を設定し、`api.http.cors_allow_origin` に信頼できる Origin を指定します。Origin が空の場合、MygramDB は CORS を有効にせず、ワイルドカード Origin も返しません。不要な場合は CORS を無効のままにしてください。
 
 **CORS ヘッダー:**
 
 ```
 Access-Control-Allow-Origin: https://app.example.com
 Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type
+Access-Control-Allow-Headers: Content-Type, Authorization
 ```
 
 ## 使用例
@@ -720,13 +746,16 @@ for doc in data['results']:
 
 ## エラーハンドリング
 
-すべてのエラーレスポンスは次の形式に従います：
+ハンドラーが生成するエラーレスポンスは次の形式に従います：
 
 ```json
 {
-  "error": "エラーメッセージの説明"
+  "error": "エラーメッセージの説明",
+  "error_code": 3000
 }
 ```
+
+`error_code` は機械処理用の MygramDB エラーコードです。原因に応じてクライアントの動作を分ける場合は、人間向けの `error` 文字列ではなくこの値を使ってください。リクエスト本文が大きすぎる場合の `413 Payload Too Large` は HTTP サーバーがルーティング前に返すため、このレスポンスでは JSON 本文や `error_code` ではなくステータスコードに基づいて処理してください。
 
 **HTTPステータスコード:**
 
@@ -734,8 +763,10 @@ for doc in data['results']:
 |--------|------|
 | 200 | 成功 |
 | 400 | 不正なリクエスト（無効な入力） |
+| 401 | 未認証（`/optimize` に必要な Bearer トークンがない、または無効） |
 | 403 | 禁止（送信元IPが許可されていない） |
 | 404 | 見つかりません（ドキュメントが存在しない） |
+| 413 | Payload Too Large（リクエスト本文が `api.http.max_body_bytes` を超過） |
 | 429 | リクエスト過多（レート制限を超過） |
 | 500 | 内部サーバーエラー |
 | 503 | サービス利用不可、機能無効、レプリケーション利用不可、またはテーブル同期中 |

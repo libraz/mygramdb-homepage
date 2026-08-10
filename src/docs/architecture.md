@@ -31,8 +31,8 @@ The **index** is the structure that finds candidate documents fast. The **DocSto
 
 - **BinlogReader** -- Connects to MySQL as a replica. Receives row-level events (INSERT, UPDATE, DELETE) via GTID-based binlog streaming.
 - **Index** -- In-memory n-gram index. Maps n-gram strings to posting lists (sorted document ID sets).
-- **DocumentStore** -- Maps internal DocIDs to MySQL primary keys and stores filter column values. Optionally stores document text for `verify_text`.
-- **SearchHandler** -- Parses queries, executes the search pipeline, manages the query cache.
+- **DocumentStore** -- Maps internal DocIDs to MySQL primary keys and stores filter column values. Filter-column names are interned once per store; each document keeps a small vector sorted by column ID rather than owning the same column names repeatedly. It optionally stores document text for `verify_text`.
+- **SearchHandler** -- Parses queries, executes the search pipeline, manages the query cache, and reads candidate text in bounded chunks for text-heavy stages.
 - **Snapshot** -- Periodic dump of index state and GTID position to disk for fast restart.
 
 ## Data Flow
@@ -63,7 +63,7 @@ Search queries arrive via TCP (port 11016, default) or HTTP (port 8080, disabled
 
 ## Thread Model
 
-Since v1.5.3, MygramDB uses an **event-driven Reactor I/O model** for TCP connections. The reactor uses epoll (Linux) or kqueue (macOS) to multiplex thousands of connections onto a single event-loop thread, dispatching work to a bounded worker pool.
+MygramDB uses an **event-driven Reactor I/O model** for TCP connections. The reactor uses epoll (Linux) or kqueue (macOS) to multiplex thousands of connections onto a single event-loop thread, dispatching work to a bounded worker pool.
 
 ::: info What is a Reactor I/O model?
 A **Reactor I/O model** watches many connections from a small number of threads and hands work to a worker only when there is something to process. Because it does not create a thread per connection, idle connections cost almost nothing.
@@ -75,9 +75,9 @@ A **Reactor I/O model** watches many connections from a small number of threads 
 
 - The **Reactor** thread handles all TCP I/O (accept, read, write) via epoll/kqueue. No thread-per-connection overhead — thousands of idle connections consume no threads.
 - Parsed requests are dispatched to the **Worker Thread Pool** for query execution.
-- The Index and DocumentStore are protected by `std::shared_mutex`, allowing multiple concurrent readers with a single writer.
-- Search queries acquire a read lock. Binlog event processing acquires a write lock.
-- This is optimal for the read-heavy workload: searches never block each other, and writes only block briefly during index updates.
+- The Index and DocumentStore synchronize their own state. Searches take short shared accesses to obtain the data they need; binlog application coordinates its updates before publishing the new state.
+- Candidate text is materialized in bounded chunks. The DocumentStore lock is released before BM25 scoring, term-frequency counting, and text post-filters, so those expensive stages do not keep the store locked.
+- Cache invalidation uses reverse indexes for n-gram, filter, and text-sensitive dependencies. Its periodic LRU maintenance resumes from a bounded slice instead of sweeping every cache entry under one exclusive lock.
 - Per-connection **backpressure** (`api.tcp.max_write_queue_bytes`, default 16 MiB) force-closes slow clients whose write queue exceeds the cap, preventing memory exhaustion.
 
 ::: info What is backpressure?
@@ -103,7 +103,7 @@ A **write-ahead log** records every change sequentially as it happens. MygramDB 
 2. On restart, MygramDB loads the snapshot and resumes binlog replication from the saved GTID.
 3. Events between the snapshot and current MySQL position are replayed automatically.
 
-Since v1.5.0, snapshot writes use **atomic file operations** (write to temp file, then rename) to prevent corruption if the process is interrupted during a dump.
+Snapshot writes use **atomic file operations** (write to temp file, then rename) to prevent corruption if the process is interrupted during a dump.
 
 If no snapshot has been loaded, run `SYNC <table>` (or `SYNC <database>.<table>` in multi-database configurations) to build the initial snapshot. Automatic startup snapshots only run when `replication.auto_initial_snapshot` is explicitly enabled.
 
@@ -123,9 +123,9 @@ MygramDB snapshots exist to restore the search index quickly. Backups and point-
 | DocumentStore + Text Store | ~1.54 GB |
 | **Total RSS** | **~2.53 GB** |
 
-The text store is allocated only when `verify_text` is enabled. Without it, memory usage is approximately 813 MB for the same dataset.
+The text store is allocated only when `verify_text` is enabled. Without it, memory usage is approximately 813 MB for the same dataset. Filter values keep interned column IDs in small sorted vectors, avoiding one owned column-name string and hash map per document and configured filter column.
 
-Posting lists are the largest component. Their memory efficiency depends on the compression strategy -- delta encoding for sparse n-grams, Roaring bitmaps for dense ones. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
+Posting lists are the largest component. Their memory efficiency depends on the compression strategy -- delta encoding for sparse n-grams, Roaring bitmaps for dense ones. Monitoring does not lock every table for every scrape: per-table values are aggregated into a bounded snapshot served by `INFO`, `/metrics`, and Prometheus. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
 
 ---
 

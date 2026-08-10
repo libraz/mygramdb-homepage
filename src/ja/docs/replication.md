@@ -119,20 +119,22 @@ replication:
   start_from: "snapshot"
 ```
 
-v1.8.0以降、起動時の自動スナップショットを有効にする場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` が必要です。
+起動時の自動スナップショットを有効にする場合は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` を使ってください。
 
-```bash
-# テーブルのスナップショット同期を開始
-mygram-cli SYNC articles
+以下の本番向け例は `api.admin_token` を設定している前提です。空なら `AUTH` は不要ですが、非ループバックのデプロイではトークンを設定してください。
 
-# 複数DB構成の場合
-mygram-cli SYNC app_db.articles
-
-# 同期進捗を確認
-mygram-cli SYNC STATUS
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC app_db.articles
+OK SYNC STARTED table=app_db.articles
+127.0.0.1:11016> SYNC STATUS
 ```
 
-v1.7.0以降、各テーブルは `<database>.<table>` の有効識別子を持ちます。すべてのテーブルが1つのDBにある場合は `articles` のような修飾なしの名前も使えます。設定が2つ以上のDBにまたがる場合、`SYNC`、`SEARCH`、各種クライアントAPIでは修飾名を使ってください。
+単一DB構成では代わりに `SYNC articles` を使います。
+
+各テーブルには `<database>.<table>` という有効識別子があります。すべてのテーブルが 1 つの DB にある場合は、`articles` のような修飾なしの名前も使えます。設定が 2 つ以上の DB にまたがる場合、`SYNC`、`SEARCH`、各種クライアント API では修飾名を使ってください。
 
 レプリケーションが有効で複数テーブルが設定されている場合、初期スナップショットは設定テーブルに対して1つの `START TRANSACTION WITH CONSISTENT SNAPSHOT` を使い、共有GTIDを取得します。これにより、binlogストリーミング再開前に関連テーブルを同じMySQL時点に揃えます。
 
@@ -309,14 +311,13 @@ MygramDB はこれらの MySQL カラム型をレプリケートできます：
 
 ### レプリケーション状態を確認
 
-CLI または TCP プロトコルを使用：
+認証済みの CLI 接続を1つ使用します：
 
-```bash
-# CLI を使用
-./build/bin/mygram-cli REPLICATION STATUS
-
-# telnet を使用
-echo "REPLICATION STATUS" | nc localhost 11016
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> REPLICATION STATUS
 ```
 
 レスポンス:
@@ -333,16 +334,22 @@ END
 
 Binlog レプリケーションを停止（インデックスは読み取り専用になります）：
 
-```bash
-./build/bin/mygram-cli REPLICATION STOP
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> REPLICATION STOP
 ```
 
 ### レプリケーションを開始
 
 Binlog レプリケーションを再開：
 
-```bash
-./build/bin/mygram-cli REPLICATION START
+```text
+$ ./build/bin/mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> REPLICATION START
 ```
 
 ## トラブルシューティング
@@ -386,7 +393,8 @@ binlog_format = ROW
 - 設定の `replication.queue_size` を増やす
 - MygramDBレプリカを追加するか、上流の書き込み負荷を下げる。`build.parallelism`は
   予約済み / 現在は未強制です。
-- MygramDB レプリカを追加
+
+`replication_seconds_since_last_applied` は、MySQL の書き込み状況とリーダー状態を合わせて見てください。この時刻は適用済み GTID を進めたときに更新されるため、大きい値は最近イベントを適用していないことを示します。ただし、ソースがアイドル中でも値だけで遅延リーダーとは断定できません。レプリケーションを利用できないとき、`/health/ready` は `503` を返します。`INFO` でも同じ全体 readiness と `data_initialized` を確認できます。
 
 ### "Lost connection to MySQL server during query"
 
@@ -407,6 +415,14 @@ replication:
 2. 新しいスキーマに合わせて設定ファイルを更新
 3. MygramDB を再起動
 4. `SYNC <table>` を実行して、対象テーブルのスナップショットを再構築
+
+### デコードできない binlog イベントから復旧する
+
+レプリケーションがエラーコード `2017` で停止した場合、そのビルドではデコードできないイベントに到達しています。XA prepare イベントや MariaDB の圧縮イベントが該当します。生成元のサーバー設定を変えても、すでに書かれたイベントは binlog から消えません。古い GTID から再開すると同じ位置で再び停止します。
+
+まず最も重要なテーブルに `SYNC` を実行し、`replication=STARTED` を伴って完了するまで待ちます。その後、他のすべてのレプリケーション対象テーブルにも `SYNC` を実行してください。最初の SYNC は新しいスナップショットマーカーから共有リーダーを再開し、デコードできない区間を飛ばします。再構築しないテーブルには、その区間にあった書き込みが反映されません。
+
+他のレプリケーション失敗では、SYNC は区間を飛ばさず、ドレイン済み位置から再開します。コマンドの手順は [SYNC コマンド](/ja/docs/sync-command#エラー-2017-デコードできない-binlog-イベント) を参照してください。
 
 ## 推奨事項
 

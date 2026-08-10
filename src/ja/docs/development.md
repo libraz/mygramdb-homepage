@@ -237,11 +237,8 @@ make test-large-dump
 # 既定の MySQL 8.4 スイート
 make e2e-test
 
-# MySQL 8.4/9.4、MariaDB 10.11/11.4 の matrix
+# MySQL 8.4/9.7、MariaDB 10.11/11.4 の matrix
 make e2e-matrix
-
-# 2台の MySQL を使う failover スイート
-make e2e-failover
 ```
 
 marker の指定方法と MariaDB 専用 runner は [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e) を参照してください。
@@ -256,10 +253,15 @@ cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
 cmake --build build-asan -j
 ctest --test-dir build-asan -L CONCURRENCY -LE LOAD --output-on-failure
 
-# parser と dump header に対する randomized harness
-cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON
+# standalone の parser・dump header 用ランダム化 harness。対応するコンパイラなら動作し、反復回数を入力にします。
+cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON -DFUZZER_ENGINE=standalone
 cmake --build build-fuzz --target binary_input_fuzz -j
 ./build-fuzz/bin/binary_input_fuzz 100000
+
+# カバレッジ誘導型 libFuzzer。libFuzzer を含む Clang ツールチェーンを使用します。
+cmake -S . -B build-libfuzzer -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON -DFUZZER_ENGINE=libfuzzer
+cmake --build build-libfuzzer --target binary_input_fuzz -j
+./build-libfuzzer/bin/binary_input_fuzz -runs=100000
 ```
 
 ## トラブルシューティング

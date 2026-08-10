@@ -132,6 +132,12 @@ SEARCH threads tutorial NOT beginner
 `NOT` は結果セットからドキュメントを除外します。先頭に `NOT` を置くクエリは候補が広くなりやすいため、大規模インデックスではできるだけ肯定条件と組み合わせてください。
 :::
 
+`AND NOT` も同じ除外条件として受け付けます。追加条件をすべて `AND` の後に出力する式変換器でも使えます。
+
+```mygram
+SEARCH threads tutorial AND NOT beginner
+```
+
 ---
 
 ## 複雑なブール演算クエリ
@@ -324,12 +330,14 @@ MygramDBでは、設定ファイルで `filters` に登録したカラムだけ�
 ### 構文
 
 ```mygram
-SEARCH <table> <query> SORT <column> [ASC|DESC]
+SEARCH <table> <query> SORT [BY] <column> [ASC|DESC]
 ```
 
 ::: info SQLのORDER BYではありません
 MygramDBでは `ORDER BY` 構文は使えません。検索結果の並び替えには `SORT` を使ってください。
 :::
+
+`BY` は省略できます。`SORT BY created_at DESC` と `SORT created_at DESC` は同じです。
 
 ### デフォルトの動作
 
@@ -346,6 +354,7 @@ SEARCH threads golang
 ```mygram
 SEARCH threads golang SORT id ASC
 SEARCH threads golang SORT id DESC
+SEARCH threads golang SORT BY id DESC
 ```
 
 **省略記法（推奨）:**
@@ -360,6 +369,7 @@ SEARCH threads golang SORT DESC  -- プライマリキー降順
 
 ```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
+SEARCH threads golang SORT BY created_at DESC LIMIT 10
 SEARCH posts database SORT _score ASC LIMIT 20
 ```
 
@@ -450,7 +460,7 @@ MygramDB は、検索語・AND/NOT 条件・FILTER 値を合計したクエリ�
 
 - **デフォルト:** 128文字
 - **設定:** `api.max_query_length`（`0` で無効化）
-- **エラー例:** `ERROR Query expression length (...) exceeds ...`
+- **エラー例:** `ERROR 3005 Query expression length (...) exceeds ...`
 
 複雑な条件が必要な場合は、`config.yaml` で上限を調整するか、複数のクエリに分割してください。
 
@@ -633,37 +643,37 @@ SEARCH articles "データベス" FUZZY 2 LIMIT 10
 **空の括弧:**
 ```mygram
 SEARCH threads ()
-ERROR Invalid query: empty expression in parentheses
+ERROR 3000 Invalid query: empty expression in parentheses
 ```
 
 **閉じられていない括弧:**
 ```mygram
 SEARCH threads (golang AND python
-ERROR Invalid query: unclosed parentheses
+ERROR 3000 Invalid query: unclosed parentheses
 ```
 
 **余分な閉じ括弧:**
 ```mygram
 SEARCH threads golang AND python)
-ERROR Invalid query: unexpected closing parenthesis
+ERROR 3000 Invalid query: unexpected closing parenthesis
 ```
 
 **オペランドのない演算子:**
 ```mygram
 SEARCH threads AND
-ERROR Invalid query: operator without operands
+ERROR 3000 Invalid query: operator without operands
 ```
 
 **末尾の演算子:**
 ```mygram
 SEARCH threads golang AND
-ERROR Invalid query: trailing operator
+ERROR 3000 Invalid query: trailing operator
 ```
 
 **閉じられていない引用符:**
 ```mygram
 SEARCH threads "golang tutorial
-ERROR Invalid query: unclosed quote
+ERROR 3000 Invalid query: unclosed quote
 ```
 
 ### 無効なフィルタ
@@ -671,13 +681,13 @@ ERROR Invalid query: unclosed quote
 **存在しないテーブル:**
 ```mygram
 SEARCH nonexistent tech
-ERROR Table not found: nonexistent
+ERROR 4007 Table not found: nonexistent
 ```
 
 **無効なフィルタカラム:**
 ```mygram
 SEARCH articles tech FILTER invalid_column=1
-ERROR Filter column not found: invalid_column
+ERROR 3006 Filter column not found: invalid_column
 ```
 
 ### 無効なソート
@@ -685,7 +695,7 @@ ERROR Filter column not found: invalid_column
 **存在しないカラム:**
 ```mygram
 SEARCH articles tech SORT nonexistent DESC
-ERROR Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
+ERROR 3007 Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
 ```
 
 存在しないカラムはエラーとして拒否されます。

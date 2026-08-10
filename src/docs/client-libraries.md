@@ -1,6 +1,6 @@
 ---
 title: Node.js / Python / Go Client Libraries
-description: Official MygramDB client libraries for Node.js, Python, and Go. Install, search, raw boolean search, FACET, HIGHLIGHT, SYNC, and v1.7 multi-database table identities.
+description: Official MygramDB client libraries for Node.js, Python, Go, and the bundled C/C++ SDK. Install, search, raw boolean search, FACET, HIGHLIGHT, SYNC, and multi-database table identities.
 head:
   - - meta
     - name: keywords
@@ -12,16 +12,17 @@ head:
 MygramDB provides official TCP client libraries for application code. Use them when you want typed search, count, document lookup, FACET, runtime variables, and on-demand sync without building the TCP protocol yourself.
 
 ::: info Scope
-This page covers the application clients for Node.js, Python, and Go. For the C/C++ library bundled with MygramDB itself, see [libmygramclient](/docs/client-library).
+This page covers the application clients for Node.js, Python, and Go, plus where the bundled C/C++ SDK fits. The C/C++ API, CMake package, and pkg-config usage are documented on [libmygramclient](/docs/client-library).
 :::
 
 ## Support Matrix
 
 | Language | Package | Requirement | Notes |
 |----------|---------|-------------|-------|
-| Node.js | `mygramdb-client` v1.4.0 | Node.js 22+ | TypeScript types, pure JavaScript implementation, optional native binding |
-| Python | `mygramdb-client` v1.3.0 | Python 3.9+ | asyncio, zero external dependencies, dataclass types |
+| Node.js | `mygramdb-client` | Node.js 22+ | TypeScript types, pure JavaScript implementation, optional native binding |
+| Python | `mygramdb-client` | Python 3.9+ | asyncio, zero external dependencies, dataclass types |
 | Go | `github.com/libraz/go-mygram-client` | Go 1.23+ | standard library only, `context.Context` variants, safe for concurrent use |
+| C / C++ | bundled `libmygramclient` | C11 / C++17 | Installed SDK with C and C++ APIs, `MygramDB::client_static` / `MygramDB::client_shared`, and `mygramclient.pc` |
 
 ::: warning Load data before querying
 The clients are thin wrappers around MygramDB server commands. If existing rows have not been loaded yet, run `SYNC <table>` first. See [SYNC Command](/docs/sync-command).
@@ -38,6 +39,10 @@ The clients are thin wrappers around MygramDB server commands. If existing rows 
 - For `OR` and parentheses, convert the expression and pass it to `searchRaw()` / `SearchRaw()` / `search_raw()`.
 - BM25 scoring, highlighting, fuzzy search, and facets depend on the server-side table configuration.
 - Runtime variables and `SYNC` are TCP commands exposed by the client libraries.
+
+::: warning Administrative commands require authentication
+`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication. On an already connected client, send `AUTH` with `MYGRAM_API_ADMIN_TOKEN` before using them. Authentication belongs to the underlying TCP connection, so repeat it after every reconnect. Automatic reconnect cannot preserve authenticated state; authenticate before the next administrative operation after a reconnect. `search`, `count`, `get`, `facet`, and `INFO` remain unauthenticated.
+:::
 
 ## Node.js / TypeScript
 
@@ -75,7 +80,7 @@ const doc = await client.get('articles', '12345')
 client.disconnect()
 ```
 
-### v1.7 Table Identities and Raw Boolean Search
+### Table Identities and Raw Boolean Search
 
 ```ts
 import {
@@ -127,6 +132,16 @@ const facets = await client.facet('articles', 'category', {
 ### Runtime Variables and SYNC
 
 ```ts
+const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
+if (!adminToken) {
+  throw new Error('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
+}
+
+const authResponse = await client.sendCommand(`AUTH ${adminToken}`)
+if (authResponse !== 'OK AUTHENTICATED') {
+  throw new Error('MygramDB authentication failed')
+}
+
 await client.setVariable('logging.level', 'info')
 console.log(await client.showVariables('logging%'))
 
@@ -164,7 +179,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### v1.7 Table Identities and Raw Boolean Search
+### Table Identities and Raw Boolean Search
 
 ```python
 import asyncio
@@ -192,6 +207,7 @@ asyncio.run(main())
 
 ```python
 import asyncio
+import os
 from mygramdb_client import ClientConfig, FacetOptions, MygramClient, SearchOptions
 
 async def main():
@@ -207,6 +223,14 @@ async def main():
             'category',
             FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
         )
+
+        admin_token = os.environ.get('MYGRAM_API_ADMIN_TOKEN')
+        if not admin_token:
+            raise RuntimeError('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
+
+        auth_response = await client.send_command(f'AUTH {admin_token}')
+        if auth_response != 'OK AUTHENTICATED':
+            raise RuntimeError('MygramDB authentication failed')
 
         await client.set_variable('logging.level', 'info')
         print(await client.show_variables('logging%'))
@@ -259,7 +283,7 @@ func main() {
 }
 ```
 
-### v1.7 Table Identities and Raw Boolean Search
+### Table Identities and Raw Boolean Search
 
 ```go
 table, _ := mygram.QualifyTableIdentity("articles", "app_db")
@@ -278,7 +302,7 @@ resp, _ = client.SearchRawWithHighlights(
 fmt.Println(resp.Results)
 ```
 
-### BM25 / HIGHLIGHT / FUZZY / FACET / SYNC
+### BM25 / HIGHLIGHT / FUZZY / FACET
 
 ```go
 ranked, _ := client.Search("articles", "machine learning", mygram.SearchOptions{
@@ -315,15 +339,62 @@ facets, _ := client.Facet("articles", "category", mygram.FacetOptions{
 	Limit:   10,
 })
 fmt.Println(facets.Results)
+```
 
-_ = client.SetVariable("logging.level", "info")
-vars, _ := client.ShowVariables("logging%")
-fmt.Println(vars)
+### Runtime Variables and SYNC
 
-_, _ = client.Sync("app_db.articles")
-status, _ := client.SyncStatus()
-fmt.Println(status)
-_, _ = client.SyncStop("app_db.articles")
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	mygram "github.com/libraz/go-mygram-client"
+)
+
+func main() {
+	adminToken := os.Getenv("MYGRAM_API_ADMIN_TOKEN")
+	if adminToken == "" {
+		log.Fatal("MYGRAM_API_ADMIN_TOKEN is required for administrative commands")
+	}
+
+	client := mygram.NewClient("localhost:11016")
+	defer client.Close()
+	if err := client.Connect(); err != nil {
+		log.Fatal(err)
+	}
+
+	authResponse, err := client.SendCommand("AUTH " + adminToken)
+	if err != nil {
+		log.Fatal("MygramDB authentication command failed")
+	}
+	if authResponse != "OK AUTHENTICATED" {
+		log.Fatal("MygramDB authentication failed")
+	}
+
+	if err := client.SetVariable("logging.level", "info"); err != nil {
+		log.Fatal(err)
+	}
+	vars, err := client.ShowVariables("logging%")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(vars)
+
+	if _, err := client.Sync("app_db.articles"); err != nil {
+		log.Fatal(err)
+	}
+	status, err := client.SyncStatus()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(status)
+	if _, err := client.SyncStop("app_db.articles"); err != nil {
+		log.Fatal(err)
+	}
+}
 ```
 
 ::: tip Go concurrency
