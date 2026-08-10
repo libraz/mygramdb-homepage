@@ -18,10 +18,6 @@
   "keywords": [],
   "author": "libraz <libraz@libraz.net>",
   "license": "MIT",
-  "volta": {
-    "node": "22.21.1",
-    "yarn": "4.12.0"
-  },
   "devDependencies": {
     "@fontsource/orbitron": "^5.2.8",
     "@iconify-json/lucide": "^1.2.112",
