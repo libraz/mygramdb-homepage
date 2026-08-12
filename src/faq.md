@@ -245,15 +245,15 @@ MygramDB is simple *to add*. It assumes MySQL already exists — which it does i
 
 ### What hardware were the benchmarks run on?
 
-Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4 in Docker. MygramDB ran with `verify_text: all` (post-filter enabled for accurate match counts) and query cache disabled. The Apple M4 Max host allocated 32 GiB to Docker Desktop (31.29 GiB visible to the containers). On other hardware and memory limits, absolute latency will differ.
+Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4.11 in Docker. MygramDB ran with `verify_text: all` (post-filter enabled for accurate match counts) and query cache disabled. The Apple M5 Max host (18 cores, 128 GiB) allocated 32 GiB to Docker Desktop (31.29 GiB visible to the containers). Each query was measured over 200 iterations after 5 warmup runs. On other hardware and memory limits, absolute latency will differ.
 
 ### Were MySQL settings tuned for the benchmark?
 
-No. MySQL ran with default `innodb_buffer_pool_size` and `innodb_ft_cache_size`. This reflects a common real-world scenario — many MySQL deployments run with defaults or minimal tuning. Even with aggressive tuning, MySQL FULLTEXT's fundamental bottleneck (disk-based posting list scans and single-threaded query execution) remains.
+Yes. MySQL ran with `innodb_buffer_pool_size` at 8.0 GiB, large enough to hold the FULLTEXT working set — during the run the buffer pool hit ratio was 99.9989% with only 7,809 disk reads. These are favourable conditions for MySQL: the numbers on the [benchmark page](/benchmarks) compare against a warm, adequately sized FULLTEXT index, not against a disk-bound one. On a deployment running MySQL defaults the gap would be wider.
 
 ### Was MySQL tested cold or warm?
 
-Both. MygramDB shows consistent latency regardless of cache state. See [Why MySQL FULLTEXT is Slow](/why) for cold vs warm cache analysis.
+Warm. The buffer pool hit ratio during the run was 99.9989%, so MySQL FULLTEXT was reading almost entirely from memory. MygramDB's own query cache was disabled for the same run, so its numbers reflect search-engine work rather than cache hits. Both configurations are recorded on the [benchmark page](/benchmarks).
 
 ### Why not benchmark against Elasticsearch with real numbers?
 

@@ -99,12 +99,12 @@ const faqJsonLd = (lang: Locale) => ({
 const SEO: Record<Locale, { title: string; description: string; keywords: string }> = {
   en: {
     title: 'MygramDB - In-memory full-text search with MySQL replication',
-    description: 'MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Millisecond-scale queries, up to 190x faster than FULLTEXT.',
+    description: `MySQL FULLTEXT too slow? MygramDB is an in-memory full-text search engine that syncs via MySQL replication. Millisecond-scale queries, up to ${benchmark.summary.bestSpeedup}x faster than FULLTEXT.`,
     keywords: 'MySQL FULLTEXT slow, MySQL full-text search slow, MySQL search timeout, MySQL FULLTEXT performance, MySQL search optimization, MySQL N-gram slow, MySQL FULLTEXT concurrent, MySQL FULLTEXT alternative, full-text search engine, in-memory search, MySQL replication, binlog search'
   },
   ja: {
     title: 'MygramDB - MySQLレプリケーションで同期するインメモリ全文検索',
-    description: 'MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジンです。ミリ秒台のクエリで、FULLTEXT比 最大190倍。',
+    description: `MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジンです。ミリ秒台のクエリで、FULLTEXT比 最大${benchmark.summary.bestSpeedup}倍。`,
     keywords: 'MySQL FULLTEXT 遅い, MySQL 全文検索 遅い, MySQL 検索 タイムアウト, MySQL FULLTEXT 性能, MySQL 検索 高速化, MySQL FULLTEXT 代替, 全文検索エンジン, インメモリ検索, MySQLレプリケーション, binlog 検索, 日本語 全文検索'
   }
 }
@@ -131,7 +131,7 @@ const LLMS_LOCALES: LlmsLocale[] = [
     prefix: '',
     title: 'MygramDB',
     summary:
-      'In-memory full-text search engine that mirrors MySQL through binlog replication, built for CJK text where MySQL FULLTEXT falls short. Millisecond-scale queries, up to 190x faster than FULLTEXT.',
+      `In-memory full-text search engine that mirrors MySQL through binlog replication, built for CJK text where MySQL FULLTEXT falls short. Millisecond-scale queries, up to ${benchmark.summary.bestSpeedup}x faster than FULLTEXT.`,
     intro:
       'MygramDB indexes with character n-grams rather than word tokenization, so it needs no\ndictionary and no morphological analyzer. It follows a MySQL primary as a replica,\napplying row events as they arrive, and answers queries over its own wire protocol\nor HTTP. The links below point to the canonical HTML documentation.',
     overviewHeading: 'Key pages',
@@ -415,7 +415,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'a personal project by <a href="https://libraz.net" target="_blank" rel="noopener">libraz</a>'
+      message: 'Released under the <a href="https://github.com/libraz/mygram-db/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> · a personal project by <a href="https://libraz.net" target="_blank" rel="noopener">libraz</a>'
     }
   }
 })

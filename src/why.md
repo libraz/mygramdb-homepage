@@ -45,7 +45,7 @@ In production, cache is often cold after restarts, deployments, or buffer pool c
 
 ### Concurrency Collapse
 
-Under concurrent load, MySQL FULLTEXT throughput can drop dramatically. The cache-off results for 1 and 4 connections are maintained on the [benchmark page](/benchmarks), together with the test configuration.
+Under concurrent load, MySQL FULLTEXT throughput can drop dramatically. The cache-off results for 1, 2, 4, 8 and 16 connections are maintained on the [benchmark page](/benchmarks), together with the test configuration.
 
 ## The Solution: MygramDB
 
