@@ -317,7 +317,7 @@ docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ワークロードに応じて `docker-compose.prod.yml` で調整してください。
 
 ::: info メモリ見積もり
-MygramDBはインメモリ検索エンジンです。`verify_text: all` の場合は100万ドキュメントあたり約2.3GBを目安にし、OS・キャッシュ・ダンプ処理の余裕分も確保してください。
+MygramDBはインメモリ検索エンジンです。`verify_text: all` の場合は100万ドキュメントあたり約3.1GBを目安にし、OS・キャッシュ・ダンプ処理の余裕分も確保してください。
 :::
 
 ## データベースの初期化

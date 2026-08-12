@@ -105,7 +105,7 @@ Without verification, the query `"quantum"` returns approximately 58,000 candida
 
 **How it works:** When `verify_text` is enabled, MygramDB stores the original document text in memory. After the posting list intersection produces candidates, each candidate's stored text is checked for an actual substring match. False positives are discarded.
 
-The tradeoff is memory: storing text for 1.1M documents adds approximately 1.5 GB of RAM. Three modes are available:
+The tradeoff is memory: storing text for 1.1M documents adds approximately 1.8 GB of RAM. Three modes are available:
 
 - `off` (default) -- No text storage, no verification. Fastest, lowest memory.
 - `ascii` -- Verifies only ASCII-only queries against stored text. Moderate memory.

@@ -1,0 +1,285 @@
+{
+  "run": {
+    "mygramdbVersion": "1.10.0",
+    "mysqlVersion": "8.4.11",
+    "datasetRows": 1100000,
+    "datasetDescription": "1M English and 100K Japanese Wikipedia articles",
+    "averageCharacters": 666,
+    "verifyText": "all",
+    "queryCache": "disabled",
+    "iterations": 200,
+    "warmup": 5,
+    "concurrentDurationSeconds": 10,
+    "host": "Apple M5 Max",
+    "hostCores": 18,
+    "hostMemoryGiB": 128,
+    "docker": "29.6.2",
+    "dockerMemoryGiB": 32,
+    "containerMemoryGiB": 31.29
+  },
+  "baseline": {
+    "innodbBufferPoolGiB": 8.0,
+    "tableDataMb": 837,
+    "tableIndexMb": 115,
+    "ftsAuxMb": 1717,
+    "ngramTokenSize": 2,
+    "bufferPoolHitRatioPct": 99.9989,
+    "diskReadsDuringRun": 7809
+  },
+  "search": [
+    {
+      "label": "Multi-word",
+      "query": "quantum physics",
+      "matches": 104,
+      "mysql": {
+        "p50Ms": 639.5,
+        "p95Ms": 977.6,
+        "p99Ms": 1688.45,
+        "stdevMs": 216.76
+      },
+      "mygramdb": {
+        "p50Ms": 3.57,
+        "p95Ms": 4.84,
+        "p99Ms": 5.61,
+        "stdevMs": 0.64
+      },
+      "speedup": 179.0
+    },
+    {
+      "label": "Medium frequency",
+      "query": "quantum",
+      "matches": 1961,
+      "mysql": {
+        "p50Ms": 509.59,
+        "p95Ms": 1042.74,
+        "p99Ms": 1148.04,
+        "stdevMs": 179.47
+      },
+      "mygramdb": {
+        "p50Ms": 64.62,
+        "p95Ms": 81.09,
+        "p99Ms": 90.3,
+        "stdevMs": 13.03
+      },
+      "speedup": 7.9
+    },
+    {
+      "label": "Low frequency",
+      "query": "algorithm",
+      "matches": 2498,
+      "mysql": {
+        "p50Ms": 281.39,
+        "p95Ms": 296.92,
+        "p99Ms": 307.55,
+        "stdevMs": 7.1
+      },
+      "mygramdb": {
+        "p50Ms": 5.19,
+        "p95Ms": 6.31,
+        "p99Ms": 6.68,
+        "stdevMs": 0.5
+      },
+      "speedup": 54.2
+    },
+    {
+      "label": "Rare term",
+      "query": "fibonacci",
+      "matches": 84,
+      "mysql": {
+        "p50Ms": 333.33,
+        "p95Ms": 780.45,
+        "p99Ms": 859.25,
+        "stdevMs": 157.45
+      },
+      "mygramdb": {
+        "p50Ms": 37.47,
+        "p95Ms": 46.0,
+        "p99Ms": 47.4,
+        "stdevMs": 5.01
+      },
+      "speedup": 8.9
+    }
+  ],
+  "cjkSearch": [
+    {
+      "label": "JA high-freq",
+      "query": "日本",
+      "matches": 32282,
+      "mysql": {
+        "p50Ms": 61.05,
+        "p95Ms": 65.23,
+        "p99Ms": 69.36,
+        "stdevMs": 2.75
+      },
+      "mygramdb": {
+        "p50Ms": 18.31,
+        "p95Ms": 23.65,
+        "p99Ms": 24.41,
+        "stdevMs": 2.4
+      },
+      "speedup": 3.3
+    },
+    {
+      "label": "JA medium-freq",
+      "query": "東京",
+      "matches": 6989,
+      "mysql": {
+        "p50Ms": 12.8,
+        "p95Ms": 16.01,
+        "p99Ms": 16.38,
+        "stdevMs": 1.74
+      },
+      "mygramdb": {
+        "p50Ms": 3.84,
+        "p95Ms": 4.93,
+        "p99Ms": 5.62,
+        "stdevMs": 0.43
+      },
+      "speedup": 3.3
+    },
+    {
+      "label": "JA low-freq",
+      "query": "科学",
+      "matches": 1551,
+      "mysql": {
+        "p50Ms": 2.99,
+        "p95Ms": 3.63,
+        "p99Ms": 4.21,
+        "stdevMs": 0.27
+      },
+      "mygramdb": {
+        "p50Ms": 1.87,
+        "p95Ms": 2.24,
+        "p99Ms": 2.48,
+        "stdevMs": 0.18
+      },
+      "speedup": 1.6
+    }
+  ],
+  "count": [
+    {
+      "label": "Medium frequency",
+      "query": "quantum",
+      "count": 1961,
+      "mysql": {
+        "p50Ms": 498.67,
+        "p95Ms": 1152.39,
+        "p99Ms": 1417.43,
+        "stdevMs": 284.94
+      },
+      "mygramdb": {
+        "p50Ms": 31.18,
+        "p95Ms": 48.71,
+        "p99Ms": 53.38,
+        "stdevMs": 6.22
+      },
+      "speedup": 16.0
+    },
+    {
+      "label": "Low frequency",
+      "query": "algorithm",
+      "count": 2498,
+      "mysql": {
+        "p50Ms": 258.74,
+        "p95Ms": 303.35,
+        "p99Ms": 333.24,
+        "stdevMs": 25.1
+      },
+      "mygramdb": {
+        "p50Ms": 4.34,
+        "p95Ms": 5.02,
+        "p99Ms": 5.42,
+        "stdevMs": 0.3
+      },
+      "speedup": 59.6
+    }
+  ],
+  "consistency": [
+    {
+      "label": "EN medium",
+      "query": "quantum",
+      "mysqlCount": 1961,
+      "mygramdbCount": 1961,
+      "diff": 0
+    },
+    {
+      "label": "EN rare",
+      "query": "algorithm",
+      "mysqlCount": 2498,
+      "mygramdbCount": 2498,
+      "diff": 0
+    },
+    {
+      "label": "JA common",
+      "query": "日本",
+      "mysqlCount": 32282,
+      "mygramdbCount": 32282,
+      "diff": 0
+    },
+    {
+      "label": "JA rare",
+      "query": "科学",
+      "mysqlCount": 1551,
+      "mygramdbCount": 1551,
+      "diff": 0
+    }
+  ],
+  "concurrent": [
+    {
+      "connections": 1,
+      "mysqlQps": 3.6,
+      "mygramdbQps": 213.1,
+      "mysqlP50Ms": 275.05,
+      "mysqlP99Ms": 294.51,
+      "mygramdbP50Ms": 4.57,
+      "mygramdbP99Ms": 6.18
+    },
+    {
+      "connections": 2,
+      "mysqlQps": 6.1,
+      "mygramdbQps": 181.1,
+      "mysqlP50Ms": 291.71,
+      "mysqlP99Ms": 433.12,
+      "mygramdbP50Ms": 10.41,
+      "mygramdbP99Ms": 28.12
+    },
+    {
+      "connections": 4,
+      "mysqlQps": 10.0,
+      "mygramdbQps": 602.3,
+      "mysqlP50Ms": 410.11,
+      "mysqlP99Ms": 450.69,
+      "mygramdbP50Ms": 6.88,
+      "mygramdbP99Ms": 8.08
+    },
+    {
+      "connections": 8,
+      "mysqlQps": 15.9,
+      "mygramdbQps": 1135.9,
+      "mysqlP50Ms": 492.4,
+      "mysqlP99Ms": 541.39,
+      "mygramdbP50Ms": 7.14,
+      "mygramdbP99Ms": 8.84
+    },
+    {
+      "connections": 16,
+      "mysqlQps": 14.8,
+      "mygramdbQps": 729.7,
+      "mysqlP50Ms": 906.58,
+      "mysqlP99Ms": 1417.72,
+      "mygramdbP50Ms": 19.36,
+      "mygramdbP99Ms": 61.89
+    }
+  ],
+  "memory": {
+    "indexMb": 152,
+    "documentsGb": 1.78,
+    "processRssGb": 3.41,
+    "perMillionDocumentsGb": 3.1
+  },
+  "summary": {
+    "medianSpeedup": 8.9,
+    "bestSpeedup": 179.0,
+    "worstSpeedup": 1.6
+  }
+}

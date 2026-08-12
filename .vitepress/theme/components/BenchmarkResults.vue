@@ -2,16 +2,25 @@
 import { computed } from 'vue'
 import { useData } from 'vitepress'
 import BenchChart from './BenchChart.vue'
-import benchmark from '../../../src/data/benchmark-v1.9.0.json'
+import benchmark from '../../../src/data/benchmark-v1.10.0.json'
 
 const { lang } = useData()
 const isJa = computed(() => lang.value.startsWith('ja'))
+
+const base = benchmark.baseline
+const workingSetMb = base.tableDataMb + base.tableIndexMb + base.ftsAuxMb
 
 const copy = computed(() =>
   isJa.value
     ? {
         environment: '計測条件',
-        environmentText: `${benchmark.run.datasetRows.toLocaleString()}件のWikipedia記事、MySQL ${benchmark.run.mysqlVersion} FULLTEXT（ngram パーサー）、MygramDB v${benchmark.run.mygramdbVersion}、verify_text: ${benchmark.run.verifyText}、クエリキャッシュ無効。レイテンシは${benchmark.run.iterations}回計測のp50です。`,
+        environmentText: `${benchmark.run.datasetRows.toLocaleString()}件のWikipedia記事、MySQL ${benchmark.run.mysqlVersion} FULLTEXT（ngram パーサー）、MygramDB v${benchmark.run.mygramdbVersion}、verify_text: ${benchmark.run.verifyText}、クエリキャッシュ無効。1クエリあたり${benchmark.run.iterations}回計測（ウォームアップ${benchmark.run.warmup}回は除外）し、p50・p95・p99を出しています。計測機は ${benchmark.run.host}（${benchmark.run.hostCores}コア / ${benchmark.run.hostMemoryGiB}GB）。`,
+        baseline: '対照のMySQLに与えた条件',
+        baselineText: `MygramDBはインデックス全体をメモリに置くため、既定の128MBバッファプールのままのMySQLと比べると、相手がしなくてよいディスクI/Oを測ることになります。そこでバッファプールを${base.innodbBufferPoolGiB}GiBに設定しました。テーブル${base.tableDataMb}MB、副次インデックス${base.tableIndexMb}MB、FULLTEXT補助テーブル${base.ftsAuxMb}MBの合計約${(workingSetMb / 1024).toFixed(1)}GiBが丸ごと収まる量です。`,
+        baselineEvidence: `チューニングしたという主張の裏付けとして、この計測中にMySQLがバッファプールから応答したページ要求の割合は${base.bufferPoolHitRatioPct}%（ディスク読み込みは${base.diskReadsDuringRun.toLocaleString()}回）でした。つまり両者ともメモリ上で動いており、残った差はインデックス構造の差です。`,
+        portability: '倍率と絶対値の扱い',
+        portabilityText: `倍率は機種が変わっても概ね保たれますが、ミリ秒の絶対値は保たれません。自分の環境の数字が必要なら ${'`make bench-up && make bench-run`'} で同じ計測を再現できます。`,
+        summary: `このデータセットでの高速化は中央値${benchmark.summary.medianSpeedup}倍、最良${benchmark.summary.bestSpeedup}倍、最悪${benchmark.summary.worstSpeedup}倍です。`,
         search: '検索レイテンシ（SORT id LIMIT 100）',
         cjk: 'CJK検索レイテンシ（SORT id LIMIT 100）',
         count: 'COUNT性能',
@@ -20,7 +29,8 @@ const copy = computed(() =>
         memory: 'メモリ使用量',
         queryType: 'クエリタイプ', query: 'クエリ', matches: 'マッチ数', countLabel: 'カウント',
         mysql: 'MySQL', mygramdb: 'MygramDB', speedup: '高速化', match: '一致',
-        connections: '接続数', mysqlQps: 'MySQL QPS', mygramdbQps: 'MygramDB QPS', mysqlP50: 'MySQL p50', mygramdbP50: 'MygramDB p50',
+        p50: 'p50', p99: 'p99',
+        connections: '接続数', mysqlQps: 'MySQL QPS', mygramdbQps: 'MygramDB QPS',
         documents: 'ドキュメント数', index: 'インデックス', documentsText: 'ドキュメント+テキスト', rss: 'RSS合計', perMillion: '100万件あたり',
         exact: '一致',
         concurrentNote: `クエリ: "algorithm"、接続数ごとに${benchmark.run.concurrentDurationSeconds}秒。`,
@@ -28,7 +38,13 @@ const copy = computed(() =>
       }
     : {
         environment: 'Benchmark Environment',
-        environmentText: `${benchmark.run.datasetRows.toLocaleString()} Wikipedia articles, MySQL ${benchmark.run.mysqlVersion} FULLTEXT (ngram parser), MygramDB v${benchmark.run.mygramdbVersion}, verify_text: ${benchmark.run.verifyText}, and the query cache disabled. Latencies are p50 over ${benchmark.run.iterations} iterations.`,
+        environmentText: `${benchmark.run.datasetRows.toLocaleString()} Wikipedia articles, MySQL ${benchmark.run.mysqlVersion} FULLTEXT (ngram parser), MygramDB v${benchmark.run.mygramdbVersion}, verify_text: ${benchmark.run.verifyText}, and the query cache disabled. Each query is measured ${benchmark.run.iterations} times after ${benchmark.run.warmup} discarded warmup runs, reported as p50/p95/p99. Measured on ${benchmark.run.host} (${benchmark.run.hostCores} cores, ${benchmark.run.hostMemoryGiB}GB).`,
+        baseline: 'What the MySQL baseline was given',
+        baselineText: `MygramDB holds its whole index in RAM, so a MySQL left on the default 128MB buffer pool would be measured on disk I/O its opponent never had to do. The pool is set to ${base.innodbBufferPoolGiB}GiB instead — enough to hold the ${base.tableDataMb}MB table, its ${base.tableIndexMb}MB of secondary indexes and the ${base.ftsAuxMb}MB of FULLTEXT auxiliary tables outright, about ${(workingSetMb / 1024).toFixed(1)}GiB in all.`,
+        baselineEvidence: `Sizing the pool is a claim; the hit ratio is the evidence. During this run MySQL served ${base.bufferPoolHitRatioPct}% of its page requests from the buffer pool, falling to disk ${base.diskReadsDuringRun.toLocaleString()} times. Both engines were working from memory, so what the numbers below compare is the index structure rather than how much disk each one had to touch.`,
+        portability: 'Ratios travel, milliseconds do not',
+        portabilityText: `The speedup ratios hold roughly across machines; the absolute millisecond figures do not. Run ${'`make bench-up && make bench-run`'} to reproduce this exact measurement on your own hardware.`,
+        summary: `On this dataset the speedup is ${benchmark.summary.medianSpeedup}x at the median, ${benchmark.summary.bestSpeedup}x at best and ${benchmark.summary.worstSpeedup}x at worst.`,
         search: 'Search Latency (SORT id LIMIT 100)',
         cjk: 'CJK Search Latency (SORT id LIMIT 100)',
         count: 'COUNT Performance',
@@ -37,7 +53,8 @@ const copy = computed(() =>
         memory: 'Memory Usage',
         queryType: 'Query Type', query: 'Query', matches: 'Matches', countLabel: 'Count',
         mysql: 'MySQL', mygramdb: 'MygramDB', speedup: 'Speedup', match: 'Match',
-        connections: 'Connections', mysqlQps: 'MySQL QPS', mygramdbQps: 'MygramDB QPS', mysqlP50: 'MySQL p50', mygramdbP50: 'MygramDB p50',
+        p50: 'p50', p99: 'p99',
+        connections: 'Connections', mysqlQps: 'MySQL QPS', mygramdbQps: 'MygramDB QPS',
         documents: 'Documents', index: 'Index', documentsText: 'Documents + Text', rss: 'Total RSS', perMillion: 'Per 1M docs',
         exact: 'exact',
         concurrentNote: `Query: "algorithm", ${benchmark.run.concurrentDurationSeconds} seconds per connection level.`,
@@ -47,50 +64,58 @@ const copy = computed(() =>
 
 const comma = (value: number) => value.toLocaleString('en-US')
 const ms = (value: number) => `${value.toFixed(2)}ms`
-const speedup = (mysql: number, mygramdb: number) => `${Math.round(mysql / mygramdb).toLocaleString('en-US')}x`
-const searchChart = benchmark.search.map((row) => ({ label: row.label, mysql: row.mysqlP50Ms, mygramdb: row.mygramdbP50Ms }))
-const cjkChart = benchmark.cjkSearch.map((row) => ({ label: row.label, mysql: row.mysqlP50Ms, mygramdb: row.mygramdbP50Ms }))
-const countChart = benchmark.count.map((row) => ({ label: row.label, mysql: row.mysqlP50Ms, mygramdb: row.mygramdbP50Ms }))
+const times = (value: number) => `${value.toLocaleString('en-US')}x`
+const searchChart = benchmark.search.map((row) => ({ label: row.label, mysql: row.mysql.p50Ms, mygramdb: row.mygramdb.p50Ms }))
+const cjkChart = benchmark.cjkSearch.map((row) => ({ label: row.label, mysql: row.mysql.p50Ms, mygramdb: row.mygramdb.p50Ms }))
+const countChart = benchmark.count.map((row) => ({ label: row.label, mysql: row.mysql.p50Ms, mygramdb: row.mygramdb.p50Ms }))
 const concurrentChart = computed(() => benchmark.concurrent.map((row) => ({ label: `${row.connections} ${isJa.value ? '接続' : row.connections === 1 ? 'connection' : 'connections'}`, mysql: row.mysqlQps, mygramdb: row.mygramdbQps })))
 </script>
 
 <template>
   <h2>{{ copy.environment }}</h2>
   <p>{{ copy.environmentText }}</p>
+  <p>{{ copy.summary }}</p>
+
+  <h2>{{ copy.baseline }}</h2>
+  <p>{{ copy.baselineText }}</p>
+  <p>{{ copy.baselineEvidence }}</p>
+
+  <h2>{{ copy.portability }}</h2>
+  <p>{{ copy.portabilityText }}</p>
 
   <h2>{{ copy.search }}</h2>
   <BenchChart :title="`${copy.search} (p50, log scale)`" :data="searchChart" />
   <table>
-    <thead><tr><th>{{ copy.queryType }}</th><th>{{ copy.matches }}</th><th>{{ copy.mysql }}</th><th>{{ copy.mygramdb }}</th><th>{{ copy.speedup }}</th></tr></thead>
-    <tbody><tr v-for="row in benchmark.search" :key="row.query"><td>{{ row.label }} ("{{ row.query }}")</td><td>{{ comma(row.matches) }}</td><td>{{ ms(row.mysqlP50Ms) }}</td><td>{{ ms(row.mygramdbP50Ms) }}</td><td>{{ speedup(row.mysqlP50Ms, row.mygramdbP50Ms) }}</td></tr></tbody>
+    <thead><tr><th>{{ copy.queryType }}</th><th>{{ copy.matches }}</th><th>{{ copy.mysql }} {{ copy.p50 }}</th><th>{{ copy.mysql }} {{ copy.p99 }}</th><th>{{ copy.mygramdb }} {{ copy.p50 }}</th><th>{{ copy.mygramdb }} {{ copy.p99 }}</th><th>{{ copy.speedup }}</th></tr></thead>
+    <tbody><tr v-for="row in benchmark.search" :key="row.query"><td>{{ row.label }} ("{{ row.query }}")</td><td>{{ comma(row.matches) }}</td><td>{{ ms(row.mysql.p50Ms) }}</td><td>{{ ms(row.mysql.p99Ms) }}</td><td>{{ ms(row.mygramdb.p50Ms) }}</td><td>{{ ms(row.mygramdb.p99Ms) }}</td><td>{{ times(row.speedup) }}</td></tr></tbody>
   </table>
 
   <h2>{{ copy.cjk }}</h2>
   <BenchChart :title="`${copy.cjk} (p50, log scale)`" :data="cjkChart" />
   <table>
-    <thead><tr><th>{{ copy.query }}</th><th>{{ copy.matches }}</th><th>{{ copy.mysql }}</th><th>{{ copy.mygramdb }}</th><th>{{ copy.speedup }}</th></tr></thead>
-    <tbody><tr v-for="row in benchmark.cjkSearch" :key="row.query"><td>{{ row.query }}</td><td>{{ comma(row.matches) }}</td><td>{{ ms(row.mysqlP50Ms) }}</td><td>{{ ms(row.mygramdbP50Ms) }}</td><td>{{ speedup(row.mysqlP50Ms, row.mygramdbP50Ms) }}</td></tr></tbody>
+    <thead><tr><th>{{ copy.query }}</th><th>{{ copy.matches }}</th><th>{{ copy.mysql }} {{ copy.p50 }}</th><th>{{ copy.mysql }} {{ copy.p99 }}</th><th>{{ copy.mygramdb }} {{ copy.p50 }}</th><th>{{ copy.mygramdb }} {{ copy.p99 }}</th><th>{{ copy.speedup }}</th></tr></thead>
+    <tbody><tr v-for="row in benchmark.cjkSearch" :key="row.query"><td>{{ row.query }}</td><td>{{ comma(row.matches) }}</td><td>{{ ms(row.mysql.p50Ms) }}</td><td>{{ ms(row.mysql.p99Ms) }}</td><td>{{ ms(row.mygramdb.p50Ms) }}</td><td>{{ ms(row.mygramdb.p99Ms) }}</td><td>{{ times(row.speedup) }}</td></tr></tbody>
   </table>
 
   <h2>{{ copy.count }}</h2>
   <BenchChart :title="`${copy.count} (p50, log scale)`" :data="countChart" />
   <table>
-    <thead><tr><th>{{ copy.queryType }}</th><th>{{ copy.countLabel }}</th><th>{{ copy.mysql }}</th><th>{{ copy.mygramdb }}</th><th>{{ copy.speedup }}</th></tr></thead>
-    <tbody><tr v-for="row in benchmark.count" :key="row.query"><td>{{ row.label }} ("{{ row.query }}")</td><td>{{ comma(row.matches) }}</td><td>{{ ms(row.mysqlP50Ms) }}</td><td>{{ ms(row.mygramdbP50Ms) }}</td><td>{{ speedup(row.mysqlP50Ms, row.mygramdbP50Ms) }}</td></tr></tbody>
+    <thead><tr><th>{{ copy.queryType }}</th><th>{{ copy.countLabel }}</th><th>{{ copy.mysql }} {{ copy.p50 }}</th><th>{{ copy.mysql }} {{ copy.p99 }}</th><th>{{ copy.mygramdb }} {{ copy.p50 }}</th><th>{{ copy.mygramdb }} {{ copy.p99 }}</th><th>{{ copy.speedup }}</th></tr></thead>
+    <tbody><tr v-for="row in benchmark.count" :key="row.query"><td>{{ row.label }} ("{{ row.query }}")</td><td>{{ comma(row.count) }}</td><td>{{ ms(row.mysql.p50Ms) }}</td><td>{{ ms(row.mysql.p99Ms) }}</td><td>{{ ms(row.mygramdb.p50Ms) }}</td><td>{{ ms(row.mygramdb.p99Ms) }}</td><td>{{ times(row.speedup) }}</td></tr></tbody>
   </table>
 
   <h2>{{ copy.consistency }}</h2>
   <table>
     <thead><tr><th>{{ copy.query }}</th><th>{{ copy.mysql }}</th><th>{{ copy.mygramdb }}</th><th>{{ copy.match }}</th></tr></thead>
-    <tbody><tr v-for="row in benchmark.consistency" :key="row.query"><td>{{ row.query }}</td><td>{{ comma(row.matches) }}</td><td>{{ comma(row.matches) }}</td><td>{{ copy.exact }}</td></tr></tbody>
+    <tbody><tr v-for="row in benchmark.consistency" :key="row.query"><td>{{ row.query }}</td><td>{{ comma(row.mysqlCount) }}</td><td>{{ comma(row.mygramdbCount) }}</td><td>{{ row.diff === 0 ? copy.exact : `${row.diff > 0 ? '+' : ''}${comma(row.diff)}` }}</td></tr></tbody>
   </table>
 
   <h2>{{ copy.concurrent }}</h2>
   <BenchChart :title="`${copy.concurrent} — QPS`" :data="concurrentChart" unit=" QPS" />
   <p>{{ copy.concurrentNote }}</p>
   <table>
-    <thead><tr><th>{{ copy.connections }}</th><th>{{ copy.mysqlQps }}</th><th>{{ copy.mygramdbQps }}</th><th>{{ copy.mysqlP50 }}</th><th>{{ copy.mygramdbP50 }}</th></tr></thead>
-    <tbody><tr v-for="row in benchmark.concurrent" :key="row.connections"><td>{{ row.connections }}</td><td>{{ row.mysqlQps.toFixed(2) }}</td><td>{{ comma(row.mygramdbQps) }}</td><td>{{ ms(row.mysqlP50Ms) }}</td><td>{{ ms(row.mygramdbP50Ms) }}</td></tr></tbody>
+    <thead><tr><th>{{ copy.connections }}</th><th>{{ copy.mysqlQps }}</th><th>{{ copy.mygramdbQps }}</th><th>{{ copy.mysql }} {{ copy.p50 }}</th><th>{{ copy.mysql }} {{ copy.p99 }}</th><th>{{ copy.mygramdb }} {{ copy.p50 }}</th><th>{{ copy.mygramdb }} {{ copy.p99 }}</th></tr></thead>
+    <tbody><tr v-for="row in benchmark.concurrent" :key="row.connections"><td>{{ row.connections }}</td><td>{{ row.mysqlQps.toFixed(2) }}</td><td>{{ comma(row.mygramdbQps) }}</td><td>{{ ms(row.mysqlP50Ms) }}</td><td>{{ ms(row.mysqlP99Ms) }}</td><td>{{ ms(row.mygramdbP50Ms) }}</td><td>{{ ms(row.mygramdbP99Ms) }}</td></tr></tbody>
   </table>
 
   <h2>{{ copy.memory }}</h2>

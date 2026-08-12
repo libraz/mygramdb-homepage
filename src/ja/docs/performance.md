@@ -145,11 +145,11 @@ OPTIMIZE
 
 ### 1. メモリサイジング
 
-**経験則:** `verify_text` の設定によって必要なRAMが大きく変わります。`verify_text: off` なら100万ドキュメントあたり約1GB前後、`verify_text: all` なら約2.3GBを目安にしてください。
+**経験則:** `verify_text` の設定によって必要なRAMが大きく変わります。`verify_text: off` なら100万ドキュメントあたり約813MB、`verify_text: all` なら約3.1GBを目安にしてください。
 
-**サイジング例:**
-- 100万ドキュメント: 2GB RAM 最小、4GB 推奨（`verify_text: all` の場合）
-- 1000万ドキュメント: 24GB RAM 最小、32GB以上推奨（`verify_text: all` の場合）
+**サイジング例（`verify_text: all` の場合）:**
+- 100万ドキュメント: 4GB RAM 最小、8GB 推奨
+- 1000万ドキュメント: 32GB RAM 最小、48GB 推奨
 - 1億ドキュメント: 複数インスタンスへのシャーディングを検討
 
 ### 2. 高可用性セットアップ

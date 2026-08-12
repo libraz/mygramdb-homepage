@@ -57,7 +57,7 @@ The key difference is data flow. RediSearch requires you to push documents into 
 
 ### How much memory does MygramDB need?
 
-Depends on `verify_text` mode. With `verify_text: off` (default): **~813MB per million documents** (index only). With `verify_text: all` (text verification enabled): **~2.3GB per million documents** (includes stored normalized text for post-filtering). For 10M documents, plan for ~8GB (`off`) or ~23GB (`all`).
+Depends on `verify_text` mode. With `verify_text: off` (default): **~813MB per million documents** (index only). With `verify_text: all` (text verification enabled): **~3.1GB per million documents** of resident memory — the figure measured in the [published benchmark](/benchmarks), covering the index, the stored normalized text used for post-filtering, and process overhead. For 10M documents, plan for ~8GB (`off`) or ~31GB (`all`).
 
 ::: warning What happens when memory runs out
 MygramDB is an in-memory engine. If the dataset outgrows available RAM, the OS or container platform can kill the process with an OOM. In production, budget index RAM plus headroom, separately from the disk space used for dumps.
@@ -186,7 +186,7 @@ Dump configuration:
 
 ### What happens when memory reaches the hard limit?
 
-MygramDB monitors memory usage via health check endpoints but does not enforce the hard limit by rejecting queries or stopping replication. If the index grows beyond available RAM, the OS-level OOM killer will terminate the process. In practice, size your server to hold the full dataset plus headroom. The rule of thumb is ~2.3GB per million documents (with `verify_text: all`) — plan accordingly and monitor `/health/detail` or Prometheus metrics for memory usage trends.
+MygramDB monitors memory usage via health check endpoints but does not enforce the hard limit by rejecting queries or stopping replication. If the index grows beyond available RAM, the OS-level OOM killer will terminate the process. In practice, size your server to hold the full dataset plus headroom. The rule of thumb is ~3.1GB per million documents (with `verify_text: all`) — plan accordingly and monitor `/health/detail` or Prometheus metrics for memory usage trends.
 
 ## Protocol and Security
 

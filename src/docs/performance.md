@@ -153,11 +153,11 @@ This converts Delta-encoded lists to Roaring bitmaps based on density, reducing 
 
 ### 1. Memory Sizing
 
-**Rule of thumb:** Plan for 1-2GB RAM per million documents
+**Rule of thumb:** RAM depends on `verify_text`. Plan for ~813MB per million documents with `verify_text: off`, and ~3.1GB per million with `verify_text: all`.
 
-**Example sizing:**
-- 1M documents: 2GB RAM minimum, 4GB recommended
-- 10M documents: 16GB RAM minimum, 32GB recommended
+**Example sizing (`verify_text: all`):**
+- 1M documents: 4GB RAM minimum, 8GB recommended
+- 10M documents: 32GB RAM minimum, 48GB recommended
 - 100M documents: Consider sharding across multiple instances
 
 ### 2. High Availability Setup

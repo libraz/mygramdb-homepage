@@ -5,7 +5,7 @@ import BenchChart from './components/BenchChart.vue'
 import BenchmarkResults from './components/BenchmarkResults.vue'
 import DocDiagram from './components/DocDiagram.vue'
 import HeroPanel from './components/HeroPanel.vue'
-import benchmark from '../../src/data/benchmark-v1.9.0.json'
+import benchmark from '../../src/data/benchmark-v1.10.0.json'
 import './custom.css'
 
 /** Locale-aware copy for the hero kicker + meta line. */

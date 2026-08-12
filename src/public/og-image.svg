@@ -42,7 +42,7 @@
   <text x="78" y="240" font-family="'Orbitron'" font-weight="800" font-size="92" letter-spacing="4" fill="url(#title)">MygramDB</text>
 
   <!-- Tagline -->
-  <text x="82" y="306" font-family="'IBM Plex Sans'" font-weight="500" font-size="34" fill="#c3d2ea">Sub-millisecond full-text search, synced over MySQL binlog</text>
+  <text x="82" y="306" font-family="'IBM Plex Sans'" font-weight="500" font-size="34" fill="#c3d2ea">Millisecond-scale full-text search, synced over MySQL binlog</text>
 
   <!-- Latency readout strip -->
   <g transform="translate(80, 392)">

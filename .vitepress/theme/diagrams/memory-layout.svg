@@ -72,7 +72,7 @@
     <text class="s" x="636" y="260" text-anchor="middle">highlighting and BM25</text>
     <text class="m" x="636" y="298" text-anchor="middle">memory.verify_text</text>
     <text class="s" x="636" y="336" text-anchor="middle">Roughly triples per-document</text>
-    <text class="s" x="636" y="358" text-anchor="middle">memory: ~813 MB → ~2.3 GB</text>
+    <text class="s" x="636" y="358" text-anchor="middle">memory: ~813 MB → ~3.1 GB</text>
     <text class="s" x="636" y="380" text-anchor="middle">per million documents</text>
 
     <text class="t" x="948" y="166" text-anchor="middle">Query cache</text>
@@ -122,7 +122,7 @@
     <text class="m" x="636" y="298" text-anchor="middle">memory.verify_text</text>
     <text class="s" x="636" y="336" text-anchor="middle">1件あたりのメモリは約3倍。</text>
     <text class="s" x="636" y="358" text-anchor="middle">100万件あたり約813MB →</text>
-    <text class="s" x="636" y="380" text-anchor="middle">約2.3GB</text>
+    <text class="s" x="636" y="380" text-anchor="middle">約3.1GB</text>
 
     <text class="t" x="948" y="166" text-anchor="middle">クエリキャッシュ</text>
     <text class="m" x="948" y="194" text-anchor="middle">クエリダイジェスト → 結果</text>
