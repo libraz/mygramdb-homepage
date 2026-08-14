@@ -115,15 +115,15 @@ MygramDB snapshots exist to restore the search index quickly. Backups and point-
 
 <DocDiagram name="memory-layout" alt="Per table, the index holds an n-gram map and posting lists, the document store holds primary keys and filter columns, and an optional text store holds normalized text; a shared cache holds query results and an n-gram reverse index." />
 
-**Sizing reference** (1.1M Wikipedia articles, avg. 666 chars):
+**Sizing reference.** The figures below come from the published v1.10.0 benchmark run: 1.1M Wikipedia articles (1M English, 100K Japanese, avg. 666 chars) with `verify_text: all`, in a 32 GiB container. See [Benchmarks](/benchmarks) for the full run.
 
 | Component | Memory |
 |-----------|--------|
-| Index (n-gram map + posting lists) | ~813 MB |
-| DocumentStore + Text Store | ~1.54 GB |
-| **Total RSS** | **~2.53 GB** |
+| Index (n-gram map + posting lists) | ~152 MB |
+| DocumentStore + Text Store | ~1.78 GB |
+| **Total RSS** | **~3.41 GB** |
 
-The text store is allocated only when `verify_text` is enabled. Without it, memory usage is approximately 813 MB for the same dataset. Filter values keep interned column IDs in small sorted vectors, avoiding one owned column-name string and hash map per document and configured filter column.
+The text store is allocated only when `verify_text` is enabled. With `verify_text: off` on the same dataset, resident memory is approximately 813 MB — see the [FAQ](/faq#how-much-memory-does-mygramdb-need) for per-million-document planning figures in both modes. Filter values keep interned column IDs in small sorted vectors, avoiding one owned column-name string and hash map per document and configured filter column.
 
 Posting lists are the largest component. Their memory efficiency depends on the compression strategy -- delta encoding for sparse n-grams, Roaring bitmaps for dense ones. Monitoring does not lock every table for every scrape: per-table values are aggregated into a bounded snapshot served by `INFO`, `/metrics`, and Prometheus. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
 
