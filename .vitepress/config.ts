@@ -152,7 +152,7 @@ const LLMS_LOCALES: LlmsLocale[] = [
     prefix: '/ja',
     title: 'MygramDB',
     summary:
-      'MySQL の binlog をリアルタイムに取り込むインメモリ全文検索エンジン。日本語のような CJK テキストを想定し、MySQL FULLTEXT に対して最大 190 倍、ミリ秒台で応答する。',
+      `MySQL の binlog をリアルタイムに取り込むインメモリ全文検索エンジン。日本語のような CJK テキストを想定し、MySQL FULLTEXT に対して最大 ${benchmark.summary.bestSpeedup} 倍、ミリ秒台で応答する。`,
     intro:
       'MygramDB は単語分割ではなく文字 N-gram で索引を作るため、辞書も形態素解析器も必要ない。\nMySQL のレプリカとして行イベントを逐次適用し、独自のワイヤプロトコルまたは HTTP で\nクエリに応答する。以下は日本語ドキュメントへのリンク一覧。',
     overviewHeading: '主要ページ',
