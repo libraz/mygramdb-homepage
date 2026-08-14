@@ -245,7 +245,7 @@ This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unne
 - Cache-off measurements are maintained in the benchmark snapshot above
 - Exact result consistency with `verify_text` (zero false positives)
 - Consistent performance regardless of cache state
-- The published concurrent measurements cover 1 and 4 connections
+- The published concurrent measurements cover 1, 2, 4, 8 and 16 connections
 
 **MySQL advantages:**
 
