@@ -5,7 +5,10 @@ import benchmark from '../src/data/benchmark-v1.10.0.json'
 
 const siteUrl = 'https://mygramdb.libraz.net'
 const githubUrl = 'https://github.com/libraz/mygram-db'
-const latestVersion = '1.10.0'
+// Newest released version in the core repo's CHANGELOG. scripts/check-facts.mjs
+// compares this against that changelog on every build, so a release cannot
+// leave the site pointing at the previous one.
+const latestVersion = '1.10.2'
 
 /** Per-locale structured data and social-card copy. Japanese answers mirror /ja/faq. */
 type Locale = 'en' | 'ja'
@@ -42,11 +45,11 @@ const FAQ: Record<Locale, { q: string; a: string }[]> = {
   en: [
     {
       q: 'Why is MySQL FULLTEXT so slow?',
-      a: 'MySQL FULLTEXT is slow because it stores indexes on disk using B-tree pages, requires disk I/O for every query, and uses uncompressed posting lists. MygramDB solves this with in-memory N-gram indexing delivering consistent millisecond-scale latency.'
+      a: 'MySQL FULLTEXT latency depends on the query, data, buffer pool, and concurrency. MygramDB keeps a separate N-gram search index in memory. The published benchmark used a warm MySQL buffer pool and disabled MygramDB’s query cache.'
     },
     {
       q: 'How does MygramDB sync with MySQL?',
-      a: 'MygramDB uses GTID-based binlog replication to sync with MySQL in real-time. It acts as a MySQL replica, receiving changes via the binary log. No ETL pipelines or manual sync needed. Write to MySQL as usual, MygramDB updates automatically.'
+      a: 'MygramDB uses GTID-based binlog replication to follow MySQL changes. Build the initial index with SYNC or enable auto_initial_snapshot. After that, binlog replication keeps the index updated without a separate ETL job.'
     },
     {
       q: 'How much faster is MygramDB than MySQL FULLTEXT?',
@@ -64,11 +67,11 @@ const FAQ: Record<Locale, { q: string; a: string }[]> = {
   ja: [
     {
       q: 'MySQL FULLTEXTが遅いのはなぜですか？',
-      a: 'ディスクI/O、非圧縮の転置リスト、キャッシュ依存、並列アクセス時の伸びにくさが主な原因です。MygramDBは検索インデックスをメモリ上に保持し、ミリ秒台のレイテンシで応答します。'
+      a: 'MySQL FULLTEXT の応答時間はクエリ、データ、バッファプール、同時実行数によって変わります。MygramDB は別の N-gram 検索インデックスをメモリに保持します。公開ベンチマークでは MySQL のバッファプールが温まった状態で、MygramDB のクエリキャッシュを無効にしています。'
     },
     {
       q: 'MygramDBはMySQLとどう同期しますか？',
-      a: 'GTIDベースのbinlogレプリケーションでリアルタイムに同期します。MygramDBはMySQLのレプリカとして振る舞い、バイナリログ経由で変更を受け取ります。ETLパイプラインや手動同期は不要で、MySQLに書き込めばMygramDB側は自動的に更新されます。'
+      a: 'GTID ベースの binlog レプリケーションで MySQL の変更に追従します。初期インデックスは SYNC を実行するか auto_initial_snapshot を有効にして構築します。その後は別の ETL ジョブなしで binlog の変更を反映します。'
     },
     {
       q: 'MygramDBはMySQL FULLTEXTよりどれくらい速いですか？',
