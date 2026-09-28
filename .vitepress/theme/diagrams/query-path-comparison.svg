@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1040 430" role="img">
-  <title>Disk-resident FULLTEXT versus in-memory MygramDB query path</title>
+  <title>MySQL FULLTEXT and MygramDB query paths</title>
   <defs>
     <marker id="qc-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
@@ -26,7 +26,7 @@
     </style>
   </defs>
 
-  <!-- ======================= lane 1 — disk path ======================= -->
+  <!-- ======================= lane 1 — MySQL path ======================= -->
   <rect class="box rose" x="24" y="64" width="110" height="88" rx="10"/>
   <rect class="box rose" x="174" y="64" width="200" height="88" rx="10"/>
   <rect class="box rose" x="414" y="64" width="190" height="88" rx="10"/>
@@ -52,51 +52,51 @@
 
   <!-- ============================= text: en ============================= -->
   <g data-i18n="en">
-    <text class="t" x="24" y="44">MySQL FULLTEXT — disk path</text>
+    <text class="t" x="24" y="44">MySQL FULLTEXT — SQL path</text>
     <text x="79" y="115" text-anchor="middle">query</text>
-    <text x="274" y="100" text-anchor="middle">B-tree index pages</text>
-    <text x="274" y="126" text-anchor="middle">read from disk</text>
-    <text x="509" y="100" text-anchor="middle">uncompressed</text>
-    <text x="509" y="126" text-anchor="middle">posting lists</text>
-    <text x="729" y="100" text-anchor="middle">external sort</text>
-    <text x="729" y="126" text-anchor="middle">/ merge</text>
-    <text class="l i-rose" x="935" y="116" text-anchor="middle">100–3000 ms</text>
-    <text class="s" x="24" y="178">every stage touches disk; latency collapses under concurrency</text>
+    <text x="274" y="100" text-anchor="middle">InnoDB FULLTEXT</text>
+    <text x="274" y="126" text-anchor="middle">through buffer pool</text>
+    <text x="509" y="100" text-anchor="middle">candidate lookup</text>
+    <text x="509" y="126" text-anchor="middle">and row access</text>
+    <text x="729" y="100" text-anchor="middle">SQL sort</text>
+    <text x="729" y="126" text-anchor="middle">when requested</text>
+    <text class="l i-rose" x="935" y="116" text-anchor="middle">results</text>
+    <text class="s" x="24" y="178">The published run had a 99.9989% buffer-pool hit ratio; most reads were served from memory.</text>
 
     <text class="t" x="24" y="238">MygramDB — in-memory path</text>
     <text x="79" y="309" text-anchor="middle">query</text>
     <text x="389" y="294" text-anchor="middle">delta + Roaring posting lists in RAM</text>
-    <text class="s" x="389" y="320" text-anchor="middle">60–80% smaller than the raw lists</text>
-    <text x="729" y="294" text-anchor="middle">SIMD</text>
-    <text x="729" y="320" text-anchor="middle">intersection</text>
-    <text class="l i-blue" x="935" y="310" text-anchor="middle">0.08–0.42 ms</text>
-    <text class="s" x="24" y="372">no disk I/O on the query path; latency stays flat under load</text>
+    <text class="s" x="389" y="320" text-anchor="middle">adaptive representation by density</text>
+    <text x="729" y="294" text-anchor="middle">intersect</text>
+    <text x="729" y="320" text-anchor="middle">and verify</text>
+    <text class="l i-blue" x="935" y="310" text-anchor="middle">results</text>
+    <text class="s" x="24" y="372">The published run disabled MygramDB's query cache; index data stayed in memory.</text>
 
-    <text class="s" x="520" y="410" text-anchor="middle">Same query, same data — the difference is where the index lives.</text>
+    <text class="s" x="520" y="410" text-anchor="middle">See the benchmark for latency by query and the full measurement conditions.</text>
   </g>
 
   <!-- ============================= text: ja ============================= -->
   <g data-i18n="ja">
-    <text class="t" x="24" y="44">MySQL FULLTEXT — ディスク経路</text>
+    <text class="t" x="24" y="44">MySQL FULLTEXT — SQL 経路</text>
     <text x="79" y="115" text-anchor="middle">クエリ</text>
-    <text x="274" y="100" text-anchor="middle">B-tree インデックス</text>
-    <text x="274" y="126" text-anchor="middle">ディスク読み込み</text>
-    <text x="509" y="100" text-anchor="middle">非圧縮の</text>
-    <text x="509" y="126" text-anchor="middle">ポスティングリスト</text>
-    <text x="729" y="100" text-anchor="middle">外部ソート</text>
-    <text x="729" y="126" text-anchor="middle">／マージ</text>
-    <text class="l i-rose" x="935" y="116" text-anchor="middle">100–3000 ms</text>
-    <text class="s" x="24" y="178">どの段階もディスクに触れ、同時実行が増えるほど遅延が伸びる</text>
+    <text x="274" y="100" text-anchor="middle">InnoDB FULLTEXT</text>
+    <text x="274" y="126" text-anchor="middle">バッファプール経由</text>
+    <text x="509" y="100" text-anchor="middle">候補と行を</text>
+    <text x="509" y="126" text-anchor="middle">取得</text>
+    <text x="729" y="100" text-anchor="middle">必要に応じて</text>
+    <text x="729" y="126" text-anchor="middle">SQL ソート</text>
+    <text class="l i-rose" x="935" y="116" text-anchor="middle">結果</text>
+    <text class="s" x="24" y="178">公開計測のバッファプールヒット率は 99.9989%。ほとんどの読み取りはメモリから処理されました。</text>
 
     <text class="t" x="24" y="238">MygramDB — インメモリ経路</text>
     <text x="79" y="309" text-anchor="middle">クエリ</text>
     <text x="389" y="294" text-anchor="middle">delta + Roaring ポスティングリストを RAM に保持</text>
-    <text class="s" x="389" y="320" text-anchor="middle">生のリストより 60〜80% 小さい</text>
-    <text x="729" y="294" text-anchor="middle">SIMD</text>
-    <text x="729" y="320" text-anchor="middle">積集合</text>
-    <text class="l i-blue" x="935" y="310" text-anchor="middle">0.08–0.42 ms</text>
-    <text class="s" x="24" y="372">クエリ経路にディスク I/O がなく、負荷が増えても遅延は横ばい</text>
+    <text class="s" x="389" y="320" text-anchor="middle">密度に応じて表現を切り替え</text>
+    <text x="729" y="294" text-anchor="middle">交差と</text>
+    <text x="729" y="320" text-anchor="middle">必要な照合</text>
+    <text class="l i-blue" x="935" y="310" text-anchor="middle">結果</text>
+    <text class="s" x="24" y="372">公開計測では MygramDB のクエリキャッシュを無効化し、インデックスはメモリに保持しました。</text>
 
-    <text class="s" x="520" y="410" text-anchor="middle">同じクエリ、同じデータ。違いはインデックスがどこにあるかだけです。</text>
+    <text class="s" x="520" y="410" text-anchor="middle">クエリごとのレイテンシと計測条件はベンチマークをご覧ください。</text>
   </g>
 </svg>

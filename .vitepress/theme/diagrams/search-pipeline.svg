@@ -99,7 +99,7 @@
     <text class="s" x="1008" y="318" text-anchor="middle">+ optional snippets</text>
 
     <text class="s" x="560" y="410" text-anchor="middle">The candidate set only ever shrinks from step 4 onward, so the cheapest filters run before the expensive ones.</text>
-    <text class="s" x="560" y="442" text-anchor="middle">Step 7 is the only stage that reads document text; with verify_text off it is skipped entirely.</text>
+    <text class="s" x="560" y="442" text-anchor="middle">Step 7 checks stored text only when enabled; highlighting and scoring can read it too.</text>
   </g>
 
   <!-- text: ja -->
@@ -147,6 +147,6 @@
     <text class="s" x="1008" y="318" text-anchor="middle">+ 任意でスニペット</text>
 
     <text class="s" x="560" y="410" text-anchor="middle">4番以降、候補集合は縮む一方です。そのため、安価なフィルタほど先に実行されます。</text>
-    <text class="s" x="560" y="442" text-anchor="middle">本文テキストを読むのは7番だけで、verify_text が off の場合はこの段階自体がスキップされます。</text>
+    <text class="s" x="560" y="442" text-anchor="middle">7番の照合は有効時のみ。ハイライトやスコアリングでも保存テキストを読みます。</text>
   </g>
 </svg>

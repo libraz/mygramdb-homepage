@@ -57,12 +57,12 @@
 
   <!-- ============================= text: en ============================= -->
   <g data-i18n="en">
-    <text class="l" x="304" y="52" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="s" x="304" y="76" text-anchor="middle">gtid_executed captured = N — this instant is t0</text>
-    <text class="l i-green" x="928" y="52" text-anchor="middle">no gap, no double-apply</text>
+    <text class="l" x="304" y="52" text-anchor="middle">Capture safe lower-bound GTID = N</text>
+    <text class="s" x="304" y="76" text-anchor="middle">then START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
+    <text class="l i-green" x="928" y="52" text-anchor="middle">no missed commits</text>
 
     <text class="l" x="680" y="142" text-anchor="middle">application writes continue</text>
-    <text class="s" x="680" y="168" text-anchor="middle">transactions N+1 … M pile up in the binlog</text>
+    <text class="s" x="680" y="168" text-anchor="middle">transactions after N appear in the binlog</text>
 
     <text class="m" x="180" y="232" text-anchor="middle">N-2</text>
     <text class="m" x="270" y="232" text-anchor="middle">N-1</text>
@@ -73,22 +73,22 @@
     <text class="s i-amber" x="360" y="292" text-anchor="middle">t0 = N</text>
 
     <text class="l" x="575" y="328" text-anchor="middle">table data read inside the transaction</text>
-    <text class="s" x="575" y="354" text-anchor="middle">a frozen view of the data at N</text>
+    <text class="s" x="575" y="354" text-anchor="middle">the view may include commits after N</text>
 
-    <text class="l i-blue" x="935" y="326" text-anchor="middle">binlog starts at N+1</text>
-    <text class="s" x="935" y="352" text-anchor="middle">catches up to M, then follows live</text>
+    <text class="l i-blue" x="935" y="326" text-anchor="middle">replay after N</text>
+    <text class="s" x="935" y="352" text-anchor="middle">then follow live writes</text>
 
-    <text class="s" x="540" y="406" text-anchor="middle">Every transaction ≤ N is in the snapshot; every transaction &gt; N arrives over the binlog.</text>
+    <text class="s" x="540" y="406" text-anchor="middle">The lower bound prevents gaps; some commits may replay after the snapshot, and row updates are idempotent.</text>
   </g>
 
   <!-- ============================= text: ja ============================= -->
   <g data-i18n="ja">
-    <text class="l" x="304" y="52" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="s" x="304" y="76" text-anchor="middle">gtid_executed = N を取得 — この瞬間が t0</text>
-    <text class="l i-green" x="928" y="52" text-anchor="middle">欠落も二重適用もなし</text>
+    <text class="l" x="304" y="52" text-anchor="middle">安全な下限 GTID = N を取得</text>
+    <text class="s" x="304" y="76" text-anchor="middle">その後に整合スナップショットのトランザクションを開始</text>
+    <text class="l i-green" x="928" y="52" text-anchor="middle">コミットの欠落なし</text>
 
     <text class="l" x="680" y="142" text-anchor="middle">アプリの書き込みは続く</text>
-    <text class="s" x="680" y="168" text-anchor="middle">トランザクション N+1 … M が binlog に溜まる</text>
+    <text class="s" x="680" y="168" text-anchor="middle">N 以降のトランザクションが binlog に記録される</text>
 
     <text class="m" x="180" y="232" text-anchor="middle">N-2</text>
     <text class="m" x="270" y="232" text-anchor="middle">N-1</text>
@@ -99,11 +99,11 @@
     <text class="s i-amber" x="360" y="292" text-anchor="middle">t0 = N</text>
 
     <text class="l" x="575" y="328" text-anchor="middle">テーブルはこのトランザクション内で読む</text>
-    <text class="s" x="575" y="354" text-anchor="middle">N 時点で凍結されたビュー</text>
+    <text class="s" x="575" y="354" text-anchor="middle">N より後のコミットを含む場合がある</text>
 
-    <text class="l i-blue" x="935" y="326" text-anchor="middle">binlog は N+1 から</text>
-    <text class="s" x="935" y="352" text-anchor="middle">M まで追いつき、以降は追従</text>
+    <text class="l i-blue" x="935" y="326" text-anchor="middle">N 以降を再適用</text>
+    <text class="s" x="935" y="352" text-anchor="middle">追いついた後は継続追従</text>
 
-    <text class="s" x="540" y="406" text-anchor="middle">N 以下のトランザクションはスナップショットに、N より後は binlog 経由で届きます。</text>
+    <text class="s" x="540" y="406" text-anchor="middle">下限で欠落を防ぎます。スナップショット後に一部を再適用する場合がありますが、行更新は冪等です。</text>
   </g>
 </svg>

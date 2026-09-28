@@ -47,16 +47,16 @@
     <text class="t" x="260" y="57" text-anchor="middle">MygramDB</text>
     <text class="t" x="850" y="57" text-anchor="middle">MySQL</text>
 
-    <text class="m" x="554" y="120" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="m" x="554" y="178" text-anchor="middle">SELECT @@global.gtid_executed</text>
+    <text class="m" x="554" y="120" text-anchor="middle">Capture safe lower-bound GTID</text>
+    <text class="m" x="554" y="178" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
     <text class="m" x="554" y="288" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
     <text class="m" x="554" y="398" text-anchor="middle">COMMIT</text>
 
-    <text class="s" x="260" y="238" text-anchor="middle">capture the GTID position</text>
+    <text class="s" x="260" y="238" text-anchor="middle">snapshot starts after GTID capture</text>
     <text class="s" x="260" y="348" text-anchor="middle">stream rows, build the index</text>
-    <text class="s" x="260" y="458" text-anchor="middle">start binlog from the captured GTID</text>
+    <text class="s" x="260" y="458" text-anchor="middle">resume binlog from a safe position</text>
 
-    <text class="s" x="560" y="504" text-anchor="middle">The GTID is captured inside the same transaction as the read, so no change is lost or applied twice at the handoff.</text>
+    <text class="s" x="560" y="504" text-anchor="middle">The pre-snapshot GTID prevents gaps; commits in the gap may replay, and row application is idempotent.</text>
   </g>
 
   <!-- text: ja -->
@@ -64,15 +64,15 @@
     <text class="t" x="260" y="57" text-anchor="middle">MygramDB</text>
     <text class="t" x="850" y="57" text-anchor="middle">MySQL</text>
 
-    <text class="m" x="554" y="120" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="m" x="554" y="178" text-anchor="middle">SELECT @@global.gtid_executed</text>
+    <text class="m" x="554" y="120" text-anchor="middle">安全な下限 GTID を取得</text>
+    <text class="m" x="554" y="178" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
     <text class="m" x="554" y="288" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
     <text class="m" x="554" y="398" text-anchor="middle">COMMIT</text>
 
-    <text class="s" x="260" y="238" text-anchor="middle">GTID 位置を記録</text>
+    <text class="s" x="260" y="238" text-anchor="middle">GTID 取得後にスナップショット開始</text>
     <text class="s" x="260" y="348" text-anchor="middle">行をストリーム処理してインデックス構築</text>
-    <text class="s" x="260" y="458" text-anchor="middle">記録した GTID から binlog を開始</text>
+    <text class="s" x="260" y="458" text-anchor="middle">安全な位置から binlog を再開</text>
 
-    <text class="s" x="560" y="504" text-anchor="middle">読み取りと同じトランザクション内で GTID を取得するため、切り替え時に変更の欠落も二重適用も起きません。</text>
+    <text class="s" x="560" y="504" text-anchor="middle">事前の GTID で欠落を防ぎます。間のコミットは再適用されることがありますが、行への適用は冪等です。</text>
   </g>
 </svg>

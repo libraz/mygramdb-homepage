@@ -65,15 +65,14 @@
     <text class="s" x="399" y="366" text-anchor="middle">— only what the config</text>
     <text class="s" x="399" y="386" text-anchor="middle">declares as a filter</text>
 
-    <text class="g" x="636" y="118" text-anchor="middle">TEXT STORE — OPTIONAL</text>
+    <text class="g" x="636" y="118" text-anchor="middle">STORED TEXT</text>
     <text class="t" x="636" y="182" text-anchor="middle">DocID → text</text>
-    <text class="s" x="636" y="216" text-anchor="middle">normalized text kept for</text>
-    <text class="s" x="636" y="238" text-anchor="middle">candidate verification,</text>
-    <text class="s" x="636" y="260" text-anchor="middle">highlighting and BM25</text>
+    <text class="s" x="636" y="216" text-anchor="middle">normalized text retained for</text>
+    <text class="s" x="636" y="238" text-anchor="middle">highlighting and BM25;</text>
+    <text class="s" x="636" y="260" text-anchor="middle">verification when enabled</text>
     <text class="m" x="636" y="298" text-anchor="middle">memory.verify_text</text>
-    <text class="s" x="636" y="336" text-anchor="middle">Roughly triples per-document</text>
-    <text class="s" x="636" y="358" text-anchor="middle">memory: ~813 MB → ~3.1 GB</text>
-    <text class="s" x="636" y="380" text-anchor="middle">per million documents</text>
+    <text class="s" x="636" y="336" text-anchor="middle">controls post-filtering,</text>
+    <text class="s" x="636" y="358" text-anchor="middle">not whether text is stored</text>
 
     <text class="t" x="948" y="166" text-anchor="middle">Query cache</text>
     <text class="m" x="948" y="194" text-anchor="middle">query digest → result set</text>
@@ -114,15 +113,14 @@
     <text class="s" x="399" y="366" text-anchor="middle">設定でフィルタとして</text>
     <text class="s" x="399" y="386" text-anchor="middle">宣言したものだけ</text>
 
-    <text class="g" x="636" y="118" text-anchor="middle">テキストストア（任意）</text>
+    <text class="g" x="636" y="118" text-anchor="middle">保存テキスト</text>
     <text class="t" x="636" y="182" text-anchor="middle">DocID → テキスト</text>
-    <text class="s" x="636" y="216" text-anchor="middle">候補の照合・ハイライト・</text>
-    <text class="s" x="636" y="238" text-anchor="middle">BM25 のために</text>
-    <text class="s" x="636" y="260" text-anchor="middle">正規化テキストを保持</text>
+    <text class="s" x="636" y="216" text-anchor="middle">ハイライト・BM25 用に</text>
+    <text class="s" x="636" y="238" text-anchor="middle">正規化テキストを保持</text>
+    <text class="s" x="636" y="260" text-anchor="middle">照合時もこのテキストを使用</text>
     <text class="m" x="636" y="298" text-anchor="middle">memory.verify_text</text>
-    <text class="s" x="636" y="336" text-anchor="middle">1件あたりのメモリは約3倍。</text>
-    <text class="s" x="636" y="358" text-anchor="middle">100万件あたり約813MB →</text>
-    <text class="s" x="636" y="380" text-anchor="middle">約3.1GB</text>
+    <text class="s" x="636" y="336" text-anchor="middle">制御するのは照合処理</text>
+    <text class="s" x="636" y="358" text-anchor="middle">テキスト保存は常に有効</text>
 
     <text class="t" x="948" y="166" text-anchor="middle">クエリキャッシュ</text>
     <text class="m" x="948" y="194" text-anchor="middle">クエリダイジェスト → 結果</text>

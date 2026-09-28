@@ -47,7 +47,7 @@
   <g data-i18n="en">
     <text class="t" x="125" y="140" text-anchor="middle">Application</text>
     <text x="125" y="174" text-anchor="middle">writes SQL as before</text>
-    <text class="s" x="125" y="202" text-anchor="middle">no code changes</text>
+    <text class="s" x="125" y="202" text-anchor="middle">search calls use MygramDB</text>
 
     <text class="t" x="510" y="140" text-anchor="middle">MySQL / MariaDB</text>
     <text class="s" x="510" y="172" text-anchor="middle">all writes land here</text>
@@ -65,7 +65,7 @@
     <text class="s" x="695" y="251" text-anchor="middle">snapshot</text>
 
     <text class="s" x="300" y="318" text-anchor="middle">search queries</text>
-    <text class="l" x="645" y="308" text-anchor="middle">0.08–0.42 ms</text>
+    <text class="l" x="645" y="308" text-anchor="middle">TCP / HTTP API</text>
 
     <text class="s" x="520" y="374" text-anchor="middle">No write-path changes — MygramDB is a read-only search sidecar, not a second datastore.</text>
   </g>
@@ -74,7 +74,7 @@
   <g data-i18n="ja">
     <text class="t" x="125" y="140" text-anchor="middle">アプリケーション</text>
     <text x="125" y="174" text-anchor="middle">SQL は従来どおり</text>
-    <text class="s" x="125" y="202" text-anchor="middle">コード変更なし</text>
+    <text class="s" x="125" y="202" text-anchor="middle">検索先は MygramDB へ変更</text>
 
     <text class="t" x="510" y="140" text-anchor="middle">MySQL / MariaDB</text>
     <text class="s" x="510" y="172" text-anchor="middle">書き込みはすべてここへ</text>
@@ -93,7 +93,7 @@
     <text class="s" x="695" y="251" text-anchor="middle">スナップショット</text>
 
     <text class="s" x="300" y="318" text-anchor="middle">検索クエリ</text>
-    <text class="l" x="645" y="308" text-anchor="middle">0.08–0.42 ms</text>
+    <text class="l" x="645" y="308" text-anchor="middle">TCP / HTTP API</text>
 
     <text class="s" x="520" y="374" text-anchor="middle">書き込み経路は変わりません。MygramDB は読み取り専用の検索サイドカーで、第二のデータストアではありません。</text>
   </g>
