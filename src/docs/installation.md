@@ -46,17 +46,17 @@ For production use under Docker, mount a config file containing the MySQL connec
 :::
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:latest
+docker pull ghcr.io/libraz/mygram-db:1.10.2
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
-  -v /path/to/config.yaml:/etc/mygramdb/config.yaml \
-  ghcr.io/libraz/mygram-db:latest
+  -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
+  ghcr.io/libraz/mygram-db:1.10.2
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.10.0`
+- `ghcr.io/libraz/mygram-db:1.10.2`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.

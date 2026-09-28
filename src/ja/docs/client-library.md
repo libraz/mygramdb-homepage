@@ -141,6 +141,8 @@ auto result = client.Search(
 );
 ```
 
+リテラル検索語、`and_terms`、`not_terms`、フィルター値、ハイライトタグには同じワイヤー引用規則が適用されます。空の値、`AND`、`OR`、`NOT`、`ORDER` などの句キーワード、全角・ノーブレークスペースを含む Unicode 空白、引用符、バックスラッシュ、括弧は、1つの値として届くように引用・エスケープされます。`query_mode = QueryMode::kBoolean` や `SearchRaw` に渡す検索文は式としてそのまま送られるため、Web構文から組み立てる場合は `ConvertSearchExpression()` を使ってください。
+
 ### 型付き検索オプション
 
 比較フィルタ、ファジー検索、ハイライト、ソート、ページネーションが必要な場合は `SearchOptions` を使います。`SearchRaw` はアプリケーションが意図して組み立てたBoolean式だけに使ってください。
@@ -168,6 +170,8 @@ if (!result) {
 
 ::: info 接続の考え方
 短いリクエストごとに接続を作り直すより、ワーカーやスレッドごとにクライアントを保持して再利用する方が効率的です。接続断やタイムアウト時は、新しい `MygramClient` を作り直して再接続してください。
+
+`ClientConfig::host` には IPv4/IPv6 リテラル（例: `"::1"`）と、IPv6だけに解決されるホスト名を指定できます。`Connect()` はシステムの名前解決が返すアドレスを順に試します。送信中に相手から接続をリセットされた場合、`SendCommand()` は型付きエラーを返してソケットを切断します。新しいクライアントを作成してから再試行してください。レスポンスはプロトコルが完了を示すまで蓄積されるため、`recv_buffer_size` が小さくても、ハイライト検索、DEBUG出力、`SHOW VARIABLES` などの複数行レスポンスが途中で切れません。
 :::
 
 ### COUNT クエリ
@@ -221,7 +225,7 @@ if (result) {
 
 ### 管理操作の認証
 
-v1.10 では、管理操作の認証は接続単位です。`ClientConfig` に `admin_token` フィールドはありません。接続後、同じ `MygramClient` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してから `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` を呼び出してください。rawコマンドの送信成功は、レスポンスを受信したことだけを意味します。再接続後は毎回認証し直します。検索、count、get、facet 操作にはこの認証は不要です。
+管理操作の認証は接続単位です。`ClientConfig` に `admin_token` フィールドはありません。接続後、同じ `MygramClient` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してから `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` を呼び出してください。rawコマンドの送信成功は、レスポンスを受信したことだけを意味します。再接続後は毎回認証し直します。検索、count、get、facet 操作にはこの認証は不要です。
 
 ```cpp
 #include <cstdlib>
@@ -321,10 +325,14 @@ if (result) {
 | `"機械学習"` | `"機械学習"` | フレーズ検索 |
 | `golang -old` | `golang AND NOT old` | 「golang」を含み、「old」を含まない |
 | `python OR ruby` | `(python OR ruby)` | 「python」または「ruby」のいずれか |
+| `order` | `"order"` | リテラル語。予約された句キーワードは引用されます |
+| `go or rust` | `(go OR rust)` | 単独の `OR` は大文字小文字を区別せず認識されます |
+| `owner's draft` | `"owner's draft"` | アポストロフィを含む値は1つの引用されたワイヤートークンになります |
 | `"深層学習" チュートリアル` | `"深層学習" AND チュートリアル` | フレーズと語句 |
 | `golang +(tutorial OR guide)` | `golang AND (tutorial OR guide)` | 「golang」AND（「tutorial」OR「guide」） |
+| `(tutorial -video)` | `(tutorial NOT video)` | グループ内のマイナスは `NOT` になります |
 | `AI machine -learning` | `AI AND machine AND NOT learning` | 「AI」と「machine」を含み、「learning」を除外 |
-| `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | 全角スペース区切り |
+| `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | 全角スペース区切り。SDKから出力する値は必要に応じて引用されます |
 | `😀 tutorial -😢` | `😀 AND tutorial AND NOT 😢` | 絵文字検索（4バイトUTF-8） |
 
 #### 簡易API（後方互換性）
@@ -340,7 +348,7 @@ if (simplified) {
 }
 ```
 
-**注意:** ORと括弧を含む複雑な式は、`SimplifySearchExpression()`を使用すると意味が失われます。
+`SimplifySearchExpression()` は `OR` または括弧によるグループ化を含む式に対して、型付きの `kClientExpressionParseError` エラーを返します。構造化フィールドではこれらの形式を表現できないためです。単純な語句と引用フレーズはプレーンな値として保持され、構造化検索メソッドがコマンド作成時に1回だけ引用します。フレーズ、ORグループ、グループ化を意味どおりに扱う場合は、`ConvertSearchExpression()` の結果を `SearchRaw()` に渡してください。
 
 ## C API
 
@@ -410,7 +418,9 @@ cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 
 ### 管理操作の認証
 
-v1.10 では、管理操作の認証は接続済みの `MygramClient_C` ごとに必要です。管理操作の前に `mygramclient_send_command` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してください。`0` の戻り値はrawレスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は戻り値が0以外の場合にだけ使用してください。再接続後も繰り返してください。これは `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` に対応するC APIに適用され、検索、count、get、facet 操作には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
+管理操作の認証は接続済みの `MygramClient_C` ごとに必要です。管理操作の前に `mygramclient_send_command` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してください。`0` の戻り値はrawレスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は戻り値が0以外の場合にだけ使用してください。再接続後も繰り返してください。これは `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` に対応するC APIに適用され、検索、count、get、facet 操作には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
+
+C APIのリテラル検索語、AND/NOT条件、フィルター値、ハイライトタグにも同じ引用規則が適用されます。接続リセット後の送信失敗は0以外のステータスを返すため、`mygramclient_get_last_error` を確認して再接続してから再試行してください。
 
 ```c
 #include <stdio.h>
@@ -593,8 +603,8 @@ NODE_API_MODULE(mygramdb, Init)
 
 #### SearchResponse
 
-- `results` - SearchResultのベクター
-- `total_count` - マッチしたドキュメントの総数
+- `results` - 現在の `LIMIT`/`OFFSET` ページに含まれるSearchResultのベクター
+- `total_count` - ページング前のマッチしたドキュメント総数。サーバーはページと同じ1回のインデックス読み取りから求めます
 - `debug` - オプションのデバッグ情報
 
 #### Error

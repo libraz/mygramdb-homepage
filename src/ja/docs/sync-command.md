@@ -16,7 +16,7 @@ head:
 本番向けの例では `api.admin_token` を使用します。空なら `AUTH` は不要ですが、非ループバックのデプロイではトークンを設定してください。
 
 ::: info 用語補足
-**スナップショット同期**は、MySQLの対象テーブルをSELECTで読み取り、その時点の内容からMygramDBの検索インデックスを作る処理です。完了後は、取得したGTIDからbinlogレプリケーションを開始して差分を追いかけます。
+**スナップショット同期**は、MySQLの対象テーブルをSELECTで読み取り、その時点の内容からMygramDBの検索インデックスを作る処理です。完了後は通常、SYNC前にドレインしたGTIDからbinlogレプリケーションを再開します。`2017` の復旧では、保守的なスナップショット下限マーカーから再開してデコードできない区間を越えます。
 :::
 
 ## 設定
@@ -82,17 +82,17 @@ OK SYNC STARTED table=articles
 
 **レスポンス（エラー）:**
 ```mygram
-ERROR SYNC already in progress for table 'articles'
-ERROR Memory critically low. Cannot start SYNC. Check system memory.
-ERROR Table 'products' not found in configuration
+ERROR 4011 SYNC already in progress for 'articles'
+ERROR 4012 Memory critically low. Cannot start SYNC.
+ERROR 4010 Table 'products' not found
 ```
 
 **動作:**
 - バックグラウンドで非同期に実行
 - 開始後すぐにレスポンスを返す
 - MySQL の SELECT クエリからスナップショットをビルド
-- スナップショット時点の GTID を取得
-- 完了時にレプリケーションをドレインし、通常は他テーブルのコミットを飛ばさないようドレイン済み GTID から再開
+- 初期スナップショットトランザクションの開始前に保守的な GTID 下限を取得
+- 完了時は通常、他テーブルのコミットを飛ばさないよう SYNC 前にドレインした GTID から再開し、`2017` の復旧ではスナップショットマーカーから再開してデコードできない区間を越えます
 
 ### SYNC STOP - 同期をキャンセル
 
@@ -100,7 +100,9 @@ ERROR Table 'products' not found in configuration
 SYNC STOP [<table_name>]
 ```
 
-キャンセルは非同期です。`SYNC STATUS` で `CANCELLED` または別の終了状態になるまで確認してください。
+キャンセルは非同期です。`SYNC STATUS` が `CANCELLING` になった後も、`CANCELLED` または別の終了状態になるまで確認してください。
+
+初期ロードは接続、読み取り、スナップショット構築の各段階でキャンセル要求を確認するため、実行中のロードを速やかにキャンセルできます。シャットダウンシグナルでも同じキャンセルが要求されます。MySQL の処理中に待機している場合、完了までの時間は設定した `read_timeout_ms` の範囲に制限されます。
 
 ### SYNC STATUS - 同期の進捗を確認
 
@@ -150,14 +152,16 @@ status=IDLE message="No sync operation performed"
 | フィールド | 説明 | 例 |
 |-------|-------------|---------|
 | `table` | 同期対象のテーブル名 | `articles` |
-| `status` | 現在のステータス | `IN_PROGRESS`, `COMPLETED`, `FAILED`, `IDLE`, `CANCELLED` |
+| `status` | 現在のステータス | `JOINING_PREVIOUS`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, `FAILED`, `CANCELLING`, `CANCELLED`, `IDLE` |
 | `progress` | 処理済み/総行数 | `10000/25000 rows (40.0%)` |
 | `rate` | 処理レート | `5000 rows/s` |
 | `rows` | 処理した総行数 | `25000` |
 | `time` | 総処理時間 | `5.2s` |
-| `gtid` | 取得したスナップショット GTID | `uuid:123` |
+| `gtid` | スナップショットトランザクション開始前に取得した保守的な GTID 下限 | `uuid:123` |
 | `replication` | レプリケーションステータス | `STARTED`, `DISABLED`, `FAILED` |
 | `error` | エラーメッセージ（失敗時） | `MySQL connection lost` |
+
+`JOINING_PREVIOUS`、`STARTING`、`CANCELLING` は一時的な状態です。`JOINING_PREVIOUS` はそのテーブルの前のワーカーを join している間、`STARTING` は新しいワーカーの開始中、`CANCELLING` は `SYNC STOP` がキャンセルを要求した後に表示されます。`SYNC STATUS` をポーリングし、終了状態になるまで待ってください。
 
 ### レプリケーションステータス値
 
@@ -195,7 +199,7 @@ status=IDLE message="No sync operation performed"
 | `INFO` | 許可 | 同期の進捗を含む現在のサーバー状態を表示 |
 | `DUMP SAVE` / `DUMP LOAD` / `OPTIMIZE` | **拒否** | SYNCの完了後に再実行 |
 | `SYNC`（別のテーブル） | **拒否** | 長時間の操作は同時に1つだけ実行できる |
-| `REPLICATION STOP` | 許可 | 独立した操作 |
+| `REPLICATION STOP` | 通常は拒否 | SYNC が内部でリーダーを停止しているため、通常は `ERROR 6029 Replication is not running` を返します。その停止より先にコマンドが成功しても、SYNC の完了時にリーダーは再開します。 |
 
 TCP/CLIとHTTPのテーブル読み取り（search、count、facet、ドキュメントGET）は、対象テーブルの同期中に拒否されます。HTTPは `503` を返します。
 
@@ -270,6 +274,7 @@ SYNC 中に MygramDB がシャットダウンシグナル（SIGTERM/SIGINT）を
 1. **実行中の SYNC 操作はキャンセルされる**
    - `SnapshotBuilder::Cancel()` が呼び出される
    - ステータスが `CANCELLED` に変わる
+   - 初期 MySQL ロードは接続、読み取り、スナップショット構築中に要求を確認する
 
 2. **サーバーはクリーンアップを待つ**
    - 最大待機時間: 30秒
@@ -279,6 +284,7 @@ SYNC 中に MygramDB がシャットダウンシグナル（SIGTERM/SIGINT）を
      binlog/スナップショット接続では秒に換算）によって制限されます。
      長時間の読み取り中に SIGTERM/SIGINT への速い応答が必要な場合は、この値を
      下げてください。
+   - 初期 MySQL 接続の再試行中に SIGTERM を受信した場合は、正常に終了します
 
 3. **サーバーがシャットダウン**
    - MySQL 接続を閉じる
@@ -319,7 +325,7 @@ INFO: TCP server stopped
 
 ### SYNC の開始に失敗する
 
-**エラー:** `Memory critically low. Cannot start SYNC. Check system memory.`
+**エラー:** `ERROR 4012 Memory critically low. Cannot start SYNC.`
 
 **解決策:**
 - 利用可能なシステムメモリを確認
@@ -349,9 +355,11 @@ INFO: TCP server stopped
 
 ### エラー `2017`: デコードできない binlog イベント
 
-XA prepare イベント、MariaDB の圧縮イベント、MySQL の `TRANSACTION_PAYLOAD_EVENT`（トランザクション圧縮）、`PARTIAL_UPDATE_ROWS_EVENT`（部分 JSON 行更新）は、生成元のサーバー設定を変えた後も binlog に残ります。古い位置から通常どおり再開すると同じイベントを再生するため、レプリケーションは再び停止します。
+XA prepare イベント、MariaDB のイベント単位の圧縮 query/row イベント、MySQL の `TRANSACTION_PAYLOAD_EVENT`（トランザクション圧縮）、`PARTIAL_UPDATE_ROWS_EVENT`（部分 JSON 行更新）は、生成元のサーバー設定を変えた後も binlog に残ります。古い位置から通常どおり再開すると同じイベントを再生するため、レプリケーションは再び停止します。
 
 レプリケーションがエラーコード `2017` で停止した場合は、まず最も重要なテーブルに `SYNC` を実行します。MygramDB はそのテーブルを再構築し、スナップショットマーカーから共有ストリームを再開して、デコードできない区間を越えます。続いて、他のすべてのレプリケーション対象テーブルにも一つずつ `SYNC` を実行してください。最初の復旧で共有ストリームが前進するため、再構築しないテーブルには、飛ばした区間の書き込みが反映されません。
+
+`log_bin_compress` による MariaDB のイベント単位の圧縮は引き続き未対応で、`2017` の復旧対象です。通常の MariaDB row イベント内にある `COMPRESSED` `VARCHAR`/`TEXT` カラムは別物であり、MygramDB はインデックス化の前に展開します。圧縮カラムのペイロードが未知または破損している場合は row デコードエラー `2008` になり、通常の再接続処理に進みます。イベントをデコードできない `2017` の手順だけを使ってください。
 
 `api.admin_token` を設定している場合は、復旧手順全体を1つの認証済み CLI 接続で実行してください。認証状態は接続単位であり、別々の `mygram-cli` プロセスには引き継がれません。次のテーブルの `SYNC` を実行する前に、`SYNC STATUS` が `COMPLETED` と `replication=STARTED` を返すまで待ちます。
 

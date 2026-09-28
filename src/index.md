@@ -28,7 +28,7 @@ features:
   - icon:
       src: /icons/refresh-cw.svg
     title: Real-time MySQL / MariaDB sync
-    details: GTID-based binlog replication for MySQL 8.4/9.x and MariaDB 10.6+/11.x. Keep writes where they are, just speed up search.
+    details: GTID-based binlog replication for MySQL 8.4/9.x and MariaDB 10.11+/11.x/12.x. Keep writes where they are, just speed up search.
   - icon:
       src: /icons/globe.svg
     title: Full Unicode, multibyte-ready
@@ -88,7 +88,7 @@ docker run -d --name mygramdb \
   -e TABLE_NGRAM_SIZE=2 \
   -e REPLICATION_SERVER_ID=12345 \
   -e NETWORK_ALLOW_CIDRS=0.0.0.0/0 \
-  ghcr.io/libraz/mygram-db:latest
+  ghcr.io/libraz/mygram-db:1.10.2
 ```
 
 ::: warning

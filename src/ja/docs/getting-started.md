@@ -13,7 +13,7 @@ head:
 
 ## 前提条件
 
-- GTIDが有効なMySQL 8.4/9.x、またはMariaDB 10.6+/11.x
+- GTIDが有効な MySQL 8.4/9.x、または MariaDB 10.11+/11.x/12.x
 - RHEL/AlmaLinux/Rocky Linux 9、Ubuntu 22.04/24.04、またはDocker
 
 MygramDBは既存のデータベースの隣に配置するサイドカーです。アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBはbinlogを追従して独自の検索インデックスを構築し、検索クエリのみがMygramDBへ送られます。
@@ -41,7 +41,7 @@ sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ### Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:latest
+docker pull ghcr.io/libraz/mygram-db:1.10.2
 ```
 
 ## 最小構成
@@ -88,7 +88,7 @@ network:
 :::
 
 ::: tip 管理トークンはファイル外で渡す
-本番設定では、YAMLファイルに書き込む代わりに `MYGRAM_API_ADMIN_TOKEN` でシークレットを渡してください。TCPを非ループバックアドレスで待ち受け、Unix socketを使わない場合は必須です。
+本番設定では、YAML ファイルに書き込む代わりに `MYGRAM_API_ADMIN_TOKEN` でシークレットを渡してください。TCP を非ループバックアドレスで待ち受け、Unix ソケットを使わない場合、または有効な HTTP を非ループバックアドレスで待ち受ける場合は必須です。
 :::
 
 ## サービスを開始

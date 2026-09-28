@@ -37,12 +37,12 @@ v1.9 では旧コマンドを受け付けません。スクリプトや運用手
 
 ```mygram
 # 更新前
-SAVE /backup/mygramdb.dmp
-LOAD /backup/mygramdb.dmp
+SAVE mygramdb.dmp
+LOAD mygramdb.dmp
 
 # v1.9
-DUMP SAVE /backup/mygramdb.dmp
-DUMP LOAD /backup/mygramdb.dmp
+DUMP SAVE mygramdb.dmp
+DUMP LOAD mygramdb.dmp
 ```
 
 `DUMP SAVE` は非同期です。バックアップ完了を判定する前に `DUMP STATUS` を確認してください。
@@ -54,8 +54,8 @@ v1.9 が書き出すダンプ形式は引き続き format v2 で、format v1/v2 
 `DUMP LOAD` は、空でないレプリケーション位置を消してしまうダンプを拒否します。メンテナンス前にダンプと復元先を確認します。
 
 ```mygram
-DUMP VERIFY /backup/mygramdb.dmp
-DUMP INFO /backup/mygramdb.dmp
+DUMP VERIFY mygramdb.dmp
+DUMP INFO mygramdb.dmp
 ```
 
 ## Docker デプロイ

@@ -79,7 +79,7 @@ sudo update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-18 100
 
 ```bash
 # Check if tools are installed
-cmake --version        # Should show 3.15+
+cmake --version        # Should show 3.16+
 clang-format --version # Should show 18.x.x
 clang-tidy --version   # Should show 18.x.x
 clangd --version       # Should show 18.x.x (optional, for LSP)
@@ -239,7 +239,7 @@ make test-large-dump
 # Default MySQL 8.4 suite
 make e2e-test
 
-# MySQL 8.4/9.7 and MariaDB 10.11/11.4 matrix
+# MySQL 8.4/9.7 and MariaDB 10.11/11.8/12.3 matrix
 make e2e-matrix
 ```
 

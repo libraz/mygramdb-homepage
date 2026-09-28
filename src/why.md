@@ -1,6 +1,6 @@
 ---
 title: Why MySQL FULLTEXT is Slow - MygramDB
-description: MySQL FULLTEXT search is slow due to disk I/O, uncompressed posting lists, and cache dependency. Learn how MygramDB solves these problems with in-memory indexing.
+description: Compare MySQL FULLTEXT with MygramDB's in-memory search path using measured cache-off benchmarks and documented execution paths.
 head:
   - - meta
     - name: keywords
@@ -9,67 +9,53 @@ head:
 
 # Why MySQL FULLTEXT is Slow
 
-MySQL FULLTEXT search becomes painfully slow as your data grows. Here's why, and how MygramDB solves it.
+MySQL FULLTEXT performance depends on the query, data, memory, and concurrency. The published benchmark compares it with MygramDB on the same dataset.
 
 ## The Problem
 
-The two architectures answer the same query through completely different data paths: one round-trips through disk-resident structures, the other stays entirely in RAM.
+MySQL serves FULLTEXT queries through its SQL execution path and InnoDB buffer pool. MygramDB maintains a separate search index in memory. The measured MySQL buffer-pool hit ratio was 99.9989%, so the benchmark does not show a disk read for every query.
 
-<DocDiagram name="query-path-comparison" alt="A MySQL FULLTEXT query passes through disk-resident B-tree pages, posting lists, and a sort, while MygramDB searches compressed posting lists in RAM with SIMD intersection." />
+<DocDiagram name="query-path-comparison" alt="MySQL searches a FULLTEXT index through its buffer pool and SQL execution path; MygramDB searches adaptive posting lists in memory and optionally verifies candidate text." />
 
-### Disk I/O Bottleneck
+### Work per query
 
-MySQL FULLTEXT stores indexes on disk using B-tree pages. Every search query requires:
-1. Reading B-tree pages from disk
-2. Loading posting lists into memory
-3. Sorting results (often with external sort)
-
-Even with SSDs, this I/O overhead can add milliseconds or seconds per query.
+MySQL FULLTEXT uses an inverted index within InnoDB. Query cost depends on the matching postings, rows fetched, sorting, and whether index pages are already in the buffer pool. MygramDB intersects in-memory posting lists and applies optional text verification before returning results. The benchmark reports the observed latency for each tested query rather than assuming one fixed cost for either engine.
 
 ::: info What is a posting list?
 A **posting list** is the list of document IDs that contain a given term. Full-text search finds candidates by combining these lists with AND/OR. See the [Glossary](/docs/glossary#posting-list) for more.
 :::
 
-### Uncompressed Posting Lists
-
-MySQL stores posting lists without compression. For common terms matching millions of rows, this means:
-- Reading megabytes of data per query
-- Memory pressure on buffer pool
-- Cache thrashing under concurrent load
-
 ### Cache Dependency
 
-Performance varies significantly between cold and warm cache. The [published benchmark](/benchmarks) disables MygramDB's query cache so that search-engine work, rather than cache hits, is measured.
+The [published benchmark](/benchmarks) ran with a warm MySQL buffer pool and disabled MygramDB's query cache. Cache hits can change latency in either system. Use those conditions when comparing your own measurements.
 
-In production, cache is often cold after restarts, deployments, or buffer pool contention.
+### Concurrent load
 
-### Concurrency Collapse
-
-Under concurrent load, MySQL FULLTEXT throughput can drop dramatically. The cache-off results for 1, 2, 4, 8 and 16 connections are maintained on the [benchmark page](/benchmarks), together with the test configuration.
+The cache-off results for 1, 2, 4, 8 and 16 connections are maintained on the [benchmark page](/benchmarks), together with the test configuration. Throughput and latency under load depend on the host and workload.
 
 ## The Solution: MygramDB
 
-MygramDB solves these problems with a fundamentally different architecture:
+MygramDB provides a separate execution path for search:
 
 ### In-Memory Index
 
-All data lives in RAM. Zero disk I/O during queries.
+The search index and stored document data are held in memory. The server does not fetch MySQL FULLTEXT index pages during a search.
 
 ### Compressed Posting Lists
 
-Delta encoding + Roaring bitmaps reduce memory usage by 60-80% while enabling faster intersections.
+Posting lists use Delta encoding or Roaring bitmaps according to density. The memory saving depends on the indexed data; see the [memory sizing reference](/docs/performance#memory-sizing).
 
 ### SIMD-Accelerated Operations
 
-Bitmap intersections use CPU SIMD instructions for maximum throughput.
+Roaring bitmap operations can use SIMD instructions where the build and CPU support them.
 
 ### Consistent Performance
 
-The index stays in memory, so a search does not need to read MySQL's FULLTEXT index. See [Benchmarks](/benchmarks) for cache-off measurements.
+The index stays in memory, so a search does not need to read MySQL's FULLTEXT index. MygramDB's own query cache may still change latency when enabled. See [Benchmarks](/benchmarks) for cache-off measurements.
 
 ### Real-time MySQL / MariaDB Sync
 
-GTID-based binlog replication keeps MygramDB in sync with MySQL 8.4/9.x or MariaDB 10.6+/11.x. No ETL pipelines, no data staleness.
+GTID-based binlog replication keeps MygramDB in sync with MySQL 8.4/9.x or MariaDB 10.11+/11.x/12.x. No ETL pipeline is needed; replication lag depends on the source, network, and MygramDB's processing rate.
 
 ::: info What is ETL?
 **ETL** stands for extract, transform, load — the pipeline that copies data from one system into another. MygramDB reads the MySQL binlog directly, so there is no separate sync job to build and operate.

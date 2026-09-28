@@ -145,6 +145,8 @@ auto result = client.Search(
 );
 ```
 
+Literal search text, `and_terms`, `not_terms`, filter values, and highlight tags use one wire-quoting rule. Empty values, clause keywords such as `AND`, `OR`, `NOT`, and `ORDER`, Unicode whitespace (including full-width and no-break spaces), quotes, backslashes, and parentheses are quoted and escaped so they arrive as one value. Boolean query text passed with `query_mode = QueryMode::kBoolean` or to `SearchRaw` is an expression and is sent as written; use `ConvertSearchExpression()` when constructing it from web syntax.
+
 ### Typed Search Options
 
 Use `SearchOptions` when a query needs comparison filters, fuzzy matching, highlighting, sorting, or pagination. Use `SearchRaw` only for a boolean expression you construct deliberately.
@@ -155,6 +157,8 @@ Use `SearchOptions` when a query needs comparison filters, fuzzy matching, highl
 
 ::: info Thinking about connections
 Holding one client per worker or thread and reusing it beats reconnecting for every short request. After a disconnect or timeout, construct a fresh `MygramClient` and reconnect.
+
+`ClientConfig::host` accepts an IPv4 or IPv6 literal (for example, `"::1"`) and hostnames that resolve only to IPv6. `Connect()` tries the addresses returned by the system resolver. If a peer resets the connection while a command is being sent, `SendCommand()` returns a typed error and disconnects the socket; create a fresh client before retrying. Responses are accumulated until the protocol marks them complete, so a small `recv_buffer_size` does not truncate multi-line responses such as highlighted searches, DEBUG output, or `SHOW VARIABLES`.
 :::
 
 ```cpp
@@ -225,7 +229,7 @@ if (result) {
 
 ### Administrative authentication
 
-In v1.10, administrative methods use connection-scoped authentication. `ClientConfig` has no `admin_token` field: after connecting, send `AUTH` on that same `MygramClient` and require the exact `OK AUTHENTICATED` response before `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, or `EnableDebug`/`DisableDebug`. A successful raw send only means a response was received. Authenticate again after every reconnect. Search, count, get, and facet operations do not require this authentication.
+Administrative methods use connection-scoped authentication. `ClientConfig` has no `admin_token` field: after connecting, send `AUTH` on that same `MygramClient` and require the exact `OK AUTHENTICATED` response before `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, or `EnableDebug`/`DisableDebug`. A successful raw send only means a response was received. Authenticate again after every reconnect. Search, count, get, and facet operations do not require this authentication.
 
 ```cpp
 #include <cstdlib>
@@ -325,10 +329,14 @@ if (result) {
 | `"machine learning"` | `"machine learning"` | Exact phrase search |
 | `golang -old` | `golang AND NOT old` | Must have "golang", must not have "old" |
 | `python OR ruby` | `(python OR ruby)` | Either "python" or "ruby" |
+| `order` | `"order"` | Literal word; reserved clause keywords are quoted |
+| `go or rust` | `(go OR rust)` | `OR` is recognized case-insensitively as a whole word |
+| `owner's draft` | `"owner's draft"` | Apostrophes make the value one quoted wire token |
 | `"deep learning" tutorial` | `"deep learning" AND tutorial` | Phrase and term |
 | `golang +(tutorial OR guide)` | `golang AND (tutorial OR guide)` | "golang" AND either "tutorial" or "guide" |
+| `(tutorial -video)` | `(tutorial NOT video)` | A minus inside a group becomes `NOT` |
 | `AI machine -learning` | `AI AND machine AND NOT learning` | Must have "AI" and "machine", exclude "learning" |
-| `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | Full-width space delimiter |
+| `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | Full-width space delimiter; values emitted by the SDK are quoted when needed |
 | `😀 tutorial -😢` | `😀 AND tutorial AND NOT 😢` | Emoji search (4-byte UTF-8) |
 
 #### Simplified API (Backward Compatible)
@@ -344,7 +352,7 @@ if (simplified) {
 }
 ```
 
-**Note:** Complex expressions with OR and parentheses will lose their semantic meaning when using `SimplifySearchExpression()`.
+`SimplifySearchExpression()` returns the typed `kClientExpressionParseError` error when the expression contains `OR` or parenthesized grouping because its structured fields cannot represent those forms. It preserves simple terms and quoted phrases as plain values; the structured search methods quote them once when building the command. Use `ConvertSearchExpression()` followed by `SearchRaw()` for lossless phrases, OR groups, and grouping.
 
 ## C API
 
@@ -414,7 +422,9 @@ cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 
 ### Administrative authentication
 
-In v1.10, administrative authentication is scoped to one connected `MygramClient_C`. Before administrative methods, send `AUTH` with `mygramclient_send_command` and require the exact `OK AUTHENTICATED` response; a `0` return only means a raw response was received and clears the last error. Use `mygramclient_get_last_error` only when the return value is nonzero. Repeat it after reconnecting. This applies to the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, and `EnableDebug`/`DisableDebug`, but not to search, count, get, or facet operations. Free the response with `mygramclient_free_string` and never log the token or command.
+Administrative authentication is scoped to one connected `MygramClient_C`. Before administrative methods, send `AUTH` with `mygramclient_send_command` and require the exact `OK AUTHENTICATED` response; a `0` return only means a raw response was received and clears the last error. Use `mygramclient_get_last_error` only when the return value is nonzero. Repeat it after reconnecting. This applies to the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, and `EnableDebug`/`DisableDebug`, but not to search, count, get, or facet operations. Free the response with `mygramclient_free_string` and never log the token or command.
+
+The C API uses the same quoting rule for literal search text, AND/NOT terms, filter values, and highlight tags. A failed send after a reset returns a nonzero status; inspect `mygramclient_get_last_error`, reconnect, and then retry.
 
 ```c
 #include <stdio.h>
@@ -595,8 +605,8 @@ NODE_API_MODULE(mygramdb, Init)
 - `dump_save_timeout_ms`, `dump_load_timeout_ms`, `dump_verify_timeout_ms`, `optimize_timeout_ms` - Operation-specific deadlines; `0` uses `timeout_ms`
 
 #### SearchResponse
-- `results` - Vector of SearchResult
-- `total_count` - Total matching documents
+- `results` - Vector of SearchResult for the current `LIMIT`/`OFFSET` page
+- `total_count` - Total matching documents before pagination; the server derives it with the page from one index read
 - `debug` - Optional debug information
 
 #### Error

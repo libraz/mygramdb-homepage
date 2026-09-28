@@ -82,7 +82,7 @@ A search query flows through a series of stages:
 
 7. **Sort and paginate** -- Results are sorted by the requested column and sliced to the requested OFFSET/LIMIT.
 
-The pipeline avoids repeating work where the same term appears in several boolean branches. One deduplicated term-information lookup is shared by boolean evaluation, NOT filtering, synonym expansion, and verification. A full document-ID scan is only needed when the expression contains NOT.
+The pipeline avoids repeating work where the same term appears in several boolean branches. One deduplicated term-information lookup is shared by boolean evaluation, NOT filtering, synonym expansion, and verification. Ordinary `NOT` clauses subtract matches from the candidate set; only an expression that needs the complement of a set enumerates all document IDs. Under `memory.verify_text`, excluded terms are checked against stored text before a document is removed.
 
 Text-heavy stages also have a fixed memory boundary. Candidate text is copied from the DocumentStore in bounded chunks, then the store lock is released before BM25 scoring, term-frequency counting, and text post-filters run. A large candidate set therefore does not require copying a large fraction of the corpus or holding the store lock throughout scoring.
 
@@ -103,16 +103,16 @@ A **false positive** is a document that survived the n-gram intersection but doe
 
 Without verification, the query `"quantum"` returns approximately 58,000 candidates on 1.1M Wikipedia articles. With `verify_text: all`, it returns exactly 1,961 -- matching MySQL FULLTEXT results precisely.
 
-**How it works:** When `verify_text` is enabled, MygramDB stores the original document text in memory. After the posting list intersection produces candidates, each candidate's stored text is checked for an actual substring match. False positives are discarded.
+**How it works:** MygramDB retains normalized text in memory for features such as highlighting. When `verify_text` applies to a query, each candidate's stored text is checked for an actual substring match after the posting list intersection. False positives are discarded.
 
-The tradeoff is memory: storing text for 1.1M documents adds approximately 1.8 GB of RAM. Three modes are available:
+The [published benchmark](/benchmarks) measured about 1.78 GB for the document and text stores together on 1.1M articles. `verify_text` controls candidate checking, not whether this text is stored. Three modes are available:
 
-- `off` (default) -- No text storage, no verification. Fastest, lowest memory.
-- `ascii` -- Verifies only ASCII-only queries against stored text. Moderate memory.
+- `off` (default) -- No post-filter verification; stored text remains available for highlighting.
+- `ascii` -- Verifies only ASCII-only queries against stored text.
 - `all` -- All candidates are verified. Exact results.
 
 ::: tip Choosing a verify_text mode
-Use `verify_text: all` when exact matching, highlighting, or BM25 `_score` matters. Choose `off` when minimizing memory use matters more than eliminating n-gram false positives.
+Use `verify_text: all` when exact matching matters. Highlighting reads stored text in every mode. Choose `off` when n-gram candidates are sufficient and post-filtering is unnecessary.
 :::
 
 ## Cache and Invalidation

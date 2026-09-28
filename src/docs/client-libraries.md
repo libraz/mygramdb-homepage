@@ -20,8 +20,8 @@ This page covers the application clients for Node.js, Python, and Go, plus where
 | Language | Package | Requirement | Notes |
 |----------|---------|-------------|-------|
 | Node.js | `mygramdb-client` | Node.js 22+ | TypeScript types, pure JavaScript implementation, optional native binding |
-| Python | `mygramdb-client` | Python 3.9+ | asyncio, zero external dependencies, dataclass types |
-| Go | `github.com/libraz/go-mygram-client` | Go 1.23+ | standard library only, `context.Context` variants, safe for concurrent use |
+| Python | `mygramdb-client` | Python 3.11+ | asyncio, zero external dependencies, dataclass types |
+| Go | `github.com/libraz/go-mygram-client` | Go 1.26+ | standard library only, `context.Context` variants, safe for concurrent use |
 | C / C++ | bundled `libmygramclient` | C11 / C++17 | Installed SDK with C and C++ APIs, `MygramDB::client_static` / `MygramDB::client_shared`, and `mygramclient.pc` |
 
 ::: warning Load data before querying
@@ -37,6 +37,8 @@ The clients are thin wrappers around MygramDB server commands. If existing rows 
 - Use `articles` on a single-database server, or `app_db.articles` when the instance indexes tables from multiple databases.
 - `search()` / `Search()` is best for simple terms and AND/NOT-style searches.
 - For `OR` and parentheses, convert the expression and pass it to `searchRaw()` / `SearchRaw()` / `search_raw()`.
+- The web-syntax converter recognizes whole-word `or` as `OR`, quotes literal words such as `order` and terms with apostrophes, and turns a minus inside a group into `NOT`. It emits phrases and OR/groups once; pass its output directly to the raw search method.
+- Search responses expose the total number of matches before `limit`/`offset` as well as the current page of results.
 - BM25 scoring, highlighting, fuzzy search, and facets depend on the server-side table configuration.
 - Runtime variables and `SYNC` are TCP commands exposed by the client libraries.
 

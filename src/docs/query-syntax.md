@@ -69,6 +69,8 @@ Terms may include punctuation unless it is a query delimiter. For example, `c++`
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
+`total_count` is the number of matching documents before `LIMIT` and `OFFSET`; the IDs on the same line are the current page. The server obtains the total and page from one index read, so they describe the same result set.
+
 Example:
 ```mygram
 OK RESULTS 3 101 205 387
@@ -260,7 +262,10 @@ Quoted phrases can be combined with boolean operators:
 ```mygram
 SEARCH threads "web framework" AND (golang OR python)
 SEARCH posts "machine learning" NOT "deep learning"
+SEARCH articles required AND 'not'
 ```
+
+Quoted clause keywords are literal terms. The last query requires the word `not`; quoting prevents it from becoming a `NOT` clause.
 
 ---
 
@@ -300,7 +305,7 @@ SEARCH articles tech FILTER status = 1 FILTER category = ai
 **Comparison operators:**
 ```mygram
 SEARCH articles tech FILTER views > 1000
-SEARCH articles tech FILTER created_at >= 2024-01-01
+SEARCH articles tech FILTER created_at >= 1704067200
 SEARCH articles tech FILTER priority != 0
 SEARCH articles tech FILTER status <> archived
 ```
@@ -316,18 +321,19 @@ MygramDB supports filtering on indexed filter columns:
 
 - **Integer**: `status=1`, `priority=5`
 - **String**: `category=tech`, `author=john`
-- **Date/Time**: `created_at=2024-01-15T10:30:00`, `published_on=2024-01-15`
+- **Date/Time**: query-time `date`, `datetime`, and `timestamp` values are integer Unix epoch seconds (for example, `created_at=1704067200`); `time` values are signed duration seconds, including negative values and values beyond 24 hours
 
-**Note:** Only columns configured as filters in `config.yaml` can be used in FILTER clauses.
+**Note:** Columns configured under either `filters` or `required_filters` in `config.yaml` can be used in FILTER clauses.
+
+`required_filters` controls whether a row is indexed and has a separate configuration syntax. Its ISO 8601 or clock-time values do not apply to query-time `FILTER` values. The same column may be listed in both settings: `required_filters` controls index admission, while `FILTER` narrows indexed rows per request.
 
 ::: warning FILTER requires configuration
-A column not registered under `filters` in `config.yaml` cannot be used with `FILTER`. This is a separate setting from `required_filters`, which decides whether a row is indexed at all.
+A column not registered under either `filters` or `required_filters` in `config.yaml` cannot be used with `FILTER`. `required_filters` also decides whether a row is indexed at all.
 :::
 
 ### Filter Performance
 
 - **Bitmap indexes**: Very fast for low-cardinality columns (e.g., status, category)
-- **Dictionary compression**: Efficient for string columns
 - **Filtering order**: Filters are applied after text search intersection
 
 ---
@@ -349,6 +355,8 @@ MygramDB has no `ORDER BY` syntax. Use `SORT` to order search results.
 :::
 
 `BY` is optional, so `SORT BY created_at DESC` and `SORT created_at DESC` are equivalent.
+
+Numeric filter columns keep their declared type when sorted. A `bigint_unsigned` column orders values above 2^63 by their unsigned numeric value.
 
 ### Default Behavior
 
@@ -534,12 +542,11 @@ SEARCH articles golang AND tutorial SORT _score LIMIT 20
 
 ### Requirements
 
-`SORT _score` needs two settings. Both are off by default, so a fresh configuration rejects the query.
+`SORT _score` requires `bm25.enable: true`. The server retains normalized text for scoring independently of `memory.verify_text`, which controls n-gram post-filtering.
 
 | Setting | Why | Error when missing |
 |---------|-----|--------------------|
 | `bm25.enable: true` | Turns on relevance scoring | `SORT _score requires BM25 to be enabled in configuration` |
-| `memory.verify_text: "ascii"` or `"all"` | Term frequency is counted from stored normalized text | `SORT _score requires normalized text storage.` |
 
 ```yaml
 bm25:
@@ -548,7 +555,7 @@ bm25:
   b: 0.75
 
 memory:
-  verify_text: "all"  # or "ascii"
+  verify_text: "off"  # post-filtering policy; text is still retained for scoring
 ```
 
 ### Combining with Filters
@@ -563,8 +570,8 @@ SEARCH articles "database" SORT _score DESC FILTER category = tech LIMIT 10
 
 Return text snippets with search terms highlighted using configurable tags.
 
-::: tip verify_text is required
-Highlighting cuts snippets out of stored normalized text. With `verify_text: "off"` the text is not retained, so highlighting is unavailable.
+::: tip Normalized text is retained
+The server retains normalized text for the query-level `HIGHLIGHT` feature even when `memory.verify_text` is `"off"`. `verify_text` controls n-gram post-filtering; it does not disable snippet generation.
 :::
 
 ### Syntax
@@ -600,7 +607,7 @@ SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 
 ### Requirements
 
-Highlighting requires `verify_text` to be set to `"ascii"` or `"all"` in configuration.
+Highlighting does not require `memory.verify_text` to be `"ascii"` or `"all"`; normal server initialization retains the text needed for snippets.
 
 ### Combining with Other Clauses
 
@@ -639,7 +646,7 @@ SEARCH articles "databse" FUZZY 2 LIMIT 10
 
 ### Performance
 
-Fuzzy search pre-filters candidates by length difference to avoid unnecessary distance computations. Use `FUZZY 1` (default) for best performance.
+Fuzzy search pre-filters candidates by length difference to avoid unnecessary distance computations. `FUZZY` includes every document returned by the same query without `FUZZY`, including terms shorter than the configured n-gram size and mixed CJK/ASCII terms, and may add edit-distance matches. Use `FUZZY 1` (default) for best performance.
 
 `FUZZY` accepts only `1` or `2`. Other distance values return an explicit query error.
 
@@ -785,6 +792,10 @@ SEARCH articles tech LIMIT 10 OFFSET 10000
 
 Consider alternative pagination strategies for deep results (e.g., cursor-based).
 
+### 7. Preserve Boolean Cache Keys
+
+Boolean-query cache keys preserve parsed token, quote, and parenthesis structure. Queries whose full-width whitespace, parentheses, or quoting produce different expressions use separate cache entries; equivalent Unicode whitespace that parses identically may share an entry.
+
 ---
 
 ## COUNT Command
@@ -835,7 +846,7 @@ MygramDB uses n-gram tokenization for indexing and search:
 - **CJK text**: Separate n-gram size for kanji/kana (configurable)
 - **Unicode normalization**: NFKC normalization, width conversion, optional lowercasing
 
-Terms shorter than the configured n-gram size need stored normalized text. Set `memory.verify_text: "ascii"` or `"all"`; otherwise the server rejects that query instead of returning an incomplete result.
+Terms shorter than the configured n-gram size use stored normalized text for substring matching. Standard server initialization retains this text independently of `memory.verify_text`; a setup that explicitly disables text retention returns an explicit query error instead of an incomplete result.
 
 ---
 

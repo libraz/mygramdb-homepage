@@ -37,7 +37,7 @@ network:
     - "127.0.0.1/32"
 ```
 
-`mysql.user`, `mysql.database`, and at least one table are required. When `replication.enable` is true (the default), `replication.server_id` is also required and must be unique among MySQL replicas and MygramDB instances.
+`mysql.user`, `mysql.database`, and at least one table are required after environment overrides are applied. The `mysql` block may be omitted when the required values come from `MYGRAM_MYSQL_USER` and `MYGRAM_MYSQL_DATABASE`. When `replication.enable` is true (the default), `replication.server_id` is also required and must be unique among MySQL replicas and MygramDB instances.
 
 ::: tip What to do after the minimal config
 Writing the config file does not load any data. After starting the server, synchronize each table you want with `SYNC articles` and confirm completion with `SYNC STATUS`.
@@ -49,7 +49,7 @@ Writing the config file does not load any data. After starting the server, synch
 
 ## MySQL / MariaDB Connection
 
-MygramDB works with MySQL 8.4/9.x and MariaDB 10.6+/11.x. The same `mysql` section is used for both; MygramDB uses a capability probe to select the correct GTID format.
+MygramDB works with MySQL 8.4/9.x and MariaDB 10.11+/11.x/12.x. The same `mysql` section is used for both; MygramDB uses a capability probe to select the correct GTID format.
 
 ```yaml
 mysql:
@@ -71,13 +71,16 @@ mysql:
   ssl_cert: "/etc/mygramdb/mysql-client-cert.pem"
   ssl_key: "/etc/mygramdb/mysql-client-key.pem"
   ssl_verify_server_cert: true
+  ignored_ddl_prefixes: []
 ```
 
-`datetime_timezone` controls how MySQL `DATETIME`, `DATE`, and `TIME` values are interpreted. `TIMESTAMP` values are always handled as UTC.
+`datetime_timezone` controls how MySQL `DATETIME` and `DATE` values, and temporal `required_filters` literals, are interpreted. `TIME` values are durations in seconds and do not use this offset. `TIMESTAMP` values are always handled as UTC.
 
 Set `ssl_enable` and the CA/certificate/key paths when MySQL requires TLS. Leave the certificate paths empty only when the server does not require them; keep `ssl_verify_server_cert: true` for verified TLS.
 
-Environment variables can override selected MySQL fields: `MYGRAM_MYSQL_USER`, `MYGRAM_MYSQL_PASSWORD`, `MYGRAM_MYSQL_HOST`, and `MYGRAM_MYSQL_DATABASE`.
+Environment variables can override `mysql.host`, `mysql.port`, `mysql.user`, `mysql.password`, and `mysql.database` through `MYGRAM_MYSQL_HOST`, `MYGRAM_MYSQL_PORT`, `MYGRAM_MYSQL_USER`, `MYGRAM_MYSQL_PASSWORD`, and `MYGRAM_MYSQL_DATABASE`. These overrides also work when the `mysql` block is absent. `MYGRAM_MYSQL_PORT` must be an integer from `1` through `65535`; an invalid value stops startup.
+
+`mysql.ignored_ddl_prefixes` is an empty startup-only list by default. Add reviewed single-statement prefixes only when an otherwise unclassified standalone DDL `QUERY_EVENT` is known to be safe to skip. Each entry must be non-empty, contain no semicolon, and begin (case-insensitively) with one of `ALTER`, `ANALYZE`, `CHECK`, `CREATE`, `DROP`, `OPTIMIZE`, `RENAME`, `REPAIR`, or `TRUNCATE`; DML prefixes are rejected. The list does not override configured-table or configured-database safety: `DROP DATABASE` or `DROP SCHEMA` for a configured database still stops replication, even when `DROP` is listed. Changes take effect after restart.
 
 ::: tip DATETIME vs TIMESTAMP
 MySQL `DATETIME` carries no timezone. MygramDB uses `datetime_timezone` to decide which timezone those values are in. `TIMESTAMP` is already normalized to UTC by MySQL, so this setting does not affect it.
@@ -151,7 +154,7 @@ A **table identity** is the name MygramDB uses to refer to one searchable table.
 
 ::: warning Configured column validation
 
-Table names, database names, primary keys, filter names, and text-source names must be valid SQL identifiers. Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VARBINARY`, or `BLOB`. Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. MygramDB checks these rules before replication starts so the initial loader and binlog reader can represent the same values.
+Table names, database names, primary keys, filter names, and text-source names must be valid SQL identifiers. Configured primary-key, text-source, and filter columns cannot use `FLOAT`, `JSON`, `GEOMETRY` or its subtypes, `VECTOR`, `ZEROFILL`, `BINARY`, `VARBINARY`, any `BLOB` type, or a type this build cannot decode from a row image. Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. MygramDB checks these rules before replication starts so the initial loader and binlog reader can represent the same values.
 :::
 
 ## Filters
@@ -182,16 +185,22 @@ tables:
 `filters` are search-time filter columns. They do not affect which rows are indexed.
 
 ```yaml
-filters:
-  - name: "status"
-    type: "int"
-  - name: "category"
-    type: "string"
-  - name: "created_at"
-    type: "datetime"
+tables:
+  - name: "articles"
+    text_source:
+      column: "content"
+    filters:
+      - name: "status"
+        type: "int"
+      - name: "category"
+        type: "string"
+      - name: "created_at"
+        type: "datetime"
 ```
 
-Supported filter types include signed and unsigned integer sizes (including `mediumint` and `mediumint_unsigned`), `float`, `double`, `boolean`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. A `boolean` filter maps to a signed MySQL `TINYINT(1)` and accepts `true`/`false` or `1`/`0`; required boolean filters support `=`, `!=`, `IS NULL`, and `IS NOT NULL`. `ENUM` and `SET` columns cannot be configured as filters because binlog row events do not carry the labels needed to keep initial load and replication semantics identical.
+Supported filter types include signed and unsigned integer sizes (including `mediumint` and `mediumint_unsigned`), `double`, `boolean`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. `float`, `enum`, and `set` are not accepted filter types. A `FLOAT` column is also refused when configured as a primary key or text source because the initial-load result and binlog row image do not preserve the same value. A `boolean` filter maps to a signed MySQL `TINYINT(1)`. Query-time `FILTER` values must be lowercase `true`/`false` or `1`/`0`; required boolean filters accept those values case-insensitively and support `=`, `!=`, `IS NULL`, and `IS NOT NULL`.
+
+For `required_filters` with type `datetime`, `date`, or `timestamp`, use epoch seconds or an ISO date/time in the offset configured by `mysql.datetime_timezone`. Fractional seconds are accepted, but a trailing `Z`, numeric offset, or other suffix is rejected. `time` values accept signed duration seconds or a MySQL `TIME` clock such as `HH:MM:SS`, with optional fractional seconds, and must fit the range `-838:59:59` through `838:59:59`. Search-time `FILTER` values use epoch seconds for `datetime`, `date`, and `timestamp`, and signed duration seconds for `time`.
 
 ::: warning Reserved filter keys
 `bitmap_index`, `dict_compress`, and `bucket` are accepted by the schema and preserved across dumps, but they do not change behavior yet. Setting them has no effect on indexing or query performance.
@@ -211,7 +220,7 @@ tables:
       use_roaring: "auto"
 ```
 
-`ngram_size` applies to ASCII/alphanumeric text. In v1.8.0 and later, the omitted default is `2`; set `ngram_size: 1` explicitly only if you need the old unigram behavior. `kanji_ngram_size` applies to CJK characters; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
+`ngram_size` applies to ASCII/alphanumeric text. The omitted default is `2`; set `ngram_size: 1` explicitly only if you need unigram behavior. `kanji_ngram_size` applies to CJK characters; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
 
 ::: info What is an N-gram?
 An **N-gram** is a short slice of a string. Because it splits by character rather than by word, it works without a dictionary even in languages that do not separate words with spaces.
@@ -221,7 +230,7 @@ An **N-gram** is a short slice of a string. Because it splits by character rathe
 The whole `posting` block — `block_size`, `freq_bits`, and `use_roaring` — is validated and preserved across dumps but not yet enforced. Delta-to-Roaring conversion is driven by `memory.roaring_threshold` and by `OPTIMIZE`, not by `use_roaring`.
 :::
 
-BM25 scoring and highlighting use stored normalized text when `memory.verify_text` is enabled; they do not depend on `freq_bits`.
+BM25 scoring and highlighting use stored normalized text. `memory.verify_text` controls n-gram candidate verification; it does not disable text storage and does not affect `freq_bits`.
 
 ## Per-table Synonyms
 
@@ -262,7 +271,7 @@ replication:
   queue_size: 10000
 ```
 
-`auto_initial_snapshot` defaults to `false`; start the first load explicitly with `SYNC <table>` for each table you want to load. This avoids accidentally loading large tables on startup. Set it to `true` only when startup-time loading is intentional. In v1.8.0 and later, `auto_initial_snapshot: true` requires `start_from: "snapshot"` for both single-table and multi-table deployments.
+`auto_initial_snapshot` defaults to `false`; start the first load explicitly with `SYNC <table>` for each table you want to load. This avoids accidentally loading large tables on startup. Set it to `true` only when startup-time loading is intentional. `auto_initial_snapshot: true` requires `start_from: "snapshot"` for both single-table and multi-table deployments. `dump.load_on_startup: true` has the same requirement so replication resumes from the GTID stored in the restored dump instead of skipping changes.
 
 `start_from` accepts:
 
@@ -286,13 +295,13 @@ memory:
   verify_text: "off"
 ```
 
-`hard_limit_mb`, `soft_target_mb`, `arena_chunk_mb`, and `minute_epoch` are reserved/not yet enforced. Size the host so the full index and optional text store fit in RAM.
+`hard_limit_mb`, `soft_target_mb`, `arena_chunk_mb`, and `minute_epoch` are reserved/not yet enforced. Size the host so the full index and stored normalized text fit in RAM.
 
 ::: warning About the memory limit
-`hard_limit_mb` does not currently stop the process at the OS level. In production, estimate from the row count, `verify_text` mode, and cache size, then provision enough RAM.
+`hard_limit_mb` does not currently stop the process at the OS level. In production, estimate from the row count, stored text, `verify_text` mode, and cache size, then provision enough RAM.
 :::
 
-`verify_text` stores normalized text and verifies n-gram candidates:
+`verify_text` controls n-gram candidate verification:
 
 | Value | Behavior |
 |-------|----------|
@@ -300,7 +309,7 @@ memory:
 | `ascii` | Verify ASCII-only queries |
 | `all` | Verify all queries; recommended when exact result semantics matter |
 
-Highlighting requires stored text, so use `verify_text: "ascii"` or `"all"` when using `HIGHLIGHT`. BM25 `_score` sorting also uses stored text to count term frequency.
+Normal startup retains normalized text regardless of `verify_text`, so `HIGHLIGHT` can use it with `verify_text: "off"` as well. BM25 `_score` sorting also uses stored text to count term frequency.
 
 ## API Server
 
@@ -350,7 +359,7 @@ The TCP API serves search plus administrative commands such as `SYNC`, `DUMP`, a
 
 ### Administrative authentication
 
-`api.admin_token` is a shared secret for administrative commands. Set it in the configuration file or through `MYGRAM_API_ADMIN_TOKEN`; use a high-entropy value and keep it out of source control. When TCP binds to a non-loopback address and no Unix socket is configured, the token is mandatory or MygramDB refuses to start.
+`api.admin_token` is a shared secret for administrative commands. Set it in the configuration file or through `MYGRAM_API_ADMIN_TOKEN`; use a high-entropy value and keep it out of source control. The environment override also applies when the `api` block is absent. The token is mandatory when TCP binds to a non-loopback address without a Unix socket, or when HTTP is enabled on a non-loopback address. A Unix socket only exempts the TCP listener; it does not exempt HTTP.
 
 Authenticate a TCP connection before administrative commands:
 
@@ -379,7 +388,7 @@ api:
     max_clients: 10000
 ```
 
-TCP and HTTP share one rate limiter, so a client cannot double its quota by spreading requests across protocols.
+TCP and HTTP share one rate limiter and one per-client token bucket, so a client cannot double its quota by spreading requests across protocols. Deployments that relied on the former per-protocol burst should raise `capacity` and `refill_rate` to preserve that aggregate rate.
 
 ## Relevance Scoring (BM25)
 
@@ -390,7 +399,7 @@ bm25:
   b: 0.75
 ```
 
-BM25 is off by default. `SORT _score` fails with `SORT _score requires BM25 to be enabled in configuration` until `enable` is `true`, and it additionally needs `memory.verify_text` set to `"ascii"` or `"all"` so term frequency can be counted from stored text.
+BM25 is off by default. `SORT _score` fails with `SORT _score requires BM25 to be enabled in configuration` until `enable` is `true`; normal startup stores the normalized text it needs regardless of `memory.verify_text`.
 
 `k1` controls term-frequency saturation (higher values let repeated terms keep raising the score). `b` controls document-length normalization between `0.0` (off) and `1.0` (full).
 
@@ -408,11 +417,14 @@ cache:
   invalidation:
     batch_size: 1000
     max_delay_ms: 100
+    max_queue_size: 100000
 ```
 
-Only queries slower than `min_query_cost_ms` are cached, so cheap lookups do not evict useful entries. `invalidation_strategy: "ngram"` invalidates just the entries whose terms overlap a changed row; `"table"` drops every entry for the table, which is cheaper to compute but far more destructive. `ttl_seconds: 0` disables expiry.
+`max_memory_mb` is a shared budget for cached results, cache containers, indexes, invalidation metadata, and the deferred invalidation queue. Startup rejects values below `1`, values above `1048576` MB, and—when the cache is enabled—values above 50% of detected physical memory. If physical memory cannot be detected, the ratio check is skipped with a warning. `ttl_seconds` accepts `0` through `2147483647`; `eviction_batch_size` and `invalidation.batch_size` accept `1` through `2147483647`; `invalidation.max_delay_ms` accepts `0` through `2147483647`; and `invalidation.max_queue_size` must be at least `1`. `ttl_seconds: 0` disables expiry. `min_query_cost_ms` must be finite when changed at runtime.
 
-`cache.enabled`, `cache.min_query_cost_ms`, and `cache.ttl_seconds` can be changed at runtime with `SET`. See [Operations Guide](/docs/operations) for the `CACHE STATS` / `CACHE CLEAR` commands.
+Only queries slower than `min_query_cost_ms` are cached, so cheap lookups do not evict useful entries. `invalidation_strategy: "ngram"` invalidates just the entries whose terms overlap a changed row; `"table"` drops every entry for the table, which is cheaper to compute but far more destructive.
+
+`cache.enabled`, `cache.min_query_cost_ms`, and `cache.ttl_seconds` can be changed at runtime with `SET`. `max_memory_mb` and the other startup-only cache limits require a restart. See [Operations Guide](/docs/operations) for the `CACHE STATS` / `CACHE CLEAR` commands.
 
 ## Index Build
 
@@ -434,13 +446,14 @@ build:
 dump:
   dir: "/var/lib/mygramdb/dumps"
   default_filename: "mygramdb.dmp"
+  load_on_startup: false
   interval_sec: 7200
   retain: 3
   restore_memory_budget_mb: 4096
   restore_max_section_mb: 2048
 ```
 
-`interval_sec: 0` disables automatic dumps. Manual `DUMP SAVE` uses `default_filename` unless a path is provided. `restore_memory_budget_mb` bounds aggregate staged data during a V2 restore; `restore_max_section_mb` bounds one encoded V2 section. In v1.7.0 and later, dump metadata preserves each table's database so multi-database identities round-trip correctly.
+`interval_sec: 0` disables automatic dumps. `retain` controls automatic dump rotation. Manual `DUMP SAVE` uses `default_filename` unless a path is provided; `DUMP SAVE .` is refused. `restore_memory_budget_mb` bounds aggregate staged data during a V2 restore; `restore_max_section_mb` bounds one encoded V2 section. `dump.load_on_startup: true` tries the default dump before a MySQL snapshot, validates the source identity and GTID, and falls back to MySQL when the dump cannot be loaded. It requires `replication.start_from: "snapshot"`. `DUMP SAVE` rejects documents that exceed restore limits instead of producing a dump that cannot be loaded.
 
 ::: warning Put the dump directory on persistent storage
 Under Docker or Kubernetes, point `dump.dir` at a persistent volume. Writing dumps to the container's ephemeral filesystem loses them when the container is recreated.

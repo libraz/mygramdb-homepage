@@ -40,7 +40,7 @@ api:
 TCP/HTTP servers bind to loopback by default. If you must expose them publicly, explicitly set `api.tcp.bind`/`api.http.bind`, configure `network.allow_cidrs` to the exact IP ranges that should connect, and keep TLS/API authentication in front of MygramDB (e.g., reverse proxy). CORS is disabled by default and should only be enabled with a trusted origin.
 :::
 
-`api.http.max_connections` caps admitted HTTP sockets, including sockets waiting for an HTTP worker. `api.http.max_body_bytes` rejects oversized POST bodies with `413 Payload Too Large` before routing; the default is 16 MiB. `api.http.trusted_proxies` is an allowlist of numeric proxy IP addresses. MygramDB honors `X-Forwarded-For` only when the direct TCP peer exactly matches that list; it ignores a forwarding header sent directly by any other client. ACL runs before rate limiting, and both use that trusted client identity.
+`api.http.max_connections` caps admitted HTTP sockets, including sockets waiting for an HTTP worker. `api.http.max_body_bytes` rejects oversized POST bodies with `413 Payload Too Large` before routing; the default is 16 MiB. `api.http.trusted_proxies` is an allowlist of numeric proxy IP addresses. Entries are normalized before matching, so an IPv4 entry matches both `a.b.c.d` and its IPv4-mapped IPv6 form `::ffff:a.b.c.d` on a dual-stack listener. MygramDB honors `X-Forwarded-For` only when the direct TCP peer matches that allowlist and ignores forwarding headers from other clients. It normalizes the resulting client identity the same way TCP does, so ACL checks, rate limiting, and logs use the same identity on both surfaces; the rate-limit bucket is shared across protocols.
 
 ::: info What is CORS?
 **CORS** is the browser mechanism that permits a page to call an API on another domain. Server-to-server traffic does not need it. Enable it only when a browser calls MygramDB directly, and restrict it to a trusted origin.
@@ -60,6 +60,8 @@ configuration spans two or more databases; a bare name is then rejected as ambig
 :::
 
 The legacy `/{table}/search`, `/{table}/count`, and `/{table}/{primary_key}` routes were removed in v1.7.0. Use `/tables/{identity}/...` for all table operations.
+
+Paths are percent-decoded before routing. The document GET route is dispatched manually, so decoded paths longer than 256 bytes still reach the handler (subject to the URI limit); a `%2F` in a primary key is available as `/`.
 
 ### POST /tables/{identity}/search
 
@@ -89,12 +91,14 @@ Content-Type: application/json
 |-------|------|----------|-------------|
 | `q` | string | Yes | Search text; treated literally unless `mode` is `"boolean"` |
 | `mode` | string | No | `"literal"` (default) or `"boolean"` |
-| `filters` | object | No | Filter conditions (column: value pairs) |
+| `filters` | object | No | Filter conditions as scalar values or `{ "op": "...", "value": ... }` objects |
 | `limit` | integer | No | Maximum results to return (default: 100, max: 1000) |
 | `offset` | integer | No | Number of results to skip (default: 0) |
 | `sort` | object | No | Sort configuration (e.g., `{"column": "_score", "order": "DESC"}`) |
 | `highlight` | object | No | Highlight configuration (see below) |
 | `fuzzy` | integer | No | Fuzzy search edit distance (`1` or `2`) |
+
+Omit `sort.column` to sort by the primary key. To sort by a named column, provide that column and `order: "ASC"` or `"DESC"`; for example, `{ "sort": { "column": "created_at", "order": "DESC" } }`.
 
 ### Literal and Boolean Search
 
@@ -119,6 +123,21 @@ HTTP treats `q` as literal text by default. For example, `"AND"` and `"LIMIT"` a
 - **Combined**: `"tech AND AI NOT old"`
 
 Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`. `q` never accepts those control clauses; in literal mode, text such as `LIMIT` or `SORT` remains part of the search text.
+
+Each filter can use a scalar value (which defaults to equality) or an operator object. The object form requires a `value`; `op` is optional and defaults to `EQ`, but when present it must be a string, for example:
+
+```json
+{
+  "filters": {
+    "price": { "op": "GTE", "value": 100 },
+    "status": { "op": "EQ", "value": "active" }
+  }
+}
+```
+
+Supported operators are `EQ`, `NE`, `GT`, `GTE`, `LT`, and `LTE` (their symbolic forms are also accepted). A non-string `op` is rejected with `400 Bad Request` and `error_code: 3006` (`kQueryInvalidFilter`). Unsigned JSON integers retain their 64-bit value, so an unsigned `BIGINT` greater than `INT64_MAX` is compared without wrapping.
+
+Boolean mode uses the same Unicode whitespace tokenizer as the TCP API. For example, an ideographic space (U+3000) separates terms just like an ASCII space.
 
 **Response (200 OK):**
 
@@ -283,7 +302,7 @@ Authorization: Bearer <token>
 {"table":"app_db.articles"}
 ```
 
-`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header; otherwise it returns `401`, sets `WWW-Authenticate: Bearer`, and includes `error_code: 7`. The token comparison is constant-time. No other HTTP route accepts a Bearer token as an administrative session.
+`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header; otherwise it returns `401`, sets `WWW-Authenticate: Bearer`, and includes `error_code: 7`. The token comparison is constant-time. The only HTTP routes that use this token as an admission requirement are `GET /config`, `GET /replication/status`, and `POST /optimize`. `GET /health/ready` and `GET /health/detail` may inspect the same credential to reveal protected replication fields, but remain open; other routes do not use it for authentication.
 
 Successful requests return `200` with `{ "status": "ok", "result": "OPTIMIZED ..." }`. The body accepts only `table`; an unknown field or a non-string table is a `400` request error.
 
@@ -314,7 +333,7 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 ```json
 {
   "error": "Document not found",
-  "error_code": 8
+  "error_code": 4004
 }
 ```
 
@@ -337,7 +356,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.0.0",
+  "version": "1.10.2",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -459,7 +478,7 @@ GET /metrics HTTP/1.1
 ```prometheus
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.0.0"} 1
+mygramdb_server_info{version="1.10.2"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -564,13 +583,15 @@ Liveness probe. Returns `200 OK` while the HTTP server process is running, even 
 
 Readiness probe for traffic gating. Returns `200 OK` only when initial data is loaded, the server is not loading, no `SYNC` is running, and configured replication is available. Its JSON body includes `data_initialized`, `loading`, and `status` (`"ready"` or `"not_ready"`); it returns `503 Service Unavailable` when these conditions are not met. Table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
 
+`/health`, `/health/live`, and `/health/ready` are not rate limited, so a probe is not answered with `429`. `/health/detail` remains rate limited because it builds a detailed snapshot.
+
 ::: tip Choosing between live and ready
 On Kubernetes, wire `/health/live` to the liveness probe and `/health/ready` to the readiness probe. `live` answers "should this process be restarted"; `ready` answers "may search traffic be sent here".
 :::
 
 ### GET /health/detail
 
-Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions. Every HTTP route, including `/health`, `/health/live`, and `/health/ready`, is subject to the CIDR allow list.
+Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions. This route remains open, but when `api.admin_token` is configured it omits `current_gtid`, `processed_events`, `queue_size`, `crc_errors`, and `schema_incompatible` unless the request has a valid `Authorization: Bearer <token>` header. `/health/ready` likewise omits `replication_crc_errors` and `replication_schema_incompatible` without accepted admin credentials. `/health/ready` and `/health/detail` expose a replication error-code description instead of raw MySQL error text. During `SYNC`, the binlog component reports a sync pause separately from a disconnected replication state. Every HTTP route, including `/health`, `/health/live`, and `/health/ready`, is subject to the CIDR allow list.
 
 ### GET /config
 
@@ -580,7 +601,10 @@ Current server configuration summary (sensitive values are omitted).
 
 ```http
 GET /config HTTP/1.1
+Authorization: Bearer <token>
 ```
+
+When `api.admin_token` is non-empty, `/config` requires an exact `Authorization: Bearer <token>` header. A missing or invalid token returns `401 Unauthorized`, includes `WWW-Authenticate: Bearer`, and uses `error_code: 7`. If no admin token is configured, the route is open. Starting another instance with the same HTTP bind address and port fails with `Bind failed (6000)` (`kNetworkBindFailed`).
 
 **Response (200 OK):**
 
@@ -617,7 +641,10 @@ MySQL replication status (requires replication enabled).
 
 ```http
 GET /replication/status HTTP/1.1
+Authorization: Bearer <token>
 ```
+
+When `api.admin_token` is non-empty, `/replication/status` has the same bearer-token requirement and `401` response as `/config`; with no configured token it is open. The `enabled` field reflects whether replication is running, and `status` is `"running"`, `"stopped"`, or `"failed"`. The full response includes replication counters and timestamps:
 
 **Response (200 OK):**
 
@@ -627,7 +654,13 @@ GET /replication/status HTTP/1.1
   "status": "running",
   "current_gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
   "processed_events": 12345,
-  "queue_size": 0
+  "queue_size": 0,
+  "crc_errors": 0,
+  "schema_incompatible": false,
+  "last_error_code": 0,
+  "last_error": "",
+  "last_applied_unixtime": 1756149998,
+  "seconds_since_last_applied": 2
 }
 ```
 
@@ -763,9 +796,9 @@ Handler-generated error responses follow this format:
 |------|-------------|
 | 200 | Success |
 | 400 | Bad Request (invalid input) |
-| 401 | Unauthorized (missing or invalid Bearer token for `/optimize`) |
+| 401 | Unauthorized (missing or invalid Bearer token for an administrative route such as `/config`, `/replication/status`, or `/optimize`) |
 | 403 | Forbidden (source IP is not allowed) |
-| 404 | Not Found (document doesn't exist) |
+| 404 | Not Found (document doesn't exist; `error_code: 4004` for a missing document) |
 | 413 | Payload Too Large (request body exceeds `api.http.max_body_bytes`) |
 | 429 | Too Many Requests (rate limit exceeded) |
 | 500 | Internal Server Error |

@@ -24,7 +24,7 @@ MygramDB supports real-time replication from MySQL using GTID-based binlog strea
 :::
 
 MygramDB requires:
-- **MySQL Version**: 8.4+ / 9.x, or MariaDB 10.6+/11.x
+- **Supported database matrix**: MySQL 8.4 and 9.7, or MariaDB 10.11, 11.8, and 12.3
 - **GTID Mode**: Must be enabled for MySQL; MariaDB uses its native GTID format
 - **Binary Log Format**: ROW format required
 - **Privileges**: Replication user needs specific privileges
@@ -69,6 +69,12 @@ SHOW VARIABLES LIKE 'binlog_format';
 SET GLOBAL binlog_format = ROW;
 ```
 
+Keep event-level binlog compression disabled. MygramDB does not decode MySQL
+`TRANSACTION_PAYLOAD_EVENT` output from `binlog_transaction_compression` or
+MariaDB compressed query/row events from `log_bin_compress`. This is separate
+from MariaDB `COMPRESSED` `VARCHAR`/`TEXT` row columns, which MygramDB inflates
+and decodes as part of an ordinary row event.
+
 ### Create Replication User
 
 ::: info Why binlog_row_image=FULL is required
@@ -102,7 +108,7 @@ FLUSH PRIVILEGES;
 ### Security Considerations
 
 - MySQL credentials are transmitted in plain text unless your MySQL server requires TLS. Place MygramDB close to MySQL on a trusted network, or terminate TLS/SSH tunnels in front of it when replicating across untrusted links.
-- Snapshots created via `DUMP SAVE` include the MySQL host/user/password. Store dump files on encrypted storage with restrictive permissions (e.g., `chmod 600`) and rotate them like any other secret.
+- Snapshots created via `DUMP SAVE` include MySQL source metadata such as host, port, and database; user and password are not recorded. Store dump files on protected storage with restrictive permissions (e.g., `chmod 600`) because they contain indexed content and source endpoint details.
 
 ## Manual Snapshot Synchronization
 
@@ -161,7 +167,7 @@ When automatic startup snapshots are enabled, use `start_from: "snapshot"` for b
 
 Every table has an effective identity of `<database>.<table>`. If all configured tables are in one database, bare names such as `articles` remain accepted. When the configuration spans two or more databases, use qualified names in `SYNC`, `SEARCH`, and all client APIs.
 
-When replication is enabled and more than one table is configured, the initial snapshot uses one `START TRANSACTION WITH CONSISTENT SNAPSHOT` across the configured tables and captures a shared GTID. This keeps related tables aligned at the same MySQL point-in-time before binlog streaming resumes.
+When replication is enabled and more than one table is configured, the initial snapshot captures a shared conservative GTID lower bound before one `START TRANSACTION WITH CONSISTENT SNAPSHOT` across the configured tables. This keeps related tables aligned at the same MySQL point-in-time while allowing a short interval of idempotent replay when binlog streaming resumes.
 
 ## Replication Start Options
 
@@ -169,21 +175,21 @@ Configure `replication.start_from` in your config file:
 
 ### snapshot (Recommended)
 
-Starts from GTID captured during initial snapshot build:
+Starts from the conservative GTID lower bound captured before the initial snapshot transaction:
 
 ```yaml
 replication:
   start_from: "snapshot"
 ```
 
-The diagram below traces that guarantee across the transaction boundary: the snapshot transaction opens and `gtid_executed` is captured in the same instant, table reads happen entirely inside that frozen view while new writes keep accumulating in the binlog, and streaming then resumes from precisely that captured GTID once the snapshot completes.
+The diagram below traces the lower-bound handoff across the transaction boundary: MygramDB captures a conservative GTID position before opening the consistent snapshot transaction, reads tables inside that frozen view while new writes keep accumulating in the binlog, and then streams from that lower bound after the snapshot completes. A commit in the interval between the capture and transaction start may be replayed, which is safe for the idempotent row application and avoids missing it.
 
-<DocDiagram name="gtid-snapshot-handoff" alt="A timeline showing that MygramDB captures gtid_executed the instant the consistent snapshot transaction opens, reads all table data inside that frozen view while new writes accumulate in the binlog, and then starts binlog streaming from exactly the captured GTID so no transaction is lost or applied twice." />
+<DocDiagram name="gtid-snapshot-handoff" alt="A timeline showing that MygramDB captures a conservative GTID lower bound before opening the consistent snapshot transaction, reads all table data inside that frozen view while new writes accumulate in the binlog, and then starts binlog streaming from that lower bound so commits are not missed even if one is replayed." />
 
 **How it works:**
 - Uses `START TRANSACTION WITH CONSISTENT SNAPSHOT` for data consistency
-- Captures `@@global.gtid_executed` at exact snapshot moment
-- Guarantees no data loss between snapshot and binlog replication
+- Captures a conservative GTID lower bound before opening the snapshot transaction
+- Avoids missing commits between snapshot capture and binlog streaming; commits in that interval may be applied again idempotently
 
 **When to use:**
 - Initial setup (recommended for most cases)
@@ -257,13 +263,11 @@ MygramDB will:
 
 #### DROP TABLE
 
-Clears all data and logs an error:
-
 ```sql
 DROP TABLE articles;
 ```
 
-If the dropped table provides a configured primary key, text source, or filter column, MygramDB stops replication before advancing the GTID. Restore a compatible schema or update the configuration, then run `SYNC` to rebuild the table.
+MygramDB detects a configured table anywhere in a multi-table `DROP TABLE` list. It stops replication before advancing the GTID and leaves the current index and document store in place; the configured table is not cleared automatically. Restore a compatible schema or update the configuration, then run `SYNC` to rebuild the table.
 
 #### ALTER TABLE
 
@@ -275,6 +279,21 @@ ALTER TABLE articles MODIFY COLUMN content TEXT;
 ```
 
 **Recovery:** Fix the schema or configuration, then run `SYNC` to rebuild the table. Do not assume that a restart alone resumes replication after an incompatible DDL change.
+
+#### RENAME TABLE and `ALTER TABLE ... RENAME TO`
+
+MygramDB recognizes renames in both directions, including `ALTER TABLE ... RENAME TO`, `ALTER TABLE ... AS`, and a rename onto a configured table name:
+
+```sql
+ALTER TABLE articles_archive RENAME TO articles;
+ALTER TABLE articles RENAME TO articles_archive;
+RENAME TABLE articles_archive TO articles;
+```
+
+The reader matches both the old and new qualified names before advancing the
+GTID. A rename that changes a configured table identity stops replication;
+update the configuration and run `SYNC` after the schema is in its intended
+state.
 
 ## Supported Column Types
 
@@ -292,23 +311,54 @@ Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VA
 - DATE, TIME, DATETIME, TIMESTAMP (with fractional seconds)
 
 ### Numeric Types
-- DECIMAL, FLOAT, DOUBLE
+- DECIMAL, DOUBLE
 
 ### Special Types
-- JSON, BIT, NULL
+- BIT
+
+`FLOAT` is decoded from the binlog but is refused for configured primary-key,
+text-source, filter, and required-filter columns because the result-set and
+row-image paths do not preserve the same value. `JSON`, `GEOMETRY` and its
+subtypes, `VECTOR`, `BINARY`, `VARBINARY`, `BLOB`, `ZEROFILL`, and unknown
+column types are also refused for configured columns. MariaDB `COMPRESSED`
+`VARCHAR`/`TEXT` row columns are inflated before indexing, including the
+uncompressed, raw-deflate, and zlib payload forms, and are supported when
+their declared text type and collation pass the same checks.
+
+### Required-filter time values
+
+The same required-filter predicate is used by the initial `SELECT` and by
+binlog row events. Text values compare as stored bytes, `TIMESTAMP` values
+compare as UTC epochs, and `TIME` values use clock seconds. `DATETIME`,
+`TIMESTAMP`, and `TIME` filter values may include fractional seconds, and both
+paths apply the same precision and timezone rules; `DATE` keeps date-only
+semantics. Use a plain date/time literal with the configured
+`mysql.datetime_timezone`; trailing `Z` or numeric offsets in a filter value
+are rejected.
+
+### TABLE_MAP metadata
+
+MygramDB consumes each column's `TABLE_MAP` metadata before it decides whether
+the table is configured. An unknown or unsizeable type therefore stops the
+reader even for an unconfigured table in the streamed binlog; it reconnects
+from the last applied GTID instead of treating the event as skippable. The
+metadata decoder consumes each type's byte order and payload length, including
+`DECIMAL`, `CHAR`, `ENUM`, `SET`, `JSON`, and `GEOMETRY`, for the supported
+MySQL 8.4/9.7 and MariaDB 10.11/11.8/12.3 streams. Configured-column
+acceptance still follows the restrictions above.
 
 ## Replication Features
 
 ### GTID Consistency
 
-- Snapshot and binlog replication are coordinated via consistent snapshot transaction
-- No data loss between snapshot and replication
+- Snapshot and binlog replication are coordinated via a consistent snapshot transaction
+- A conservative GTID lower bound avoids missing commits; commits in the short pre-transaction interval may be replayed idempotently
 
-### GTID Position Tracking
+### GTID Position and Recovery
 
-- Atomic persistence with state file
-- Automatic save on shutdown
-- Resume on restart
+- `start_from: snapshot` uses the conservative GTID lower bound captured before the initial snapshot transaction, while `latest` and an explicit `gtid=...` use the configured starting position
+- `DUMP SAVE` records its GTID in the dump; `DUMP LOAD` or startup restore sets that GTID as the reader's next position. A manual `DUMP LOAD` leaves a reader that was already stopped in the stopped state.
+- An initial `SYNC` captures a conservative snapshot GTID lower bound before its transaction; its normal handoff restarts the shared reader from the drained pre-SYNC GTID, while the `2017` recovery path uses that snapshot marker to pass the undecodable interval
 
 ### Automatic Validation
 
@@ -318,8 +368,8 @@ Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VA
 ### Automatic Reconnection
 
 - Handles connection loss gracefully
-- Exponential backoff retry (configurable)
-- Continues from last GTID position
+- Uses the built-in retry schedule; `reconnect_backoff_min_ms` and `reconnect_backoff_max_ms` are reserved and are not applied
+- Continues from the reader's last processed GTID while the process remains running
 
 ### Multi-threaded Processing
 
@@ -346,6 +396,12 @@ status: running
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
 processed_events: 12345
 queue_size: 0
+crc_errors: 0
+schema_incompatible: false
+last_error_code: 0
+last_error:
+last_applied_unixtime: 1790553600
+seconds_since_last_applied: 0
 END
 ```
 
@@ -438,7 +494,13 @@ replication:
 
 ### Recovering from an undecodable binlog event
 
-If replication stops with error code `2017`, the stream encountered an event this build cannot decode, such as an XA prepare event or a compressed MariaDB event. Changing the server setting that produced it does not remove the already-written event, so starting again from the old GTID stops at the same place.
+If replication stops with error code `2017`, the stream encountered an event this build cannot decode, such as an XA prepare event, a MySQL `TRANSACTION_PAYLOAD_EVENT`, a `PARTIAL_UPDATE_ROWS_EVENT`, or a MariaDB event compressed by `log_bin_compress`. Event-level MariaDB compression remains unsupported. Changing the server setting that produced it does not remove the already-written event, so starting again from the old GTID stops at the same place.
+
+This is different from a MariaDB `COMPRESSED` `VARCHAR`/`TEXT` column inside an
+ordinary row event. MygramDB inflates that column before indexing; an invalid,
+unknown, or corrupt column payload is a row-decoding failure reported as error
+`2008` and follows normal reconnect handling. It is not the `2017` recovery
+case.
 
 Run `SYNC` for the table that is most important first, wait for it to complete with `replication=STARTED`, then run `SYNC` for every other replicated table. That first SYNC restarts the shared reader from the new snapshot marker and skips the undecodable interval. A table that you do not rebuild keeps its prior state for writes from that skipped interval.
 
@@ -451,7 +513,7 @@ For every other replication failure, SYNC uses the drained position rather than 
 3. **Monitor replication lag** regularly
 4. **Rebuild snapshot** after significant schema changes
 5. **Test configuration** before deploying to production
-6. **Keep state file** for crash recovery
+6. **Use `DUMP SAVE` or `SYNC`** to establish a recoverable GTID and data set
 7. **Use multiple replicas** for high availability
 
 ## Configuration Example

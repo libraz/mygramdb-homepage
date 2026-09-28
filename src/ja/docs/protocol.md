@@ -42,6 +42,8 @@ OK AUTHENTICATED
 
 コマンドはテキストベースで、1行に1コマンドです。レスポンスは改行で終了します。
 
+スレッドプールのキューが満杯で接続のドレインタスクをスケジュールできない場合、サーバーはその接続に `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` を返し、すでにキューに入っているレスポンスを送ってから接続を閉じます。保留フレーム数や共有バッファの上限に達した場合も、切断前にベストエフォートで `ERROR 6030` を返すことがあります。
+
 `SEARCH`、`COUNT`、`GET`、`FACET` は認証不要です。管理トークンを設定している場合、設定コマンド、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には `AUTH` が必要です。認証前の管理コマンドは `ERROR 7 Administrative command requires AUTH` を返します。
 
 テーブル参照は DB 修飾形式 `` `database.table` `` を受け付けます。たとえば `app_db` データベースの
@@ -147,7 +149,7 @@ OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
 
 見つからない場合：
 ```mygram
-ERROR 8 Document not found
+ERROR 4004 Document not found
 ```
 
 ---
@@ -170,7 +172,7 @@ Redis形式のキー・バリュー形式で複数のセクションを返しま
 OK INFO
 
 # Server
-version: 1.0.0
+version: 1.10.2
 uptime_seconds: 3600
 data_initialized: true
 readiness: ready
@@ -448,12 +450,11 @@ DUMP SAVE [<filepath>]
 **レスポンス:**
 ```mygram
 OK DUMP_STARTED <filepath>
-Use DUMP STATUS to monitor progress
 ```
 
 **例:**
 ```mygram
-DUMP SAVE /backup/mygramdb.dmp
+DUMP SAVE mygramdb.dmp
 ```
 
 `DUMP STATUS` で進捗を監視し、完了を確認できます。`--with-stats` は文法から削除されており、指定すると未知の `DUMP SAVE` フラグとして拒否されます。
@@ -473,7 +474,7 @@ DUMP LOAD <filepath>
 
 **例:**
 ```mygram
-DUMP LOAD /backup/mygramdb.dmp
+DUMP LOAD mygramdb.dmp
 ```
 
 ### DUMP VERIFY
@@ -487,7 +488,7 @@ DUMP VERIFY <filepath>
 
 **例:**
 ```mygram
-DUMP VERIFY /backup/mygramdb.dmp
+DUMP VERIFY mygramdb.dmp
 ```
 
 ### DUMP INFO
@@ -501,7 +502,7 @@ DUMP INFO <filepath>
 
 **例:**
 ```mygram
-DUMP INFO /backup/mygramdb.dmp
+DUMP INFO mygramdb.dmp
 ```
 
 ### DUMP STATUS
@@ -583,13 +584,14 @@ FACET articles category "機械学習" FILTER status = 1 LIMIT 10
 ### レスポンス
 
 ```mygram
-OK FACET <num_values>
+OK FACET <returned_value_count> <total_distinct_values>
 <value1>	<count1>
 <value2>	<count2>
 ...
+
 ```
 
-結果はカウントの降順でソートされます。
+値の行はタブ区切りで、カウントの降順にソートされます。レスポンスは空行で終わります（wire では `\r\n\r\n`）。接続のデバッグモードが有効な場合は、値の行と空行の間に `# query_time_ms`、`# matched_documents`、`# distinct_values` の行が入ります。
 
 ---
 
@@ -609,20 +611,33 @@ REPLICATION STATUS
 
 ```mygram
 OK REPLICATION
-status: <running|stopped|not_configured>
+status: <running|stopped|failed|not_configured>
 current_gtid: <current_gtid>
 processed_events: <count>
 queue_size: <size>
+crc_errors: <count>
+schema_incompatible: <true|false>
+last_error_code: <code>
+last_error: <message>
+last_applied_unixtime: <unix_timestamp>
+seconds_since_last_applied: <seconds>
 END
 ```
 
-- **status**: 現在のレプリケーション状態
+- **status**: 現在のレプリケーション状態。binlogリーダーが設定されている場合は `running`、`stopped`、`failed`、設定されていない場合は `not_configured` です
   - `running`: MySQLからアクティブにレプリケーション中
   - `stopped`: レプリケーションが手動で停止中
+  - `failed`: エラーによってレプリケーションが停止中
   - `not_configured`: MySQLレプリケーションが設定されていない
 - **current_gtid**: 最後に処理されたGTID位置
 - **processed_events**: 処理されたbinlogイベントの総数
-- **queue_size**: キュー内の保留中イベント数（実行中のみ表示）
+- **queue_size**: キュー内の保留中イベント数。binlogリーダーが設定されていれば、`stopped` や `failed` を含むすべての状態で返されます
+- **crc_errors**: 検出したbinlogイベントのCRCエラー総数
+- **schema_incompatible**: 監視対象のスキーマが互換性を失ってレプリケーションが停止した場合に `true`
+- **last_error_code**: 最後のレプリケーションエラーの数値コード。エラーがなければ `0`
+- **last_error**: 最後のレプリケーションエラーのメッセージ。エラーがなければ空です
+- **last_applied_unixtime**: 最後に正常適用した位置のUnix時刻。未知の場合は `0`
+- **seconds_since_last_applied**: 最後に正常適用した位置からの経過秒数。未知の場合は `-1`
 
 例（実行中）：
 ```mygram
@@ -631,6 +646,12 @@ status: running
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
 processed_events: 5000
 queue_size: 0
+crc_errors: 0
+schema_incompatible: false
+last_error_code: 0
+last_error:
+last_applied_unixtime: 1710000000
+seconds_since_last_applied: 2
 END
 ```
 
@@ -640,6 +661,13 @@ OK REPLICATION
 status: stopped
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
 processed_events: 5000
+queue_size: 0
+crc_errors: 0
+schema_incompatible: false
+last_error_code: 0
+last_error:
+last_applied_unixtime: 1710000000
+seconds_since_last_applied: 120
 END
 ```
 
@@ -701,7 +729,153 @@ SYNC <table_name>
 OK SYNC STARTED table=<table_name>
 ```
 
-SYNCは非同期で実行されます。同期中は対象テーブルへの `SEARCH`、`COUNT`、`GET`、`FACET` が拒否されます。完了後は、他テーブルのコミットを飛ばさないよう保存済みGTIDからレプリケーションを再開します。進捗と失敗理由は `SYNC STATUS` で確認してください。詳しくは[SYNCコマンドガイド](/ja/docs/sync-command)を参照してください。
+### パラメータ
+
+- **table_name**: 同期するテーブル名（設定ファイルに登録済みでなければなりません）
+
+### エラー応答
+
+```mygram
+ERROR 4011 SYNC already in progress for '<name>'
+ERROR 4012 Memory critically low. Cannot start SYNC.
+ERROR 4010 Table '<name>' not found
+```
+
+### 動作
+
+- バックグラウンドで非同期に実行されます
+- 開始後すぐにレスポンスを返します
+- MySQL の SELECT でスナップショットを構築します
+- `START TRANSACTION WITH CONSISTENT SNAPSHOT` の前に安全な下限 GTID を取得します
+- GTID の取得からスナップショットトランザクション開始までにコミットされた変更は、レプリケーションで再適用されることがあります。これは意図した at-least-once 処理であり、冪等に適用されます
+- 完了時は通常、SYNC 前にドレインして保存した GTID からレプリケーションを再開するため、他テーブルのコミットを飛ばしません。デコード不能な2017イベントからの特殊な回復時だけ、スナップショットの下限 GTID から再開します
+
+同期中は対象テーブルへの `SEARCH`、`COUNT`、`GET`、`FACET` が拒否されます。進捗と失敗理由は `SYNC STATUS` で確認してください。
+
+### SYNC STOP
+
+```mygram
+SYNC STOP [<table_name>]
+```
+
+指定したテーブルの同期を停止します。テーブル名を省略すると、実行中のすべての同期にキャンセルを要求します。キャンセルは非同期です。`CANCELLED` または別の終端状態になるまで `SYNC STATUS` で確認してください。
+
+### 競合
+
+- **DUMP LOAD**: SYNC 中は拒否されます（データ破損を防ぐため）
+- **REPLICATION START**: SYNC 中は拒否されます（SYNC がレプリケーションを自動開始するため）
+- **SYNC**: 別の長時間メンテナンス処理の実行中は拒否されます
+
+### 例
+
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC articles
+OK SYNC STARTED table=articles
+```
+
+## SYNC STATUS
+
+SYNC の進捗と状態を確認します。
+
+### 構文
+
+```mygram
+SYNC STATUS
+```
+
+### 応答例
+
+`SYNC STATUS` は複数行の wire response です。サーバーは状態行を `OK SYNC_STATUS` と `END` で囲みます。`mygram-cli` は表示時にこの envelope 行を取り除きます。以下は wire response の例です。
+
+**以前のワーカーへの参加中:**
+```mygram
+OK SYNC_STATUS
+table=articles status=JOINING_PREVIOUS
+END
+```
+
+**開始処理中:**
+```mygram
+OK SYNC_STATUS
+table=articles status=STARTING
+END
+```
+
+**実行中:**
+```mygram
+OK SYNC_STATUS
+table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
+END
+```
+
+**キャンセル要求中:**
+```mygram
+OK SYNC_STATUS
+table=articles status=CANCELLING
+END
+```
+
+**完了:**
+```mygram
+OK SYNC_STATUS
+table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
+END
+```
+
+**失敗:**
+```mygram
+OK SYNC_STATUS
+table=articles status=FAILED rows=5000 error="MySQL connection lost"
+END
+```
+
+**アイドル:**
+```mygram
+OK SYNC_STATUS
+status=IDLE message="No sync operation performed"
+END
+```
+
+### ステータスフィールド
+
+| フィールド | 説明 |
+|-----------|------|
+| `table` | 同期対象テーブル名 |
+| `status` | `JOINING_PREVIOUS`、`STARTING`、`IN_PROGRESS`、`COMPLETED`、`FAILED`、`CANCELLING`、`CANCELLED`、`IDLE` |
+| `progress` | 処理済み行数 / 総行数 |
+| `rate` | 処理速度（行/秒） |
+| `rows` | 処理した行の総数 |
+| `time` | 処理時間の合計 |
+| `gtid` | スナップショットの下限 GTID マーカー。通常の再開には SYNC 前にドレインした GTID を使い、デコード不能イベント（2017）の回復時だけこのマーカーから再開することがあります |
+| `replication` | レプリケーション状態（`STARTED`、`DISABLED`、`FAILED`） |
+| `error` | 失敗時のエラーメッセージ |
+
+`JOINING_PREVIOUS` は、対象テーブルの前のワーカーを join している間だけ現れる一時状態です。新しいワーカーを確保すると `STARTING` に変わります。`CANCELLING` は `SYNC STOP` によるキャンセル要求を示します。これらの一時状態には進捗詳細は付きません。
+
+状態がない場合は次のレスポンスです。
+
+```mygram
+OK SYNC_STATUS
+status=IDLE message="No sync operation performed"
+END
+```
+
+### CLIの例
+
+CLIは `OK SYNC_STATUS` と `END` の envelope を表示から取り除きます。
+
+```text
+$ mygram-cli
+127.0.0.1:11016> AUTH <token>
+OK AUTHENTICATED
+127.0.0.1:11016> SYNC STATUS
+table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
+```
+
+詳しくは[SYNCコマンドガイド](/ja/docs/sync-command)を参照してください。
 
 ---
 
@@ -724,22 +898,22 @@ OPTIMIZE [<db.table>]
 ### 動作
 
 - **実行前チェック**: メモリヘルスと可用性の検証
-- ポスティングリストをバッチでコピーして最適化
-- クエリ処理は継続（切り替わるまでは旧バッチを使用）
+- 用語名のスナップショットを取得し、すべてのポスティングリストを新しい最適化済み領域に再構築
+- 用語をバッチ処理します。バッチは各回の管理用メモリを制限し、定期的なアトミック公開を可能にしますが、再構築全体に必要な主要メモリは減らしません
+- 最適化済みの置き換えを構築している間も、検索と書き込みは継続します
 - バッチごとにアトミックに切り替わるため、binlogレプリケーションは止まりません
 
 ### メモリ安全性
 
 **実行前メモリチェック：**
 - システムメモリヘルスが **CRITICAL**（利用可能メモリ<10%）の場合は実行を拒否
-- インデックスサイズとバッチサイズに基づいて必要メモリを推定
-- 要件：`利用可能メモリ >= 推定メモリ + 10%の安全マージン`
-- 典型的なメモリオーバーヘッド：最適化中にインデックスサイズの約5〜15%
+- 常駐中のインデックス、再構築用の完全なコピー、10%の一時オーバーヘッド、用語名スナップショット、バッチ管理用メモリからピーク使用量を推定
+- インデックスの空きメモリが概ね `2.1x` 必要です。実際の推定値は、異なる用語の数とバッチ管理用メモリによっても増加します
 
 **メモリ使用パターン：**
-- **インデックス部分のみ**が一時的に2倍になる（ドキュメントストアは変更なし）
-- 全体的なメモリ使用量は約1.05〜1.15倍に増加
-- メモリはバッチ処理で段階的に解放
+- 既存のインデックスを常駐させたまま最適化済みの完全な置き換えを構築するため、ピーク使用量はインデックス2個分に近づきます
+- 推定値には置き換えコピーに加えて、用語名スナップショットと一時構造体を含みます
+- バッチサイズでピークメモリを大きく減らすことはできません。各回の管理用メモリと、置き換えを公開するタイミングを制御します
 
 ### 同時実行の制御
 
@@ -749,22 +923,18 @@ OPTIMIZE [<db.table>]
 
 ### パフォーマンス
 
-- 小規模インデックス（<10K terms）：<1秒
-- 中規模インデックス（10K-100K terms）：1-10秒
-- 大規模インデックス（>100K terms）：10秒以上
-- 並行検索：最小限の影響（短いロック時間）
-- 並行更新：安全だが短時間の競合が発生する可能性あり
+実行時間はポスティングリストの数と大きさ、ホストの空きメモリに左右されます。再構築中も検索とレプリケーションは継続しますが、バッチの公開時には並行更新が短時間競合することがあります。定期実行を計画する前に、実データで所要時間を測定してください。
 
 ### レスポンス
 
 **成功時：**
 ```mygram
-OK OPTIMIZED terms=<total> delta=<count> roaring=<count> memory=<size>
+OK OPTIMIZED tables=<n> terms=<n> delta=<n> roaring=<n> memory=<human>
 ```
 
 例：
 ```mygram
-OK OPTIMIZED terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
+OK OPTIMIZED tables=1 terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
 ```
 
 **エラー：**
@@ -909,7 +1079,9 @@ total_time_saved_ms: 218640.000
 END
 ```
 
-`CACHE ENABLE` / `CACHE DISABLE` は稼働中の状態だけを変更します。設定として残す場合は `SET cache.enabled = ...` を使うか、`config.yaml` を編集してください。
+`CACHE STATS` はキャッシュが無効でも現在のカウンターを返します。未設定のキャッシュ、または有効なキャッシュが必要な操作では `ERROR 8001`（`kCacheDisabled`）を返します。無効化ワーカーを起動できない場合、`CACHE ENABLE` は `ERROR 8001 Cache cannot be enabled: the invalidation worker could not be started.` を返します。
+
+`CACHE ENABLE` / `CACHE DISABLE` は稼働中の状態だけを変更します。`SET cache.enabled = ...` もプロセスのメモリだけを変更し、設定ファイルを書き換えません。再起動後も設定を残す場合は `config.yaml` を編集してください。
 
 ---
 
@@ -947,6 +1119,10 @@ SHOW VARIABLES [LIKE '<pattern>']
 +---------------------+-----------+---------+
 ```
 
+`SET cache.enabled = true` は、キャッシュを起動できない場合に `ERROR 8001 Failed to set variable 'cache.enabled': Cache cannot be enabled` で失敗します。`cache.min_query_cost_ms` は有限かつ 0 以上の値でなければならず、`nan`、`inf`、`-inf` などは `ERROR 1004` で拒否されます。
+
+`SHOW VARIABLES` で機密フィールドを返す場合、値は `***` にマスクされます。`mysql.password`、`mysql.ssl_key` のほか、名前に `password`、`secret`、`ssl_key`、`api_key`、`auth_key`、`private_key`、`access_key`、`token` を含むフィールドが対象です。空の値は空のままです。
+
 ---
 
 ## エラーレスポンス
@@ -976,6 +1152,11 @@ CLIクライアント（`mygram-cli`）は対話型シェルを提供：
 - **コマンド履歴**: ↑/↓矢印キーで履歴をナビゲート（GNU Readline必須）
 - **行編集**: Ctrl+A、Ctrl+Eなどでフル行編集（GNU Readline必須）
 - **エラーハンドリング**: グレースフルなエラーメッセージ（クラッシュしない）
+- **引用処理**: 検索テキスト、フィルタ値、`AND` / `NOT` の語は SDK と C API と同じワイヤ形式で引用します。Unicode 空白やリテラルとして使うコマンドキーワードも値の一部として保持されます。
+- **完全な読み取り**: ハイライト結果、`DEBUG` 出力、`SHOW VARIABLES` を含む複数行レスポンスを、受信バッファが小さくても最後まで読み取ります。
+- **IPv6**: IPv6 リテラル、または IPv6 に解決されるホスト名で接続できます。
+- **検索結果**: 主キーごとに1行を表示し、空白を含む引用済み主キーもデコードします。
+- **ダンプのエラー**: `DUMP SAVE` が失敗した場合はサーバーの数値エラーコードを表示します。`--wait-ready` を指定すると、サーバーがロード中または未準備の間はコマンドを再試行します。`INFO` が `readiness: not_ready` を返している状態は成功として扱いません。
 
 ### 対話モード
 

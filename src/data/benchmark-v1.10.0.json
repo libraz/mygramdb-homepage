@@ -275,7 +275,8 @@
     "indexMb": 152,
     "documentsGb": 1.78,
     "processRssGb": 3.41,
-    "perMillionDocumentsGb": 3.1
+    "perMillionDocumentsGb": 3.1,
+    "verifyTextOffRssMb": 813
   },
   "summary": {
     "medianSpeedup": 8.9,

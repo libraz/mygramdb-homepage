@@ -63,9 +63,12 @@ OK RESULTS 3 101 205 387
 ```mygram
 127.0.0.1:11016> SEARCH articles tutorial NOT beginner
 127.0.0.1:11016> SEARCH articles tutorial AND NOT beginner
+127.0.0.1:11016> SEARCH articles required AND 'not'
 ```
 
 `AND NOT` はここでの `NOT` と同じ除外条件です。追加条件をすべて `AND` の後に表現するクライアントでも使えます。
+
+引用したキーワードはリテラルとして扱われます。最後のクエリは `not` という語を必須にし、引用符によって `NOT` 演算子としては解釈されません。
 
 先頭の `NOT` も使えますが、候補集合が広くなりやすいため、通常は検索語やフィルタと組み合わせて絞り込みます。
 
@@ -97,12 +100,14 @@ OK RESULTS 3 101 205 387
 ```mygram
 127.0.0.1:11016> SEARCH articles tech FILTER status = 1
 127.0.0.1:11016> SEARCH articles tech FILTER views > 1000
-127.0.0.1:11016> SEARCH articles tech FILTER created_at >= 2024-01-01
+127.0.0.1:11016> SEARCH articles tech FILTER created_at >= 1704067200
 ```
 
 ::: warning フィルタ対象カラムは設定が必要
-`FILTER` で使えるのは、設定ファイルの `tables[*].filters` または `tables[*].required_filters` に定義したカラムです。定義していないカラムは、MySQLに存在していてもMygramDBの検索時フィルタには使えません。
+`FILTER` で使えるのは、設定ファイルの `tables[*].filters` または `tables[*].required_filters` に定義したカラムです。定義していないカラムは、MySQLに存在していてもMygramDBの検索時フィルタには使えません。同じカラムを両方に定義できます。`required_filters` は行をインデックスに登録するかどうかを決め、クエリの `FILTER` はリクエストごとに登録済みの行を絞り込みます。
 :::
+
+クエリの日時フィルタには数値を指定します。`date`、`datetime`、`timestamp` は Unix エポック秒、`time` は符号付きの時間差を秒で指定し、負値や24時間を超える値も使えます。たとえば `1704067200` は UTC の 2024-01-01 00:00:00 を表します。設定の `required_filters` は ISO 8601 など独自の日時形式を使うため、その文字列をクエリの `FILTER` にそのまま指定しないでください。
 
 複数フィルタ（AND条件）：
 
@@ -140,19 +145,21 @@ OK RESULTS 3 101 205 387
 
 `BY` は省略できます。カラムを指定する2つの形式はどちらも有効です。`SORT ASC` と `SORT DESC` は引き続きプライマリキーの並び順を指定する省略形です。
 
+数値型のフィルタカラムは宣言された型の順序で並びます。`bigint_unsigned` は 2^63 を超える値も符号なし整数として正しく並べます。
+
 ### 関連度ソート（BM25）
 
-予約カラム `_score` を指定するとBM25関連度でソートできます（v1.6.0以降）：
+予約カラム `_score` を指定するとBM25関連度でソートできます：
 
 ```mygram
 127.0.0.1:11016> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 ```
 
-BM25はクエリ時にIDFとTFを計算します。パラメータは `bm25.k1`（デフォルト `1.2`）と `bm25.b`（デフォルト `0.75`）で調整できます。`SORT _score` を使うには `bm25.enable: true` に加え、保存された正規化テキストからTFを数えるため `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
+BM25はクエリ時にIDFとTFを計算します。パラメータは `bm25.k1`（デフォルト `1.2`）と `bm25.b`（デフォルト `0.75`）で調整できます。`SORT _score` には `bm25.enable: true` が必要です。スコア計算に使う正規化済みテキストは、N-gramの事後フィルタを制御する `memory.verify_text` とは別にサーバーが保持します。
 
 ## ハイライト
 
-マッチした語句をタグで囲んだスニペットを返却（v1.6.0以降）：
+マッチした語句をタグで囲んだスニペットを返却します：
 
 ```mygram
 127.0.0.1:11016> SEARCH articles "machine learning" HIGHLIGHT LIMIT 10
@@ -166,41 +173,42 @@ BM25はクエリ時にIDFとTFを計算します。パラメータは `bm25.k1`�
 | `SNIPPET_LEN <n>` | 100 | 1〜10,000 | 1フラグメントあたりの最大コードポイント数 |
 | `MAX_FRAGMENTS <n>` | 3 | 1〜100 | `…` で連結する最大フラグメント数 |
 
-HIGHLIGHTの使用には `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
+HIGHLIGHTは、`memory.verify_text` が `"off"` の場合もサーバーが保持する正規化済みテキストを使います。
 
 ## ファジー検索
 
-Levenshtein編集距離の範囲内で語句をマッチ（v1.6.0以降）：
+Levenshtein編集距離の範囲内で語句をマッチします：
 
 ```mygram
 127.0.0.1:11016> SEARCH articles "machne" FUZZY LIMIT 10
 127.0.0.1:11016> SEARCH articles "databse" FUZZY 2 LIMIT 10
 ```
 
-距離 `1`（デフォルト）は1編集操作（挿入／削除／置換）以内、`2` は2編集操作以内でマッチします。候補は長さの差で事前フィルタされるため、オーバーヘッドは抑えられます。
+距離 `1`（デフォルト）は1編集操作（挿入／削除／置換）以内、`2` は2編集操作以内でマッチします。長さで候補を絞ることで距離計算を抑えます。`FUZZY` は同じクエリから `FUZZY` を外した検索結果をすべて含みます。N-gramサイズ未満の短い語やCJK/ASCII混在語も含まれ、編集距離に一致する追加結果が加わることがあります。
 
 ## FACET集計
 
-フィルタカラムの値を件数付きで集計（v1.6.0以降）：
+フィルタカラムの値を件数付きで集計します：
 
 ```mygram
 127.0.0.1:11016> FACET articles status
 127.0.0.1:11016> FACET articles category "search text" FILTER status = 1 LIMIT 10
 ```
 
-レスポンス（件数の降順）：
+TCPレスポンス（件数の降順）：
 
 ```mygram
-OK FACET <column>
-<value1> <count1>
-<value2> <count2>
-...
-END
+OK FACET <returned_value_count> <total_distinct_values>
+<value1>\t<count1>
+<value2>\t<count2>
+
 ```
+
+値と件数はタブで区切られ、空行でレスポンスが終わります。2つ目の件数には、`LIMIT` や `OFFSET` で省略された値も含まれます。
 
 FACETは `SEARCH` と同じく AND/NOT/FILTER/LIMIT を組み合わせて、特定の検索結果にスコープを絞った集計も可能です。
 
-v1.7.0以降、FACETはHTTPでも `POST /tables/{identity}/facet` から利用できます。HTTPボディでは `column`、任意の `q`、任意の `filters`、任意の `limit` を指定します。
+FACETはHTTPでも `POST /tables/{identity}/facet` から利用できます。HTTPボディでは `column`、任意の `q`、任意の `filters`、任意の `limit` を指定します。
 
 ## シノニム展開
 
@@ -214,6 +222,10 @@ v1.7.0以降、FACETはHTTPでも `POST /tables/{identity}/facet` から利用�
 127.0.0.1:11016> SEARCH articles golang LIMIT 10
 127.0.0.1:11016> SEARCH articles golang LIMIT 10 OFFSET 20
 ```
+
+`OK RESULTS` の `total_count` はページング前のマッチ総数で、返されるIDは現在のページです。サーバーは総数とページを1回のインデックス読み取りから求めるため、同じ結果集合を示します。
+
+ブール検索のキャッシュキーは、解析後のトークン、引用符、括弧の構造を保持します。全角空白、括弧、引用の違いによって別の式になるクエリは別のキャッシュエントリを使い、同じように解析される Unicode 空白は共有されることがあります。
 
 ## カウントクエリ
 
@@ -252,7 +264,7 @@ OK COUNT 42
 
 ## HTTP API
 
-`SEARCH`、`COUNT`、`FACET`、ドキュメントGETはHTTPでも利用できます。v1.7.0以降は `/tables/{identity}/...` のルート形式を使います。HTTPの `q` は既定でリテラル検索です。意図したBoolean式を送る場合だけ `"mode": "boolean"` を指定してください。
+`SEARCH`、`COUNT`、`FACET`、ドキュメントGETは `/tables/{identity}/...` のルート形式でHTTPからも利用できます。HTTPの `q` は既定でリテラル検索です。意図したBoolean式を送る場合だけ `"mode": "boolean"` を指定してください。
 
 ```bash
 curl -X POST http://localhost:8080/tables/articles/search \

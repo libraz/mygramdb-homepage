@@ -20,8 +20,8 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 | 言語 | パッケージ | 要件 | 特徴 |
 |------|------------|------|------|
 | Node.js | `mygramdb-client` | Node.js 22+ | TypeScript型定義、純JavaScript実装、任意のネイティブバインディング |
-| Python | `mygramdb-client` | Python 3.9+ | asyncio、外部依存なし、dataclass型 |
-| Go | `github.com/libraz/go-mygram-client` | Go 1.23+ | 標準ライブラリのみ、`context.Context` 対応、並行利用可能 |
+| Python | `mygramdb-client` | Python 3.11+ | asyncio、外部依存なし、dataclass型 |
+| Go | `github.com/libraz/go-mygram-client` | Go 1.26+ | 標準ライブラリのみ、`context.Context` 対応、並行利用可能 |
 | C / C++ | 同梱の `libmygramclient` | C11 / C++17 | CとC++ API、`MygramDB::client_static` / `MygramDB::client_shared`、`mygramclient.pc` を含むインストール済みSDK |
 
 ::: warning 検索対象データは先に同期してください
@@ -33,6 +33,8 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 - テーブル名には、単一DB構成では `articles`、複数DB構成では `app_db.articles` のようなDB修飾名を使います。
 - 通常の `search()` / `Search()` は、単純な検索語やAND/NOT中心の検索に向いています。
 - `OR` や括弧を含むブール式は、検索式パーサーで変換して `searchRaw()` / `SearchRaw()` / `search_raw()` に渡します。
+- Web構文の変換関数は、単独の `or` を `OR` として認識し、`order` のようなリテラル語やアポストロフィを含む語を引用し、グループ内のマイナスを `NOT` に変換します。フレーズとOR/グループは1回だけ変換されるため、結果をそのままRaw検索メソッドへ渡してください。
+- 検索レスポンスには、`limit`/`offset` 適用前のマッチ総数と現在のページの結果が含まれます。
 - BM25関連度ソート、ハイライト、ファジー検索、FACETはサーバー側の設定にも依存します。
 - `SET`、`SHOW VARIABLES`、`SYNC` などの管理系操作はTCP経由で実行されます。
 

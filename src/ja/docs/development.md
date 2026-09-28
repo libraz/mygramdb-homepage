@@ -75,7 +75,7 @@ sudo update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-18 100
 
 ```bash
 # ツールがインストールされているか確認
-cmake --version        # 3.15+ であることを確認
+cmake --version        # 3.16+ であることを確認
 clang-format --version # 18.x.x であることを確認
 clang-tidy --version   # 18.x.x であることを確認
 clangd --version       # 18.x.x であることを確認（オプション、LSP 用）
@@ -237,7 +237,7 @@ make test-large-dump
 # 既定の MySQL 8.4 スイート
 make e2e-test
 
-# MySQL 8.4/9.7、MariaDB 10.11/11.4 の matrix
+# MySQL 8.4/9.7、MariaDB 10.11/11.8/12.3 の matrix
 make e2e-matrix
 ```
 

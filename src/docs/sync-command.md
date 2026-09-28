@@ -12,7 +12,7 @@ head:
 ## Overview
 
 ::: info What is snapshot synchronization?
-**Snapshot synchronization** reads the target MySQL table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication starts from the captured GTID and follows subsequent changes.
+**Snapshot synchronization** reads the target MySQL table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication normally resumes from the drained pre-SYNC GTID; the `2017` recovery path uses the conservative snapshot lower-bound marker to pass the undecodable interval.
 :::
 
 The `SYNC` command allows manual control over snapshot synchronization from MySQL to MygramDB. This prevents unexpected load on the MySQL master server during startup.
@@ -82,17 +82,17 @@ OK SYNC STARTED table=articles
 
 **Response (Error):**
 ```mygram
-ERROR SYNC already in progress for table 'articles'
-ERROR Memory critically low. Cannot start SYNC. Check system memory.
-ERROR Table 'products' not found in configuration
+ERROR 4011 SYNC already in progress for 'articles'
+ERROR 4012 Memory critically low. Cannot start SYNC.
+ERROR 4010 Table 'products' not found
 ```
 
 **Behavior:**
 - Runs asynchronously in the background
 - Returns immediately after starting
 - Builds snapshot from MySQL SELECT query
-- Captures GTID at snapshot time
-- Drains replication and normally restarts it from the drained GTID, so commits for other tables are not skipped
+- Captures a conservative GTID lower bound before opening the initial snapshot transaction
+- Drains replication and normally restarts it from the drained pre-SYNC GTID, so commits for other tables are not skipped; the `2017` recovery path uses the snapshot marker to pass the undecodable interval
 
 ### SYNC STOP - Cancel Synchronization
 
@@ -100,7 +100,13 @@ ERROR Table 'products' not found in configuration
 SYNC STOP [<table_name>]
 ```
 
-Cancellation is asynchronous. Continue checking `SYNC STATUS` until the operation reaches `CANCELLED` or another terminal state.
+Cancellation is asynchronous. Continue checking `SYNC STATUS` after it reports `CANCELLING` until the operation reaches `CANCELLED` or another terminal state.
+
+The initial load observes the cancellation request while connecting, reading,
+and building the snapshot, so `SYNC STOP` cancels a running load promptly. A
+shutdown signal requests the same cancellation; if the loader is waiting for
+an in-flight MySQL operation, completion remains bounded by the configured
+`read_timeout_ms`.
 
 ### SYNC STATUS - Check Synchronization Progress
 
@@ -150,14 +156,16 @@ status=IDLE message="No sync operation performed"
 | Field | Description | Example |
 |-------|-------------|---------|
 | `table` | Table name being synced | `articles` |
-| `status` | Current status | `IN_PROGRESS`, `COMPLETED`, `FAILED`, `IDLE`, `CANCELLED` |
+| `status` | Current status | `JOINING_PREVIOUS`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, `FAILED`, `CANCELLING`, `CANCELLED`, `IDLE` |
 | `progress` | Current/total rows processed | `10000/25000 rows (40.0%)` |
 | `rate` | Processing rate | `5000 rows/s` |
 | `rows` | Total rows processed | `25000` |
 | `time` | Total processing time | `5.2s` |
-| `gtid` | Captured snapshot GTID | `uuid:123` |
+| `gtid` | Conservative GTID lower bound captured before the snapshot transaction | `uuid:123` |
 | `replication` | Replication status | `STARTED`, `DISABLED`, `FAILED` |
 | `error` | Error message (if failed) | `MySQL connection lost` |
+
+`JOINING_PREVIOUS`, `STARTING`, and `CANCELLING` are transient states. `JOINING_PREVIOUS` appears while a previous worker for the table is joined, `STARTING` while the new worker begins, and `CANCELLING` after `SYNC STOP` has requested cancellation. Poll `SYNC STATUS` until a terminal state is reported.
 
 ### Replication Status Values
 
@@ -195,7 +203,7 @@ The diagram below traces a SYNC through its full lifecycle: the initial memory-h
 | `INFO` | Allowed | Shows current server state including sync progress |
 | `DUMP SAVE` / `DUMP LOAD` / `OPTIMIZE` | **Blocked** | Retry after SYNC completes |
 | `SYNC` (different table) | **Blocked** | Only one long-running operation can run at a time |
-| `REPLICATION STOP` | Allowed | Independent operation |
+| `REPLICATION STOP` | Usually rejected | SYNC has stopped the reader internally, so the command normally returns `ERROR 6029 Replication is not running`. A stop issued just before that pause may succeed, but SYNC starts the reader again on completion. |
 
 TCP/CLI and HTTP table reads (`search`, `count`, `facet`, and document `GET`) are rejected while the target table is synchronizing. HTTP returns `503`.
 
@@ -270,6 +278,7 @@ When MygramDB receives a shutdown signal (SIGTERM/SIGINT) during SYNC:
 1. **Active SYNC operations are cancelled**
    - `SnapshotBuilder::Cancel()` is called
    - Status changes to `CANCELLED`
+   - The initial MySQL load observes the request while connecting, reading, and building the snapshot
 
 2. **Server waits for cleanup**
    - Maximum wait time: 30 seconds
@@ -279,6 +288,7 @@ When MygramDB receives a shutdown signal (SIGTERM/SIGINT) during SYNC:
      (converted to seconds for the dedicated binlog/snapshot connection).
      Lower this value if operators require faster SIGTERM/SIGINT response
      during long-running reads.
+   - SIGTERM received during the initial MySQL connection retry loop exits cleanly
 
 3. **Server shuts down**
    - MySQL connections closed
@@ -319,7 +329,7 @@ INFO: TCP server stopped
 
 ### SYNC Fails to Start
 
-**Error:** `Memory critically low. Cannot start SYNC. Check system memory.`
+**Error:** `ERROR 4012 Memory critically low. Cannot start SYNC.`
 
 **Solution:**
 - Check available system memory
@@ -349,9 +359,16 @@ INFO: TCP server stopped
 
 ### Error `2017`: undecodable binlog event
 
-XA prepare events, MariaDB compressed events, MySQL `TRANSACTION_PAYLOAD_EVENT` events (transaction compression), and `PARTIAL_UPDATE_ROWS_EVENT` events (partial JSON row updates) can remain in the binlog after the server setting that produced them has changed. Repeating a normal restart from the old position replays the same event and stops replication again.
+XA prepare events, MariaDB event-level compressed query/row events, MySQL `TRANSACTION_PAYLOAD_EVENT` events (transaction compression), and `PARTIAL_UPDATE_ROWS_EVENT` events (partial JSON row updates) can remain in the binlog after the server setting that produced them has changed. Repeating a normal restart from the old position replays the same event and stops replication again.
 
 When replication stops with error code `2017`, run `SYNC` for the table that matters first. MygramDB rebuilds that table and restarts the shared stream from its snapshot marker, past the undecodable interval. Then run `SYNC` for every other replicated table, one at a time. The first recovery moves the shared stream forward; a table not rebuilt retains whatever writes in the skipped interval would have changed.
+
+MariaDB event-level compression from `log_bin_compress` remains unsupported and
+is one of the `2017` recovery cases. A `COMPRESSED` `VARCHAR`/`TEXT` column in
+an ordinary MariaDB row event is different: MygramDB inflates it before
+indexing. An unknown or corrupt compressed-column payload is reported as row
+decode error `2008` and follows normal reconnect handling; use the `2017`
+sequence only for an undecodable event.
 
 When `api.admin_token` is configured, keep the entire recovery sequence in one authenticated CLI connection: authentication is per connection and does not carry across separate `mygram-cli` processes. Wait for `SYNC STATUS` to report `COMPLETED` and `replication=STARTED` before issuing the next table's `SYNC`.
 

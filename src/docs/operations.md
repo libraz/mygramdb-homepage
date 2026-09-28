@@ -32,7 +32,7 @@ SET api.default_limit = 200, api.rate_limiting.capacity = 200
 | --- | --- |
 | `logging.level`, `logging.format` | Change diagnostics or log encoding. |
 | `api.default_limit`, `api.max_query_length` | Tune request defaults and bounds. |
-| `api.rate_limiting.enable`, `api.rate_limiting.capacity`, `api.rate_limiting.refill_rate` | Tune the TCP rate limiter. |
+| `api.rate_limiting.enable`, `api.rate_limiting.capacity`, `api.rate_limiting.refill_rate` | Tune the shared TCP and HTTP rate limiter. |
 | `cache.enabled`, `cache.min_query_cost_ms`, `cache.ttl_seconds` | Enable or tune the query cache. |
 
 All other known variables are immutable. In particular, `mysql.host` and `mysql.port` are startup-only:
@@ -57,7 +57,7 @@ Do not use `SET mysql.host` or `SET mysql.port`, and do not treat an automatic r
 
 ## Readiness, liveness, and traffic gates
 
-`GET /health/live` reports whether the process is alive. `GET /health/ready` is the traffic gate: it returns `200` only when the initial data is initialized, no dump load or `SYNC` is active, and replication is not unavailable. Otherwise it returns `503` with a reason and replication diagnostics.
+`GET /health/live` reports whether the process is alive. `GET /health/ready` is the traffic gate: it returns `200` only when the initial data is initialized, no dump load or `SYNC` is active, and replication is not unavailable. Otherwise it returns `503` with a reason and a redacted replication summary.
 
 ```bash
 curl -fsS http://127.0.0.1:8080/health/live
@@ -76,7 +76,7 @@ Readiness stays false while any configured table has not been initialized. A suc
 
 ## Replication diagnostics
 
-Use `INFO`, `/health/ready`, `/health/detail`, or `/metrics` to observe replication. The health response includes whether replication is running or starting, its last error and numeric code, schema-incompatibility state, the last applied timestamp, and seconds since the last applied event.
+Use `INFO`, `/health/ready`, `/health/detail`, or `/metrics` to observe replication. Open health routes report whether replication is running or starting, a summarized last error and numeric code, the last applied timestamp, and seconds since the last applied event. They redact the current GTID, processed-event and queue counters, CRC counts, schema-incompatibility details, and raw MySQL error text. A request carrying the admin token can receive the protected replication details; `/replication/status` requires that token when `api.admin_token` is configured. The full error remains available to authorized clients and in the logs.
 
 The lag timestamp is updated when MygramDB advances the applied GTID. Treat `replication_seconds_since_last_applied` as an elapsed-time signal, not proof that MySQL currently has no new commits: an idle source also has no recent applied event. Alert on it together with MySQL write activity, replication state, and the error fields.
 
@@ -85,6 +85,10 @@ If readiness returns `503`, use its `reason` first. Common states are an initial
 ## Safe operational changes
 
 Long-running operations share one maintenance slot. `SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and scheduled snapshots cannot overlap. Schedule them deliberately, watch their status, and keep traffic out of a table while it is synchronizing.
+
+`OPTIMIZE` checks memory before rebuilding an index. Its admission estimate includes the resident index, a full rebuild copy, term snapshots, batch bookkeeping, and a safety margin, so keep roughly 2.1 times the current index memory free. If the estimate does not fit, `OPTIMIZE` is refused before it starts; provision memory or reduce the indexed data before retrying.
+
+The rate limiter uses one token bucket per client IP across TCP and HTTP. `capacity` and `refill_rate` therefore apply to the combined traffic, and runtime `SET api.rate_limiting.*` changes both protocol surfaces. A client that uses both protocols draws from the same burst and refill budget.
 
 For settings that require restart, use a rollout that keeps a healthy instance available if the deployment topology allows it. Confirm the configuration before stopping a healthy process, then confirm `INFO` or `/health/ready` after it starts.
 

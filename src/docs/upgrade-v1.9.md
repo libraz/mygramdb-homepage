@@ -37,12 +37,12 @@ The legacy commands are rejected in v1.9. Replace them in scripts and runbooks:
 
 ```mygram
 # Before
-SAVE /backup/mygramdb.dmp
-LOAD /backup/mygramdb.dmp
+SAVE mygramdb.dmp
+LOAD mygramdb.dmp
 
 # v1.9
-DUMP SAVE /backup/mygramdb.dmp
-DUMP LOAD /backup/mygramdb.dmp
+DUMP SAVE mygramdb.dmp
+DUMP LOAD mygramdb.dmp
 ```
 
 `DUMP SAVE` remains asynchronous. Check `DUMP STATUS` before treating a backup as complete.
@@ -54,8 +54,8 @@ v1.9 continues to write dump format v2, and both v1 and v2 dump files load in v1
 `DUMP LOAD` now refuses a payload that would clear a non-empty replication position. Validate the dump and planned target before the maintenance window:
 
 ```mygram
-DUMP VERIFY /backup/mygramdb.dmp
-DUMP INFO /backup/mygramdb.dmp
+DUMP VERIFY mygramdb.dmp
+DUMP INFO mygramdb.dmp
 ```
 
 ## Docker Deployments

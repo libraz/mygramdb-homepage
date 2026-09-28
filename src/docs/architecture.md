@@ -9,7 +9,7 @@ head:
 
 # Architecture
 
-MygramDB runs as a sidecar process alongside MySQL (8.4/9.x) or MariaDB (10.6+/11.x). It reads the upstream server's binary log to build and maintain an in-memory full-text index, then serves search queries over TCP and HTTP. The server flavor is auto-detected from `SELECT VERSION()`, so the same binary and config work with either.
+MygramDB runs as a sidecar process alongside MySQL (8.4/9.x) or MariaDB (10.11+/11.x/12.x). It reads the upstream server's binary log to build and maintain an in-memory full-text index, then serves search queries over TCP and HTTP. The server flavor is detected with a capability probe, so the same binary and config work with either.
 
 <DocDiagram name="system-flow" alt="MySQL remains the source of truth while MygramDB reads snapshots and binlog events, maintains an in-memory index, and serves search traffic over TCP or HTTP." />
 
@@ -31,7 +31,7 @@ The **index** is the structure that finds candidate documents fast. The **DocSto
 
 - **BinlogReader** -- Connects to MySQL as a replica. Receives row-level events (INSERT, UPDATE, DELETE) via GTID-based binlog streaming.
 - **Index** -- In-memory n-gram index. Maps n-gram strings to posting lists (sorted document ID sets).
-- **DocumentStore** -- Maps internal DocIDs to MySQL primary keys and stores filter column values. Filter-column names are interned once per store; each document keeps a small vector sorted by column ID rather than owning the same column names repeatedly. It optionally stores document text for `verify_text`.
+- **DocumentStore** -- Maps internal DocIDs to MySQL primary keys and stores filter column values and normalized text. Filter-column names are interned once per store; each document keeps a small vector sorted by column ID rather than owning the same column names repeatedly.
 - **SearchHandler** -- Parses queries, executes the search pipeline, manages the query cache, and reads candidate text in bounded chunks for text-heavy stages.
 - **Snapshot** -- Periodic dump of index state and GTID position to disk for fast restart.
 
@@ -43,9 +43,9 @@ MygramDB operates in three phases:
 
 When `SYNC` is run, or when `replication.auto_initial_snapshot: true` is configured, MygramDB performs a consistent snapshot of the source table. The default is `auto_initial_snapshot: false`, so production operators explicitly choose when the initial MySQL read happens:
 
-<DocDiagram name="initial-snapshot-sequence" alt="MygramDB opens a consistent-snapshot transaction, records gtid_executed, streams the table rows to build the index, commits, and then starts binlog reading from the captured GTID." />
+<DocDiagram name="initial-snapshot-sequence" alt="MygramDB records a safe lower-bound GTID before opening a consistent-snapshot transaction, streams the table rows into the index, commits, and resumes binlog reading from a safe position." />
 
-This guarantees no data is missed or duplicated between the snapshot and subsequent binlog events.
+The pre-snapshot GTID prevents a gap. Commits between that capture and the transaction start may be replayed; row application is idempotent.
 
 ### Phase 2: Live Replication
 
@@ -55,7 +55,7 @@ After the initial snapshot, MygramDB switches to binlog streaming:
 
 The BinlogReader thread reads events into a bounded queue. A worker thread dequeues events and applies them to the index and document store. This decoupling allows the binlog reader to keep up with MySQL even during bursts.
 
-On connection loss, MygramDB reconnects with exponential backoff (500ms to 10s) and resumes from the last processed GTID position. No data is lost or replayed.
+On connection loss, MygramDB retries the configured endpoint and resumes from the last applied or processed GTID position. Events after that position may be replayed and applied idempotently.
 
 ### Phase 3: Query Processing
 
@@ -100,12 +100,12 @@ A **write-ahead log** records every change sequentially as it happens. MygramDB 
 **How it works:**
 
 1. A background scheduler periodically serializes the full index, document store, and current GTID position to disk.
-2. On restart, MygramDB loads the snapshot and resumes binlog replication from the saved GTID.
-3. Events between the snapshot and current MySQL position are replayed automatically.
+2. With `dump.load_on_startup: true`, MygramDB tries `dump.dir/default_filename` at startup. A successful restore resumes binlog replication from the saved GTID; this mode requires `replication.start_from: snapshot`.
+3. Events between that GTID and the current MySQL position are replayed automatically. If the dump fails validation, startup falls back to a MySQL initial snapshot.
 
 Snapshot writes use **atomic file operations** (write to temp file, then rename) to prevent corruption if the process is interrupted during a dump.
 
-If no snapshot has been loaded, run `SYNC <table>` (or `SYNC <database>.<table>` in multi-database configurations) to build the initial snapshot. Automatic startup snapshots only run when `replication.auto_initial_snapshot` is explicitly enabled.
+When startup does not attempt a dump restore, enable `replication.auto_initial_snapshot` to build the initial index automatically, or run `SYNC <table>` (or `SYNC <database>.<table>` in multi-database configurations). A failed startup dump restore falls back to a MySQL initial snapshot even if `auto_initial_snapshot` is false.
 
 ::: warning Not a substitute for MySQL backups
 MygramDB snapshots exist to restore the search index quickly. Backups and point-in-time recovery for the source data remain MySQL's responsibility.
@@ -113,7 +113,7 @@ MygramDB snapshots exist to restore the search index quickly. Backups and point-
 
 ## Memory Layout
 
-<DocDiagram name="memory-layout" alt="Per table, the index holds an n-gram map and posting lists, the document store holds primary keys and filter columns, and an optional text store holds normalized text; a shared cache holds query results and an n-gram reverse index." />
+<DocDiagram name="memory-layout" alt="Per table, the index holds an n-gram map and posting lists, and the document store holds primary keys, filter columns, and normalized text; a shared cache holds query results and an n-gram reverse index." />
 
 **Sizing reference.** The figures below come from the published v1.10.0 benchmark run: 1.1M Wikipedia articles (1M English, 100K Japanese, avg. 666 chars) with `verify_text: all`, in a 32 GiB container. See [Benchmarks](/benchmarks) for the full run.
 
@@ -123,9 +123,9 @@ MygramDB snapshots exist to restore the search index quickly. Backups and point-
 | DocumentStore + Text Store | ~1.78 GB |
 | **Total RSS** | **~3.41 GB** |
 
-The text store is allocated only when `verify_text` is enabled. With `verify_text: off` on the same dataset, resident memory is approximately 813 MB — see the [FAQ](/faq#how-much-memory-does-mygramdb-need) for per-million-document planning figures in both modes. Filter values keep interned column IDs in small sorted vectors, avoiding one owned column-name string and hash map per document and configured filter column.
+Current server startup retains normalized text even with `verify_text: off`, because highlighting is a query-level feature. `verify_text` controls post-filtering, not text storage. The [FAQ](/faq#how-much-memory-does-mygramdb-need) explains how to use this benchmark for capacity planning. Filter values keep interned column IDs in small sorted vectors, avoiding one owned column-name string and hash map per document and configured filter column.
 
-Posting lists are the largest component. Their memory efficiency depends on the compression strategy -- delta encoding for sparse n-grams, Roaring bitmaps for dense ones. Monitoring does not lock every table for every scrape: per-table values are aggregated into a bounded snapshot served by `INFO`, `/metrics`, and Prometheus. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
+Stored text and document data dominate the benchmark above. Posting-list memory depends on the compression strategy -- delta encoding for sparse n-grams, Roaring bitmaps for dense ones. Monitoring does not lock every table for every scrape: per-table values are aggregated into a bounded snapshot served by `INFO`, `/metrics`, and Prometheus. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
 
 ---
 

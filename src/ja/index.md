@@ -28,7 +28,7 @@ features:
   - icon:
       src: /icons/refresh-cw.svg
     title: MySQL / MariaDBのbinlogに追従
-    details: MySQL 8.4/9.xとMariaDB 10.6+/11.xに対応したGTIDベースのbinlogレプリケーション。書き込みはMySQLのまま、検索処理を分離。
+    details: MySQL 8.4/9.x と MariaDB 10.11+/11.x/12.x に対応した GTID ベースの binlog レプリケーション。書き込みは MySQL のまま、検索処理を分離。
   - icon:
       src: /icons/globe.svg
     title: 日本語対応
@@ -88,7 +88,7 @@ docker run -d --name mygramdb \
   -e TABLE_NGRAM_SIZE=2 \
   -e REPLICATION_SERVER_ID=12345 \
   -e NETWORK_ALLOW_CIDRS=0.0.0.0/0 \
-  ghcr.io/libraz/mygram-db:latest
+  ghcr.io/libraz/mygram-db:1.10.2
 ```
 
 ::: warning

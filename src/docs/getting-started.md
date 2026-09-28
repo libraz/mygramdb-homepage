@@ -13,7 +13,7 @@ Get MygramDB up and running in 5 minutes.
 
 ## Prerequisites
 
-- MySQL 8.4/9.x with GTID enabled, or MariaDB 10.6+/11.x
+- MySQL 8.4/9.x with GTID enabled, or MariaDB 10.11+/11.x/12.x
 - RHEL/AlmaLinux/Rocky Linux 9, Ubuntu 22.04/24.04, or Docker
 
 MygramDB deploys next to your existing database as a sidecar: your application keeps writing to MySQL/MariaDB unchanged, MygramDB follows the binlog to build its own search index, and only search queries go to MygramDB.
@@ -41,7 +41,7 @@ sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ### Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:latest
+docker pull ghcr.io/libraz/mygram-db:1.10.2
 ```
 
 ## Minimal Configuration
@@ -88,7 +88,7 @@ The `allow_cidrs` setting is required. Without it, all connections are denied. A
 :::
 
 ::: tip Keep the admin token outside the file when practical
-For a production configuration, provide the secret as `MYGRAM_API_ADMIN_TOKEN` instead of committing it to the YAML file. It is required when TCP listens on a non-loopback address without a Unix socket.
+For a production configuration, provide the secret as `MYGRAM_API_ADMIN_TOKEN` instead of committing it to the YAML file. It is required when TCP listens on a non-loopback address without a Unix socket, or when enabled HTTP listens on a non-loopback address.
 :::
 
 ## Start the Service

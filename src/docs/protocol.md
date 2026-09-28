@@ -46,6 +46,8 @@ The TCP protocol suits `mygram-cli` and administrative commands. For web applica
 
 Commands are text-based, one command per line. Responses are terminated with newline.
 
+If the thread-pool queue is full while a connection drain task is being scheduled, the server returns `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` on that connection, sends responses already queued for it, and then closes the connection. A pending-frame or shared-buffer limit can also produce a best-effort `ERROR 6030` before close.
+
 `SEARCH`, `COUNT`, `GET`, and `FACET` do not require authentication. When an administrative token is configured, `AUTH` is required for configuration commands, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` commands. A request made before authentication returns `ERROR 7 Administrative command requires AUTH`.
 
 Table references accept the database-qualified form `` `database.table` ``. For example, a table named
@@ -147,7 +149,7 @@ OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
 
 Not found:
 ```mygram
-ERROR 8 Document not found
+ERROR 4004 Document not found
 ```
 
 ---
@@ -170,7 +172,7 @@ Returns server information in Redis-style key-value format with multiple section
 OK INFO
 
 # Server
-version: 1.0.0
+version: 1.10.2
 uptime_seconds: 3600
 data_initialized: true
 readiness: ready
@@ -448,15 +450,14 @@ DUMP SAVE [<filepath>]
 **Response:**
 ```mygram
 OK DUMP_STARTED <filepath>
-Use DUMP STATUS to monitor progress
 ```
 
 **Example:**
 ```mygram
-DUMP SAVE /backup/mygramdb.dmp
+DUMP SAVE mygramdb.dmp
 ```
 
-Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown `DUMP SAVE` flag.
+The filename resolves under `dump.dir`; a path outside that directory is refused. Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown `DUMP SAVE` flag.
 
 ### DUMP LOAD
 
@@ -473,7 +474,7 @@ DUMP LOAD <filepath>
 
 **Example:**
 ```mygram
-DUMP LOAD /backup/mygramdb.dmp
+DUMP LOAD mygramdb.dmp
 ```
 
 ### DUMP VERIFY
@@ -487,7 +488,7 @@ DUMP VERIFY <filepath>
 
 **Example:**
 ```mygram
-DUMP VERIFY /backup/mygramdb.dmp
+DUMP VERIFY mygramdb.dmp
 ```
 
 ### DUMP INFO
@@ -501,7 +502,7 @@ DUMP INFO <filepath>
 
 **Example:**
 ```mygram
-DUMP INFO /backup/mygramdb.dmp
+DUMP INFO mygramdb.dmp
 ```
 
 ### DUMP STATUS
@@ -583,13 +584,14 @@ FACET articles category "machine learning" FILTER status = 1 LIMIT 10
 ### Response
 
 ```mygram
-OK FACET <num_values>
+OK FACET <returned_value_count> <total_distinct_values>
 <value1>	<count1>
 <value2>	<count2>
 ...
+
 ```
 
-Results are sorted by count in descending order.
+The value rows are tab-separated and sorted by count in descending order. The response ends with an empty line (`\r\n\r\n` on the wire). When connection debug mode is enabled, `# query_time_ms`, `# matched_documents`, and `# distinct_values` lines appear after the value rows and before the empty line.
 
 ---
 
@@ -609,20 +611,33 @@ Multi-line key-value format:
 
 ```mygram
 OK REPLICATION
-status: <running|stopped|not_configured>
+status: <running|stopped|failed|not_configured>
 current_gtid: <current_gtid>
 processed_events: <count>
 queue_size: <size>
+crc_errors: <count>
+schema_incompatible: <true|false>
+last_error_code: <code>
+last_error: <message>
+last_applied_unixtime: <unix_timestamp>
+seconds_since_last_applied: <seconds>
 END
 ```
 
-- **status**: Current replication state
+- **status**: Current replication state: `running`, `stopped`, or `failed` when a binlog reader is configured; `not_configured` when it is not
   - `running`: Actively replicating from MySQL
   - `stopped`: Replication manually stopped
+  - `failed`: Replication stopped because of an error
   - `not_configured`: MySQL replication not configured
 - **current_gtid**: Last processed GTID position
 - **processed_events**: Total binlog events processed
-- **queue_size**: Pending events in queue (only shown when running)
+- **queue_size**: Pending events in the queue; returned for every configured reader state, including `stopped` and `failed`
+- **crc_errors**: Total binlog event CRC errors detected
+- **schema_incompatible**: `true` when replication stopped because a monitored schema is incompatible
+- **last_error_code**: Numeric code for the last replication error, or `0` when there is none
+- **last_error**: Message for the last replication error, or an empty value when there is none
+- **last_applied_unixtime**: Unix timestamp of the last successfully applied position, or `0` when unknown
+- **seconds_since_last_applied**: Seconds since the last successfully applied position, or `-1` when unknown
 
 Example (running):
 ```mygram
@@ -631,6 +646,12 @@ status: running
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
 processed_events: 5000
 queue_size: 0
+crc_errors: 0
+schema_incompatible: false
+last_error_code: 0
+last_error:
+last_applied_unixtime: 1710000000
+seconds_since_last_applied: 2
 END
 ```
 
@@ -640,6 +661,13 @@ OK REPLICATION
 status: stopped
 current_gtid: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
 processed_events: 5000
+queue_size: 0
+crc_errors: 0
+schema_incompatible: false
+last_error_code: 0
+last_error:
+last_applied_unixtime: 1710000000
+seconds_since_last_applied: 120
 END
 ```
 
@@ -708,9 +736,9 @@ OK SYNC STARTED table=<table_name>
 ### Response (Error)
 
 ```mygram
-ERROR 4011 SYNC already in progress for table '<table_name>'
-ERROR 4012 Memory critically low. Cannot start SYNC. Check system memory.
-ERROR 4010 Table '<table_name>' not found in configuration
+ERROR 4011 SYNC already in progress for '<name>'
+ERROR 4012 Memory critically low. Cannot start SYNC.
+ERROR 4010 Table '<name>' not found
 ```
 
 ### Behavior
@@ -718,8 +746,9 @@ ERROR 4010 Table '<table_name>' not found in configuration
 - Runs asynchronously in the background
 - Returns immediately after starting
 - Builds snapshot from MySQL using SELECT query
-- Captures GTID at snapshot time
-- Drains replication and restarts it from the saved GTID when complete, so commits for other tables are not skipped
+- Captures a safe lower-bound GTID before `START TRANSACTION WITH CONSISTENT SNAPSHOT`
+- Commits between the GTID capture and the snapshot transaction may be replayed during replication; this at-least-once replay is intentional and idempotent
+- Drains replication and normally restarts it from the GTID drained before SYNC, so commits for other tables are not skipped; only recovery from an undecodable 2017 event restarts from the snapshot lower-bound GTID
 
 ### Cancel a SYNC
 
@@ -759,24 +788,55 @@ SYNC STATUS
 
 ### Response Examples
 
+`SYNC STATUS` is a multi-line wire response. The server wraps the status lines with `OK SYNC_STATUS` and `END`. `mygram-cli` removes these envelope lines before printing the status body; the examples below show the wire response.
+
 **In Progress:**
 ```mygram
+OK SYNC_STATUS
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
+END
+```
+
+**Joining the previous worker:**
+```mygram
+OK SYNC_STATUS
+table=articles status=JOINING_PREVIOUS
+END
+```
+
+**Starting:**
+```mygram
+OK SYNC_STATUS
+table=articles status=STARTING
+END
+```
+
+**Cancelling:**
+```mygram
+OK SYNC_STATUS
+table=articles status=CANCELLING
+END
 ```
 
 **Completed:**
 ```mygram
+OK SYNC_STATUS
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
+END
 ```
 
 **Failed:**
 ```mygram
+OK SYNC_STATUS
 table=articles status=FAILED rows=5000 error="MySQL connection lost"
+END
 ```
 
 **Idle:**
 ```mygram
+OK SYNC_STATUS
 status=IDLE message="No sync operation performed"
+END
 ```
 
 ### Status Fields
@@ -784,16 +844,20 @@ status=IDLE message="No sync operation performed"
 | Field | Description |
 |-------|-------------|
 | `table` | Table name being synced |
-| `status` | `IN_PROGRESS`, `COMPLETED`, `FAILED`, `IDLE`, `CANCELLED` |
+| `status` | `JOINING_PREVIOUS`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, `FAILED`, `CANCELLING`, `CANCELLED`, or `IDLE` |
 | `progress` | Current/total rows processed |
 | `rate` | Processing rate (rows/s) |
 | `rows` | Total rows processed |
 | `time` | Total processing time |
-| `gtid` | Saved GTID used for replication restart |
+| `gtid` | Snapshot lower-bound GTID marker; normal restart uses the drained pre-SYNC GTID, while undecodable-event (2017) recovery may restart from this marker |
 | `replication` | Replication status: `STARTED`, `DISABLED`, `FAILED` |
 | `error` | Error message (if failed) |
 
-### Example
+`JOINING_PREVIOUS` is a transient state while the previous worker for the table is joined; it changes to `STARTING` once the new worker is claimed. `CANCELLING` means that `SYNC STOP` requested cancellation. The transient states do not carry progress details.
+
+### CLI Example
+
+The CLI strips the `OK SYNC_STATUS` and `END` envelope before displaying the status body.
 
 ```text
 $ mygram-cli
@@ -829,22 +893,22 @@ Omit the table on a single-table deployment; qualify it when more than one table
 ### How it works
 
 - **Pre-execution checks**: Memory health and availability verification
-- Copies and optimizes posting lists in batches
-- Query processing continues (using the old batch until each swap)
+- Takes a snapshot of term names and rebuilds every posting list into a fresh optimized allocation
+- Processes terms in batches; batches limit per-batch bookkeeping and allow periodic atomic publication, but do not remove the full rebuild's dominant memory cost
+- Query processing and writes continue while the replacement lists are built
 - Each batch is swapped in atomically, so replication keeps running throughout
 
 ### Memory Safety
 
 **Pre-execution Memory Checks:**
 - Rejects execution if system memory health is **CRITICAL** (<10% available)
-- Estimates required memory based on index size and batch size
-- Requires: `available_memory >= estimated_memory + 10% safety margin`
-- Typical memory overhead: ~5-15% of index size during optimization
+- Estimates peak memory from the resident index, a full rebuild copy, 10% temporary overhead, a term-name snapshot, and batch bookkeeping
+- Requires roughly `2.1x` the index memory to be free; the exact estimate also grows with the number of distinct terms and the batch bookkeeping
 
 **Memory Usage Pattern:**
-- **Index portion only** temporarily doubles (document store unchanged)
-- Overall memory usage increases by approximately 1.05-1.15x
-- Memory is freed gradually through batch processing
+- The existing index remains resident while the full optimized replacement is built, so peak usage approaches two index copies
+- The estimate includes the term-name snapshot and temporary structures in addition to the replacement copy
+- Batch size does not materially reduce peak memory; it limits per-batch bookkeeping and controls when replacements are published
 
 ### Global Exclusion
 
@@ -854,22 +918,18 @@ Omit the table on a single-table deployment; qualify it when more than one table
 
 ### Performance
 
-- Small indexes (<10K terms): <1 second
-- Medium indexes (10K-100K terms): 1-10 seconds
-- Large indexes (>100K terms): 10+ seconds
-- Concurrent searches: minimal impact (short lock durations)
-- Concurrent updates: safe but may see brief contention
+Runtime depends on the number and size of posting lists and the host's available memory. Searches and replication continue during the rebuild, though concurrent updates may briefly contend when batches are published. Measure a run with your own data before scheduling regular optimization.
 
 ### Response
 
 **Success:**
 ```mygram
-OK OPTIMIZED terms=<total> delta=<count> roaring=<count> memory=<size>
+OK OPTIMIZED tables=<n> terms=<n> delta=<n> roaring=<n> memory=<human>
 ```
 
 Example:
 ```mygram
-OK OPTIMIZED terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
+OK OPTIMIZED tables=1 terms=1500000 delta=1200000 roaring=300000 memory=450.00 MB
 ```
 
 **Errors:**
@@ -1014,7 +1074,9 @@ total_time_saved_ms: 218640.000
 END
 ```
 
-`CACHE ENABLE` / `CACHE DISABLE` change the running state only. To persist the setting, use `SET cache.enabled = ...` or edit `config.yaml`.
+`CACHE STATS` can report the current counters while the cache is disabled. `CACHE CLEAR` requires an enabled cache; an unconfigured cache or an operation that requires the cache returns `ERROR 8001` (`kCacheDisabled`). `CACHE ENABLE` returns `ERROR 8001 Cache cannot be enabled: the invalidation worker could not be started.` when its invalidation worker cannot start.
+
+`CACHE ENABLE` / `CACHE DISABLE` change the running state only. `SET cache.enabled = ...` also changes process memory only and does not rewrite the configuration file. Edit `config.yaml` to persist the setting across a restart.
 
 ---
 
@@ -1052,6 +1114,10 @@ The compact form is also valid: `SET api.default_limit=50`. It can be mixed with
 +---------------------+-----------+---------+
 ```
 
+`SET cache.enabled = true` can fail with `ERROR 8001 Failed to set variable 'cache.enabled': Cache cannot be enabled`. `cache.min_query_cost_ms` must be a finite, non-negative number; values such as `nan`, `inf`, and `-inf` are rejected with `ERROR 1004`.
+
+When `SHOW VARIABLES` returns a sensitive field, its value is masked as `***`. This includes `mysql.password`, `mysql.ssl_key`, and fields whose names contain `password`, `secret`, `ssl_key`, `api_key`, `auth_key`, `private_key`, `access_key`, or `token`. Empty values remain empty.
+
 ---
 
 ## Error Response
@@ -1081,6 +1147,11 @@ The CLI client (`mygram-cli`) provides an interactive shell with:
 - **Command History**: Use ↑/↓ arrow keys to navigate history (requires GNU Readline)
 - **Line Editing**: Full line editing with Ctrl+A, Ctrl+E, etc. (requires GNU Readline)
 - **Error Handling**: Graceful error messages (does not crash)
+- **Quoting**: Search text, filter values, and `AND`/`NOT` terms are quoted using the same wire rule as the SDK and C API. Unicode whitespace and literal command keywords remain part of the value.
+- **Complete Reads**: Multi-line responses, including highlighted results, `DEBUG` output, and `SHOW VARIABLES`, are read completely even when the receive buffer is small.
+- **IPv6**: Connect using an IPv6 literal or a hostname that resolves to IPv6.
+- **Search Output**: Prints one row per primary key and decodes quoted keys containing spaces or other whitespace.
+- **Dump Errors**: Prints the numeric server error code when `DUMP SAVE` fails. With `--wait-ready`, it retries the command while the server is loading or not ready; `INFO` reporting `readiness: not_ready` is not treated as success.
 
 ### Interactive Mode
 

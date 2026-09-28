@@ -7,6 +7,10 @@ head:
       content: MygramDB パフォーマンス, MySQL FULLTEXT ベンチマーク, 検索レイテンシ, COUNT 性能, 並列スループット, OPTIMIZE, メモリサイジング, roaring bitmap
 ---
 
+<script setup>
+import { VERIFY_ALL_PER_MILLION_GB } from '../../data/memory'
+</script>
+
 # パフォーマンスガイド
 
 このガイドでは、MygramDB のベンチマーク結果、性能を見るときの前提、最適化の考え方、本番環境でのサイジングを説明します。
@@ -19,44 +23,9 @@ head:
 
 ## パフォーマンス分析
 
-### MySQL が遅くなりやすい理由
-
-1. **ディスクベースのB-tree**: FULLTEXT インデックスは各クエリでディスクI/Oが必要
-2. **圧縮なし**: 転置インデックスが圧縮されておらず、より多くのディスク読み込みが必要
-3. **キャッシュ依存**: コールドとウォームキャッシュで2-3倍のパフォーマンス差
-4. **ソートのオーバーヘッド**: `ORDER BY` には追加の処理とI/Oが必要
-5. **高頻度語句**: 短く一般的な語句は大きな転置リストのスキャンが必要
-6. **並行性のボトルネック**: 高負荷な並行環境では、ディスクI/Oの待ち行列が伸びやすい
-
-### MygramDB が速い理由
-
-1. **インメモリインデックス**: 検索インデックスをRAM上に保持し、検索時のディスクI/Oを避ける
-2. **圧縮転置リスト**: ハイブリッド Delta エンコーディング + Roaring ビットマップ
-3. **最適化された交差演算**: SIMD アクセラレーション付きビットマップ演算
-4. **ソート**: `SORT` はプライマリキーと設定済みフィルタカラムを検証してから結果を並べ替える
-5. **verify_text**: 正確性が必要な場合に、ポストフィルタで偽陽性を除去できる。保持テキスト分のメモリは使う
-6. **対象を絞ったキャッシュ無効化**: 行が変わったとき、その依存関係が影響を受けうるキャッシュエントリだけを調べる
+公開ベンチマークでの MySQL の InnoDB バッファプールヒット率は 99.9989% でした。したがって、実測した差を「MySQL が毎回ディスクを読んだため」とは説明できません。MygramDB は検索インデックスをメモリに保持し、密度に応じて Delta エンコーディングと Roaring ビットマップのポスティングリストを使います。差はクエリ、データ、ソート、メモリ、同時実行数に左右されるため、上の計測条件と併せて評価してください。
 
 ## パフォーマンス特性
-
-### クエリ時間計算量
-
-| 操作 | MySQL FULLTEXT | MygramDB |
-|-----------|----------------|----------|
-| 単一語句検索 | O(n log n) + ディスクI/O | O(n) インメモリ |
-| AND 交差演算 | O(n * m) + ディスクI/O | O(n + m) SIMD付き |
-| `SORT id` | 比較ソート | 結果件数に応じた比較ソート（部分または完全） |
-| COUNT | フルスキャン | ビットマップ基数 |
-
-### スケーラビリティ
-
-**MygramDB が線形にスケールするもの:**
-- 検索語句の数（効率的なビットマップ交差演算）
-- 結果セットのサイズ（圧縮ビットマップ）
-- 同時クエリ数（スレッドプールアーキテクチャ）
-
-**MygramDB がスケールしないもの:**
-- 利用可能なRAMを超えるデータセットサイズ（インメモリのみ）
 
 ### 現行の実行経路
 
@@ -122,14 +91,7 @@ SEARCH articles tech FILTER status=1 FILTER category_id=5 LIMIT 100
 
 ### 4. クエリパターンの最適化
 
-**高速なクエリ:**
-- `SEARCH table term SORT id LIMIT 100` - プライマリキーで並べ替える
-- `COUNT table term` - ビットマップ基数演算
-- `SEARCH table term1 AND term2` - 効率的なビットマップ交差演算
-
-**やや遅いクエリ:**
-- `SEARCH table term LIMIT 100` - それでも高速だが、明示的にソートする場合より多くスキャンする可能性
-- 非常に大きな LIMIT 値（>1000） - 返すIDが多い
+`SEARCH table term SORT id LIMIT 100` は、設定済みの主キーが `id` の場合にその値で並べ替えます。`SEARCH table term1 AND term2` は両方の語句の候補を交差します。`COUNT table term` は ID のページを返さず件数を返しますが、テキスト照合が有効な場合はそれも含めて検索処理を実行します。大きな `LIMIT` は返す ID が増えるため、応答処理も増えます。速度の順序を固定して考えず、実データで測定してください。
 
 ### 5. OPTIMIZE コマンドの使用
 
@@ -139,13 +101,13 @@ SEARCH articles tech FILTER status=1 FILTER category_id=5 LIMIT 100
 OPTIMIZE
 ```
 
-これにより、密度に基づいて Delta エンコーディングリストを Roaring ビットマップに変換し、メモリ使用量を10-30%削減します。
+密度に応じて Delta エンコーディングのポスティングリストを Roaring ビットマップへ変換できます。メモリ使用量の変化はデータに依存します。実行前にインデックスサイズの約2.1倍の空きメモリを確保してください。見積もりが空き容量を超える場合、`OPTIMIZE` は実行を拒否します。
 
 ## 本番環境デプロイの推奨事項
 
 ### 1. メモリサイジング
 
-**経験則:** `verify_text` の設定によって必要なRAMが大きく変わります。`verify_text: off` なら100万ドキュメントあたり約813MB、`verify_text: all` なら約3.1GBを目安にしてください。
+**容量の参考値:** [公開した v1.10.0 のベンチマーク](/ja/benchmarks)では、`verify_text: all` で100万ドキュメントあたり約{{ VERIFY_ALL_PER_MILLION_GB }}GBの常駐メモリを使用しました。現行版は `verify_text: off` でもハイライト用の正規化テキストを保持するため、インデックスだけのメモリ構成にはなりません。実データで RSS を測定し、余裕分を確保してください。
 
 **サイジング例（`verify_text: all` の場合）:**
 - 100万ドキュメント: 4GB RAM 最小、8GB 推奨
@@ -167,27 +129,27 @@ INFO
 ```
 
 見るべき主な項目:
-- `doc_count`: インデックスされたドキュメント数
-- `index_size`: インデックスが使用するメモリ
+- `total_documents`: インデックスされたドキュメント数
+- `used_memory_index`: インデックスが使用するメモリ（読みやすい単位で表示）
 - `total_requests`: 処理された総クエリ数
-- `connections`: 現在のアクティブ接続数
-- `uptime`: サーバー稼働時間（秒）
+- `connected_clients`: 現在のアクティブ接続数
+- `uptime_seconds`: サーバー稼働時間（秒）
 
 ### 4. バックアップ戦略
 
 `DUMP SAVE` コマンドでスナップショットを作成:
 
 ```mygram
-DUMP SAVE /path/to/snapshot.dmp
+DUMP SAVE snapshot.dmp
 ```
 
 定期的なスナップショットをスケジュール:
 ```bash
 # 毎日のスナップショット
-0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE /backup/mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
+0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
 ```
 
-この cron の例では `AUTH` と `DUMP SAVE` を1つの接続に送ります。`api.admin_token` が空の場合だけ `AUTH` は不要です。非ループバックのデプロイではトークンを設定してください。
+これらのファイル名は `dump.dir` の下に解決され、外側のパスは拒否されます。この cron の例では `AUTH` と `DUMP SAVE` を1つの接続に送ります。`api.admin_token` が空の場合だけ `AUTH` は不要です。非ループバックのデプロイではトークンを設定してください。
 
 ## トラブルシューティング
 
@@ -202,7 +164,7 @@ DUMP SAVE /path/to/snapshot.dmp
    ```mygram
    INFO
    ```
-   `index_size`とプロセスRSSを確認してください。`hard_limit_mb`は予約済みで、
+   `used_memory_index`とプロセスRSSを確認してください。`hard_limit_mb`は予約済みで、
    現時点ではプロセスメモリ上限を強制しません。
 
 3. **デバッグモードを有効化:**
@@ -218,7 +180,7 @@ DUMP SAVE /path/to/snapshot.dmp
    ```mygram
    OPTIMIZE
    ```
-   密な転置リストを Roaring ビットマップに変換（10-30%削減）。
+   密なポスティングリストを Roaring ビットマップへ変換できます。再構築中はインデックスサイズの約2.1倍の空きメモリが必要なため、事前に確認してください。
 
 2. **roaring_threshold を調整:**
    ```yaml
@@ -226,7 +188,7 @@ DUMP SAVE /path/to/snapshot.dmp
      roaring_threshold: 0.15  # 低い = より積極的な圧縮
    ```
 
-3. **シャーディングを検討:** データを複数の MygramDB インスタンスに分割。
+3. **アプリ側でのシャーディングを検討:** 元データを分割して各パーティションを別の MygramDB インスタンスで扱い、アプリ側でクエリを振り分けたり結果を統合したりします。MygramDB は自動でシャーディングしません。
 
 ## 代替手段との比較
 
@@ -235,7 +197,7 @@ DUMP SAVE /path/to/snapshot.dmp
 **MygramDB の利点:**
 
 - キャッシュ無効の実測値は、このページ上部のベンチマークスナップショットに集約
-- ディスクキャッシュの暖まり具合に左右されにくい
+- 検索インデックスの参照は MySQL のバッファプールに依存しない。ただし MygramDB 自身のクエリキャッシュのヒットはレイテンシを変える
 - COUNTを含む実測値はベンチマークスナップショットを参照
 - `verify_text` によりn-gramの偽陽性を除去できる
 - 読み取り中心の並列負荷でスループットを伸ばしやすい
@@ -244,7 +206,6 @@ DUMP SAVE /path/to/snapshot.dmp
 
 - 別の検索基盤が不要
 - 既存の MySQL データで動作
-- メモリ要件が低い
 - マッチ数が少ない単純なクエリでは十分な速度
 
 ### vs Elasticsearch
@@ -253,12 +214,11 @@ DUMP SAVE /path/to/snapshot.dmp
 - デプロイ構成が小さい（単一バイナリ）
 - 運用の複雑さが低い
 - 直接 MySQL レプリケーション（ETL不要）
-- シンプルなクエリでのレイテンシが低い
 
 **Elasticsearch の利点:**
 - ノード間の分散検索
 - 高度な分析と集計
-- 全文検索機能（ハイライト、ファジー検索）
+- 分散検索・分析のための広いエコシステム
 - 単一ノードRAMに制限されない
 
 ## ベンチマークの再現

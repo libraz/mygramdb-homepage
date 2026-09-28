@@ -11,16 +11,18 @@ This page describes MygramDB's own replication lifecycle. It does not manage MyS
 
 ## Coordination around maintenance
 
-`DUMP SAVE`, `DUMP LOAD`, scheduled snapshots, and `SYNC` coordinate with the single binlog reader. The server pauses and drains replication where an operation needs a consistent position, then restores it after the operation succeeds or fails. A pause during a long dump can increase lag behind MySQL.
+`DUMP SAVE`, `DUMP LOAD`, scheduled snapshots, and `SYNC` coordinate with the single binlog reader. Where a dump operation needs a consistent position, it pauses and drains a running reader, then attempts to restart that reader when the operation ends. A reader that was already manually stopped remains stopped. A successful dump restore whose reader cannot restart leaves replication stopped and readiness false. A pause during a long dump can increase lag behind MySQL.
 
 | Operation | Replication behavior | Reader impact |
 | --- | --- | --- |
-| `DUMP SAVE` | Pauses for a consistent saved GTID, then resumes. | Search remains available; lag can grow while saving. |
-| `DUMP LOAD` | Pauses before replacing state; on success it uses the dump GTID before restoring replication. | Restored data is installed atomically; readiness also requires replication to be available. |
+| `DUMP SAVE` | Pauses a running reader for a consistent saved GTID, then resumes it when the operation ends. A reader already stopped stays stopped. | Search remains available; lag can grow while saving. |
+| `DUMP LOAD` | Pauses a running reader before replacing state; on success it uses the dump GTID before attempting to restore that reader. A reader already stopped stays stopped. | Restored data is installed atomically; readiness also requires replication to be available. |
 | `SYNC` | Drains the shared reader, builds one table off to the side, then restarts. | A single reader serves every configured table, so normal restarts use the drained position. |
 | `OPTIMIZE` | Holds the shared maintenance slot. | Run it separately from dumps and SYNC. |
 
 The long-running operations share one slot. A new request while another is active fails as busy; wait for the active operation to reach a terminal status.
+
+Startup restore follows the same handoff. With replication enabled, `dump.load_on_startup: true` requires `replication.start_from: snapshot`; `latest` and `gtid=...` are rejected because they would ignore the dump's GTID. A missing or incompatible startup dump falls back to the normal MySQL initial snapshot. If the reader cannot start after a successful restore, MygramDB keeps serving the restored data with replication stopped and readiness false.
 
 ## Source endpoint changes
 

@@ -3,6 +3,10 @@ title: FAQ - MygramDB
 description: Frequently asked questions about MygramDB. Architecture, benchmarks, N-gram indexing, Roaring bitmaps, MySQL replication, and comparisons with Elasticsearch.
 ---
 
+<script setup>
+import { VERIFY_ALL_PER_MILLION_GB, PLANNING_10M_ALL_GB } from './data/memory'
+</script>
+
 # Frequently Asked Questions
 
 ::: info Unfamiliar with a term?
@@ -13,7 +17,7 @@ GTID, binlog, N-gram, BM25, and Roaring Bitmap are all defined in the [Glossary]
 
 ### Why is my MySQL FULLTEXT search so slow?
 
-Disk I/O, uncompressed posting lists, cache dependency, and concurrency collapse. See [Why MySQL FULLTEXT is Slow](/why) for a detailed breakdown.
+MySQL FULLTEXT latency depends on the query, data, sorting, buffer-pool state, and concurrency. The [architecture comparison](/why) explains the search paths; the published benchmark used a 99.9989% buffer-pool hit ratio, so per-query disk reads do not explain its measured difference.
 
 **Solution**: MygramDB keeps its search index in memory. See [Benchmarks](/benchmarks) for the current cache-off measurements.
 
@@ -25,9 +29,9 @@ Writes to MySQL stay exactly as they are. What changes is where search requests 
 
 Add MygramDB as a search replica. The [reproducible benchmark](/benchmarks) compares its cache-off throughput with MySQL FULLTEXT on the same dataset.
 
-### Is there a way to speed up MySQL FULLTEXT without changing my application?
+### Can I speed up MySQL FULLTEXT without changing my application?
 
-Yes. MygramDB syncs with MySQL via binlog replication. Your application continues writing to MySQL normally — just route search queries to MygramDB. See [Quick Start](/) for setup.
+MygramDB leaves MySQL writes in place, but it uses its own TCP and HTTP search APIs. Change the application's search path to call MygramDB; existing MySQL FULLTEXT SQL queries do not become faster automatically. See [Quick Start](/) for setup.
 
 ## Alternatives
 
@@ -57,7 +61,7 @@ The key difference is data flow. RediSearch requires you to push documents into 
 
 ### How much memory does MygramDB need?
 
-Depends on `verify_text` mode. With `verify_text: off` (default): **~813MB per million documents** (index only). With `verify_text: all` (text verification enabled): **~3.1GB per million documents** of resident memory — the figure measured in the [published benchmark](/benchmarks), covering the index, the stored normalized text used for post-filtering, and process overhead. For 10M documents, plan for ~8GB (`off`) or ~31GB (`all`).
+The [published v1.10.0 benchmark](/benchmarks) measured **~{{ VERIFY_ALL_PER_MILLION_GB }}GB of resident memory per million documents** with `verify_text: all`, including the index, stored text, and process overhead. A linear estimate for 10M similar documents is ~{{ PLANNING_10M_ALL_GB }}GB before headroom. Current builds retain normalized text even with `verify_text: off` because highlighting can be requested at query time. That setting controls post-filtering, so do not use an index-only estimate for it. Measure memory with your own content and leave headroom.
 
 ::: warning What happens when memory runs out
 MygramDB is an in-memory engine. If the dataset outgrows available RAM, the OS or container platform can kill the process with an OOM. In production, budget index RAM plus headroom, separately from the disk space used for dumps.
@@ -69,25 +73,21 @@ Yes. MygramDB is fully Unicode-aware: text goes through ICU-based NFKC normaliza
 
 ### Does MygramDB support fuzzy search or typo tolerance?
 
-Yes (v1.6.0+). Add `FUZZY` (or `FUZZY 2`) to a query to match terms within a Levenshtein edit distance of 1 or 2. Candidates are pre-filtered by length difference so the extra work stays cheap. See [Query Guide — Fuzzy Search](/docs/queries#fuzzy-search).
+Yes. Add `FUZZY` (or `FUZZY 2`) to match terms within a Levenshtein edit distance of 1 or 2. Fuzzy search also includes every result from the same non-fuzzy query, including short terms and mixed CJK/ASCII terms. See [Query Guide — Fuzzy Search](/docs/queries#fuzzy-search).
 
 ### Does MygramDB support search result highlighting?
 
-Yes (v1.6.0+). Add the `HIGHLIGHT` clause to receive snippet fragments with configurable tags (`TAG`), fragment length (`SNIPPET_LEN`), and fragment count (`MAX_FRAGMENTS`). Highlighting requires `verify_text` to be `"ascii"` or `"all"` since snippets are taken from stored normalized text. See [Query Guide — Highlighting](/docs/queries#highlighting).
+Yes. Add the `HIGHLIGHT` clause to receive snippet fragments with configurable tags (`TAG`), fragment length (`SNIPPET_LEN`), and fragment count (`MAX_FRAGMENTS`). The server retains normalized text for highlighting even with `memory.verify_text: "off"`. See [Query Guide — Highlighting](/docs/queries#highlighting).
 
 ### Does MygramDB support relevance ranking?
 
-Yes (v1.6.0+). Use `SORT _score DESC` to rank results by BM25 relevance. IDF and TF are computed at query time; `k1` and `b` are tunable via `bm25.k1` (default `1.2`) and `bm25.b` (default `0.75`). It requires `bm25.enable: true` and `verify_text` set to `"ascii"` or `"all"`.
+Yes. Use `SORT _score DESC` to rank results by BM25 relevance. IDF and TF are computed at query time; `k1` and `b` are tunable via `bm25.k1` (default `1.2`) and `bm25.b` (default `0.75`). Set `bm25.enable: true`; normalized text is retained for scoring independently of `memory.verify_text`.
 
 ### Can MygramDB scale horizontally?
 
-Not built-in. MygramDB is single-node by design. For datasets exceeding single-node RAM:
+Not built-in. Full replicas behind a load balancer can increase read capacity and availability, but each instance still holds the whole index. For a dataset that exceeds one node's RAM, partition the source data across separately indexed tables or instances and route or combine queries in the application.
 
-- Deploy multiple MygramDB instances behind a load balancer
-- Each instance replicates from the same MySQL primary (full replica)
-- For true sharding, partition tables by ID range and route queries at the application layer
-
-For most use cases (up to ~50M documents on a 64-128GB server), a single node is sufficient.
+Capacity depends on document size and filters. The published benchmark used about 3.1 GB per million documents with `verify_text: all`; measure your own data and leave room for indexing and maintenance before choosing a node size.
 
 ### Can I search across multiple tables?
 
@@ -103,7 +103,7 @@ No. MygramDB relies on MySQL's binary log replication protocol, which is MySQL-s
 
 ### Does MygramDB work with MariaDB?
 
-Yes (v1.6.0+). MygramDB supports MariaDB 10.6+ and 11.x using MariaDB-native GTIDs (`domain-server-sequence`). A capability probe detects the server flavor, so the same `mysql` config section works for both MySQL 8.4/9.x and MariaDB. E2E tested against MariaDB 10.11 and 11.4.
+Yes. MygramDB supports MariaDB 10.11+/11.x/12.x using MariaDB-native GTIDs (`domain-server-sequence`). A capability probe detects the server flavor, so the same `mysql` config section works for both MySQL 8.4/9.x and MariaDB. The E2E matrix covers MariaDB 10.11, 11.8, and 12.3.
 
 ## Indexing and Search
 
@@ -126,14 +126,14 @@ The threshold is configurable (`roaring_threshold`). A hysteresis factor (0.5x) 
 
 MygramDB links against [CRoaring](https://github.com/RoaringBitmap/CRoaring), which uses SIMD instructions internally for bitmap operations (AND, OR, cardinality). On x86-64, CRoaring uses AVX2 when available; on ARM, it uses NEON. MygramDB does not contain custom SIMD code — the acceleration comes from the bitmap library.
 
-### How does compression achieve 60-80% reduction?
+### How are posting lists encoded?
 
-The baseline is uncompressed uint32 arrays (4 bytes per DocID). Delta encoding makes sparse IDs easier to represent, while Roaring compression reduces memory for dense postings:
+The index chooses Delta-encoded lists for sparse terms and Roaring bitmaps for dense terms. Their memory usage depends on the document-ID distribution:
 
-1. **Delta encoding**: Monotonically increasing DocIDs become small deltas. For example, `[1000, 1002, 1005]` becomes `[1000, 2, 3]`; the current representation stores each delta as a `uint32_t`.
+1. **Delta encoding**: Monotonically increasing DocIDs become deltas. For example, `[1000, 1002, 1005]` becomes `[1000, 2, 3]`; the current representation stores each delta as a `uint32_t`.
 2. **Roaring bitmap compression**: Dense postings use Roaring's container optimization — run-length encoding for consecutive ranges, bitmap containers for scattered dense regions.
 
-The 60-80% figure is typical for real-world posting lists with mixed sparse and dense terms.
+There is no fixed compression ratio across datasets. Measure index memory with your own content and see the [published memory breakdown](/docs/architecture#memory-layout).
 
 ## Replication and Data Sync
 
@@ -143,27 +143,21 @@ Yes. MygramDB includes a custom C++ binlog parser that uses the MySQL C API (`my
 
 ### How fast is replication? INSERT to searchable?
 
-Typically under 20ms end-to-end:
-
-- MySQL binlog event generation: <1ms
-- Network transit: <5ms (same network)
-- Event queue processing + index update: 1-10ms
-
-The bottleneck is network latency. On localhost, the lag is under 5ms.
+Lag depends on source transactions, network conditions, event queueing, and index updates. Monitor `mygramdb_replication_last_applied_unixtime` and `mygramdb_replication_seconds_since_last_applied` at `/metrics`, alongside MySQL write activity. An idle source can have an old last-applied time without being behind.
 
 ### What happens during MySQL failover?
 
-MygramDB detects connection loss and reconnects with exponential backoff (500ms to 10s). On reconnection:
+MygramDB detects connection loss and retries the configured endpoint. On reconnection:
 
 1. The current GTID position is preserved
-2. A new connection is established (can point to a different host via runtime configuration)
-3. Binlog replication resumes from the saved GTID — no data loss
+2. The source server UUID is checked; a different source is rejected
+3. If the source is unchanged, binlog replication resumes from the saved GTID
 
-During reconnection, search queries are blocked briefly (typically 1-5 seconds). Write events queued before disconnection are not lost.
+`mysql.host` and `mysql.port` cannot be changed with `SET`. To move to another endpoint, edit the configuration and restart after confirming the intended source. Monitor readiness and replication lag while the reader reconnects.
 
 ### How does MygramDB handle ALTER TABLE?
 
-MygramDB catches DDL events via binlog. TRUNCATE TABLE and DROP TABLE clear the affected index immediately. An incompatible rename, drop, or semantic change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. Fix the schema or configuration, then run `SYNC` to rebuild the table.
+MygramDB catches DDL events via binlog. `TRUNCATE TABLE` clears the affected index. Dropping or renaming a configured table, renaming another table onto its name, or making an incompatible change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. On a configured `DROP TABLE`, the existing index is retained while replication is stopped; it is no longer current. Fix the schema or configuration, then run `SYNC` to rebuild the table.
 
 ### How are deletes handled in the index?
 
@@ -175,10 +169,10 @@ Immediate removal. When a DELETE event arrives via binlog, the document's N-gram
 
 No WAL. MygramDB uses snapshot-based persistence:
 
-1. Periodic or manual dump saves the full index state with the current GTID position
-2. On restart, the latest dump is loaded and binlog replication resumes from the saved GTID
+1. Periodic or manual `DUMP SAVE` writes the index state with its GTID position. Scheduled dumps have timestamped filenames.
+2. If `dump.load_on_startup: true`, startup tries `dump.dir/default_filename`, not the newest timestamped dump. On success, replication resumes from the dump's GTID. Set `replication.start_from: snapshot` for this mode.
 
-This is simpler than WAL and acceptable because MygramDB is a read-only replica — the source of truth is MySQL. Worst case on crash without a recent dump: a full rebuild from MySQL (initial snapshot + binlog catchup).
+If that startup dump is missing or invalid, MygramDB falls back to a MySQL initial snapshot. MySQL remains the source of truth; keep its own backup and binlogs separately. See [Snapshot and Dump Recovery](/docs/snapshot) for restore checks.
 
 Dump configuration:
 - `dump.interval_sec`: Auto-save interval (0 = disabled, recommended: 7200 for production)
@@ -186,7 +180,7 @@ Dump configuration:
 
 ### What happens when memory reaches the hard limit?
 
-MygramDB monitors memory usage via health check endpoints but does not enforce the hard limit by rejecting queries or stopping replication. If the index grows beyond available RAM, the OS-level OOM killer will terminate the process. In practice, size your server to hold the full dataset plus headroom. The rule of thumb is ~3.1GB per million documents (with `verify_text: all`) — plan accordingly and monitor `/health/detail` or Prometheus metrics for memory usage trends.
+MygramDB monitors memory usage via health check endpoints but does not enforce the hard limit by rejecting queries or stopping replication. If the index grows beyond available RAM, the OS-level OOM killer can terminate the process. Size the server for the full dataset plus headroom. The measured reference is ~{{ VERIFY_ALL_PER_MILLION_GB }}GB per million documents with `verify_text: all`; monitor `/health/detail` or Prometheus metrics for memory usage trends.
 
 ## Protocol and Security
 
@@ -212,7 +206,7 @@ In multi-database deployments, qualify the route as `/tables/app_db.articles/sea
 
 MygramDB has no native TLS; terminate TLS at a reverse proxy or load balancer when needed. The MySQL replication connection supports SSL/TLS for secure binlog transfer.
 
-Administrative TCP commands require `AUTH <token>` after `api.admin_token` is configured. The HTTP administrative endpoint, `POST /optimize`, requires `Authorization: Bearer <token>`. Search endpoints are controlled by the listener bind address and `NETWORK_ALLOW_CIDRS`; keep the service on a private network or behind a reverse proxy or firewall.
+Administrative TCP commands require `AUTH <token>` on each connection when `api.admin_token` is set. HTTP `GET /config`, `GET /replication/status`, and `POST /optimize` require `Authorization: Bearer <token>` on each request. Search endpoints are controlled by the listener bind address and `NETWORK_ALLOW_CIDRS`; keep the service on a private network or behind a reverse proxy or firewall.
 
 ## Deployment and Monitoring
 
@@ -222,7 +216,7 @@ The building blocks are there. Health check endpoints are built in:
 
 - `GET /health/live` — Liveness probe (200 if process is running)
 - `GET /health/ready` — Readiness probe (503 during dump load, table sync, or replication unavailability; 200 when ready)
-- `GET /health/detail` — Detailed status with uptime, index stats, memory
+- `GET /health/detail` — Detailed status with uptime, index stats, and memory; replication details require a bearer token when `api.admin_token` is set
 
 Prometheus metrics are available at `GET /metrics`. The Docker image runs as a non-root user (UID 1000). The author runs MygramDB on Docker, not Kubernetes, so K8s-specific operational advice is limited.
 
@@ -230,16 +224,16 @@ Prometheus metrics are available at `GET /metrics`. The Docker image runs as a n
 
 Prometheus-format metrics at `GET /metrics`, including:
 
-- Query performance (search/count/get latency, QPS)
-- Index stats (term count, document count per table)
-- Cache stats (hit rate, memory, evictions)
-- Memory usage (RSS, heap)
-- Replication status (binlog position, lag, events applied)
-- Connection stats
+- Command counts (`mygramdb_command_total`); derive rates from the counters
+- Index document and term counts by table
+- Cache hit rate, memory, and eviction counts
+- Process RSS and accounted index memory
+- Replication state, events processed, and time since the last applied event
+- Connected clients and denied-request counts
 
 ### "Single binary" but it requires MySQL — is that really simple?
 
-MygramDB is simple *to add*. It assumes MySQL already exists — which it does in most applications that need better search. You don't replace your database; you deploy MygramDB alongside it. One `docker run` command with environment variables pointing to your MySQL. No schema changes, no application rewrites, no ETL pipelines. The simplicity is in the integration, not in having zero dependencies.
+MygramDB is a separate search service beside an existing MySQL database. Configure GTID/binlog, a replication user, searchable tables, and network access. MySQL remains the source of writes; the application must send search requests to MygramDB's TCP or HTTP API. A separate search ETL job is unnecessary.
 
 ## Benchmarks
 
@@ -249,7 +243,7 @@ Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with
 
 ### Were MySQL settings tuned for the benchmark?
 
-Yes. MySQL ran with `innodb_buffer_pool_size` at 8.0 GiB, large enough to hold the FULLTEXT working set — during the run the buffer pool hit ratio was 99.9989% with only 7,809 disk reads. These are favourable conditions for MySQL: the numbers on the [benchmark page](/benchmarks) compare against a warm, adequately sized FULLTEXT index, not against a disk-bound one. On a deployment running MySQL defaults the gap would be wider.
+Yes. MySQL ran with `innodb_buffer_pool_size` at 8.0 GiB, large enough to hold the FULLTEXT working set — during the run the buffer pool hit ratio was 99.9989% with 7,809 disk reads. The numbers on the [benchmark page](/benchmarks) compare against a warm, adequately sized FULLTEXT index.
 
 ### Was MySQL tested cold or warm?
 

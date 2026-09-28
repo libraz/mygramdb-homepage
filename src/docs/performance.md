@@ -7,6 +7,10 @@ head:
       content: MygramDB performance, MySQL FULLTEXT benchmark, search latency, COUNT performance, concurrent throughput, OPTIMIZE, memory sizing, roaring bitmap
 ---
 
+<script setup>
+import { VERIFY_ALL_PER_MILLION_GB } from '../data/memory'
+</script>
+
 # Performance Guide
 
 This guide provides detailed performance benchmarks, optimization tips, and best practices for MygramDB.
@@ -19,43 +23,9 @@ The benchmark tables, charts, environment, and measured memory use are rendered 
 
 ## Performance Analysis
 
-### Why MySQL is Slow
-
-1. **Disk-based B-tree**: FULLTEXT index requires disk I/O for each query
-2. **No compression**: Posting lists are not compressed, requiring more disk reads
-3. **ORDER BY overhead**: Sorting requires additional processing and I/O
-4. **High-frequency terms**: Short, common terms result in large posting list scans
-5. **Concurrency bottleneck**: Under concurrent load, disk I/O serialization causes request queuing
-
-### Why MygramDB is Fast
-
-1. **In-memory index**: Zero disk I/O, all data in RAM
-2. **Compressed posting lists**: Hybrid Delta encoding + Roaring bitmaps
-3. **Optimized intersections**: SIMD-accelerated bitmap operations
-4. **Sorting**: `SORT` validates the primary key and configured filter columns before ordering results
-5. **verify_text**: Post-filter eliminates false positives when exactness matters
-6. **Targeted cache invalidation**: A row change visits only cache entries whose indexed dependencies can be affected
+The published MySQL run had a 99.9989% InnoDB buffer-pool hit ratio, so its measured latency cannot be explained as a physical disk read on every query. MygramDB keeps its search index in memory and uses Delta-encoded or Roaring posting lists according to density. The measured difference depends on the query, data, sorting, memory, and concurrency; see the benchmark conditions above before applying these results to another deployment.
 
 ## Performance Characteristics
-
-### Query Time Complexity
-
-| Operation | MySQL FULLTEXT | MygramDB |
-|-----------|----------------|----------|
-| Single term search | O(n log n) with disk I/O | O(n) in memory |
-| AND intersection | O(n * m) with disk I/O | O(n + m) with SIMD |
-| Sort by id | Comparison sort | Comparison sort (partial or full, depending on result count) |
-| COUNT | Full scan | Bitmap cardinality |
-
-### Scalability
-
-**MygramDB scales linearly with:**
-- Number of search terms (efficient bitmap intersection)
-- Result set size (compressed bitmaps)
-- Concurrent queries (thread pool architecture)
-
-**MygramDB does NOT scale with:**
-- Dataset size beyond available RAM (in-memory only)
 
 ### Current Execution Paths
 
@@ -130,14 +100,7 @@ SEARCH articles tech FILTER status=1 FILTER category_id=5 LIMIT 100
 
 ### 5. Optimize Query Patterns
 
-**Fast queries:**
-- `SEARCH table term SORT id LIMIT 100` - Sorts by the primary key
-- `COUNT table term` - Bitmap cardinality operation
-- `SEARCH table term1 AND term2` - Efficient bitmap intersection
-
-**Slower queries:**
-- `SEARCH table term LIMIT 100` without `SORT` - Still fast, but may scan more
-- Very high LIMIT values (>1000) - More IDs to return
+`SEARCH table term SORT id LIMIT 100` sorts by an `id` primary key when that is the configured key. `SEARCH table term1 AND term2` intersects candidates from both terms. `COUNT table term` returns a count without a page of IDs, but still runs the search pipeline, including text verification when enabled. A large `LIMIT` returns more IDs and can increase response work. Measure these patterns with your own data rather than assuming a fixed speed ranking.
 
 ### 6. Use OPTIMIZE Command
 
@@ -147,13 +110,13 @@ Run periodically to optimize posting list storage:
 OPTIMIZE
 ```
 
-This converts Delta-encoded lists to Roaring bitmaps based on density, reducing memory usage by 10-30%.
+This can convert dense Delta-encoded posting lists to Roaring bitmaps. The memory change depends on the data. Allow roughly 2.1 times the index size as free memory before running `OPTIMIZE`; the command rejects a run when its admission estimate exceeds available memory.
 
 ## Production Deployment Recommendations
 
 ### 1. Memory Sizing
 
-**Rule of thumb:** RAM depends on `verify_text`. Plan for ~813MB per million documents with `verify_text: off`, and ~3.1GB per million with `verify_text: all`.
+**Sizing reference:** The [published v1.10.0 benchmark](/benchmarks) used ~{{ VERIFY_ALL_PER_MILLION_GB }}GB of resident memory per million documents with `verify_text: all`. Current builds also retain normalized text with `verify_text: off` for highlighting, so that setting is not an index-only memory mode. Measure RSS with your dataset and add headroom.
 
 **Example sizing (`verify_text: all`):**
 - 1M documents: 4GB RAM minimum, 8GB recommended
@@ -175,27 +138,27 @@ INFO
 ```
 
 Key metrics:
-- `doc_count`: Number of indexed documents
-- `index_size`: Memory used by index
+- `total_documents`: Number of indexed documents
+- `used_memory_index`: Memory used by index (human-readable)
 - `total_requests`: Total queries processed
-- `connections`: Current active connections
-- `uptime`: Server uptime in seconds
+- `connected_clients`: Current active connections
+- `uptime_seconds`: Server uptime in seconds
 
 ### 4. Backup Strategy
 
 Use `DUMP SAVE` command to create snapshots:
 
 ```mygram
-DUMP SAVE /path/to/snapshot.dmp
+DUMP SAVE snapshot.dmp
 ```
 
 Schedule regular snapshots:
 ```bash
 # Daily snapshot
-0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE /backup/mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
+0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
 ```
 
-This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unnecessary only when `api.admin_token` is empty; configure a token for non-loopback deployments.
+These filenames resolve under `dump.dir`; paths outside it are refused. The cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unnecessary only when `api.admin_token` is empty; configure a token for non-loopback deployments.
 
 ## Troubleshooting
 
@@ -210,7 +173,7 @@ This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unne
    ```mygram
    INFO
    ```
-   Look at `index_size` and process RSS; `hard_limit_mb` is reserved and does
+   Look at `used_memory_index` and process RSS; `hard_limit_mb` is reserved and does
    not enforce a process memory limit today.
 
 3. **Enable debug mode:**
@@ -226,7 +189,7 @@ This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unne
    ```mygram
    OPTIMIZE
    ```
-   Converts dense posting lists to Roaring bitmaps (10-30% reduction).
+   Can convert dense posting lists to Roaring bitmaps. Check available memory first: `OPTIMIZE` needs roughly 2.1 times the index size free during rebuilding.
 
 2. **Adjust roaring_threshold:**
    ```yaml
@@ -234,7 +197,7 @@ This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unne
      roaring_threshold: 0.15  # Lower = more aggressive compression
    ```
 
-3. **Consider sharding:** Split data across multiple MygramDB instances.
+3. **Consider application-managed sharding:** Partition source data, run separate MygramDB instances for the partitions, and route or combine queries in the application. MygramDB does not shard automatically.
 
 ## Comparison with Alternatives
 
@@ -244,14 +207,13 @@ This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unne
 
 - Cache-off measurements are maintained in the benchmark snapshot above
 - Exact result consistency with `verify_text` (zero false positives)
-- Consistent performance regardless of cache state
+- Search-index access does not depend on the MySQL buffer pool; MygramDB's own query-cache hits can still change latency
 - The published concurrent measurements cover 1, 2, 4, 8 and 16 connections
 
 **MySQL advantages:**
 
 - No separate infrastructure
 - Works with existing MySQL data
-- Lower memory requirements
 
 ### vs Elasticsearch
 
@@ -259,12 +221,11 @@ This cron example keeps `AUTH` and `DUMP SAVE` on one connection. `AUTH` is unne
 - Simpler deployment (single binary)
 - Lower operational complexity
 - Direct MySQL replication (no ETL)
-- Lower latency for simple queries
 
 **Elasticsearch advantages:**
 - Distributed search across nodes
 - Advanced analytics and aggregations
-- Full-text features (highlighting, fuzzy search)
+- A broader distributed search and analytics ecosystem
 - Not limited by single-node RAM
 
 ## Benchmarking Your Own Data

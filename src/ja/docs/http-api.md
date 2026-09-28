@@ -40,7 +40,7 @@ api:
 デフォルトでは TCP/HTTP サーバーはループバックにのみバインドします。公開する必要がある場合は `api.tcp.bind` / `api.http.bind` を明示的に設定し、`network.allow_cidrs` で許可 IP を厳密に指定し、MygramDB の前段に TLS/認証付きリバースプロキシ等を配置してください。CORS はデフォルトで無効であり、信頼できるOriginに限定して使用します。
 :::
 
-`api.http.max_connections` は、HTTP ワーカーを待つソケットも含めて受け入れる接続数を制限します。`api.http.max_body_bytes` を超える POST 本文は、ルーティング前に `413 Payload Too Large` で拒否されます。既定値は 16 MiB です。`api.http.trusted_proxies` には数値形式のプロキシ IP アドレスを列挙します。MygramDB は直接の TCP 接続元がこの一覧と完全一致した場合だけ `X-Forwarded-For` を信頼し、それ以外のクライアントが直接付けたヘッダーは無視します。ACL はレート制限より先に評価され、どちらもこの条件を満たしたクライアント識別子を使います。
+`api.http.max_connections` は、HTTP ワーカーを待つソケットも含めて受け入れる接続数を制限します。`api.http.max_body_bytes` を超える POST 本文は、ルーティング前に `413 Payload Too Large` で拒否されます。既定値は 16 MiB です。`api.http.trusted_proxies` には数値形式のプロキシ IP アドレスを列挙します。エントリは照合前に正規化されるため、デュアルスタックのリスナーでは IPv4 エントリが `a.b.c.d` と IPv4-mapped IPv6 形式の `::ffff:a.b.c.d` の両方に一致します。MygramDB は直接の TCP 接続元がこの一覧に一致した場合だけ `X-Forwarded-For` を信頼し、それ以外のクライアントが直接付けたヘッダーは無視します。得られたクライアント識別子は TCP と同じ方法で正規化されるため、ACL、レート制限、ログで同じ識別子が使われます。レート制限のバケットはプロトコル間で共有されます。
 
 ::: info 用語補足
 **CORS** はブラウザが別ドメインのAPIを呼ぶための仕組みです。サーバー間通信では通常不要です。ブラウザから直接MygramDBを呼ぶ場合だけ、信頼できるOriginに限定して有効化してください。
@@ -56,6 +56,8 @@ api:
 場合にのみ修飾が必要となり、修飾なしの名前は曖昧として拒否されます。
 
 v1.7.0 で旧ルートの `/{table}/search`、`/{table}/count`、`/{table}/{primary_key}` は削除されました。テーブル操作はすべて `/tables/{identity}/...` を使ってください。
+
+パスはルーティング前にパーセントデコードされます。ドキュメント GET ルートは手動でディスパッチするため、デコード後のパスが 256 バイトを超えても（URI の上限までは）ハンドラーに到達します。主キーの `%2F` は `/` として利用できます。
 
 ::: tip identity の考え方
 `identity` は「検索対象テーブルを一意に表す名前」です。単一DBでは `articles`、複数DBでは `app_db.articles` のように指定します。
@@ -89,12 +91,14 @@ Content-Type: application/json
 |-----------|-----|------|------|
 | `q` | string | はい | 検索テキスト。`mode` が `"boolean"` でない限りリテラルとして扱う |
 | `mode` | string | いいえ | `"literal"`（既定）または `"boolean"` |
-| `filters` | object | いいえ | フィルタ条件（カラム: 値のペア） |
+| `filters` | object | いいえ | スカラー値、または `{ "op": "...", "value": ... }` 形式のフィルタ条件 |
 | `limit` | integer | いいえ | 返す最大結果数（デフォルト: 100、最大: 1000） |
 | `offset` | integer | いいえ | スキップする結果数（デフォルト: 0） |
 | `sort` | object | いいえ | ソート設定（例: `{"column": "_score", "order": "DESC"}`） |
 | `highlight` | object | いいえ | ハイライト設定（下記参照） |
 | `fuzzy` | integer | いいえ | あいまい検索の編集距離（`1` または `2`） |
+
+`sort.column` を省略すると主キーでソートします。カラム名を指定する場合は、`order: "ASC"` または `"DESC"` と組み合わせます。たとえば `{ "sort": { "column": "created_at", "order": "DESC" } }` のように指定します。
 
 ### リテラル検索とBoolean検索
 
@@ -119,6 +123,21 @@ HTTPでは、既定で `q` をリテラルな検索テキストとして扱い�
 - **組み合わせ**: `"tech AND AI NOT old"`
 
 `limit`、`offset`、`sort`、`filters`、`highlight`、`fuzzy` はJSONフィールドで指定してください。`q` にこれらの制御句は書けません。リテラルモードでは `LIMIT` や `SORT` のような文字列も検索テキストの一部として扱われます。
+
+各フィルタはスカラー値（既定では等価比較）または演算子オブジェクトで指定できます。オブジェクト形式では `value` が必須で、`op` は省略すると `EQ` になります。指定する場合、`op` は文字列でなければなりません。
+
+```json
+{
+  "filters": {
+    "price": { "op": "GTE", "value": 100 },
+    "status": { "op": "EQ", "value": "active" }
+  }
+}
+```
+
+利用できる演算子は `EQ`、`NE`、`GT`、`GTE`、`LT`、`LTE` です（記号形式も利用できます）。`op` が文字列でない場合は `400 Bad Request` と `error_code: 3006`（`kQueryInvalidFilter`）になります。符号なし JSON 整数は 64 ビット値のまま扱われるため、`INT64_MAX` を超える符号なし `BIGINT` もラップアラウンドせず比較されます。
+
+Boolean モードでは TCP API と同じ Unicode 空白のトークナイザーを使います。たとえば全角スペース（U+3000）は ASCII のスペースと同じく語の区切りになります。
 
 **レスポンス (200 OK):**
 
@@ -283,7 +302,7 @@ Authorization: Bearer <token>
 {"table":"app_db.articles"}
 ```
 
-`Content-Type` は `application/json` でなければなりません。`api.admin_token` が空でない場合、このエンドポイントには正確な `Authorization: Bearer <token>` ヘッダーが必要です。満たさない場合は `WWW-Authenticate: Bearer` と `error_code: 7` を含む `401` を返します。トークンは定数時間で比較します。ほかの HTTP ルートで Bearer トークンを管理セッションとして使うことはできません。
+`Content-Type` は `application/json` でなければなりません。`api.admin_token` が空でない場合、このエンドポイントには正確な `Authorization: Bearer <token>` ヘッダーが必要です。満たさない場合は `WWW-Authenticate: Bearer` と `error_code: 7` を含む `401` を返します。トークンは定数時間で比較します。このトークンをアクセス許可の条件にする HTTP ルートは `GET /config`、`GET /replication/status`、`POST /optimize` の3つだけです。`GET /health/ready` と `GET /health/detail` は同じ認証情報を参照して保護されたレプリケーションフィールドを表示することがありますが、ルート自体は公開されています。それ以外のルートでは認証に使いません。
 
 成功時は `{ "status": "ok", "result": "OPTIMIZED ..." }` を含む `200` を返します。本文で受け付けるフィールドは `table` だけです。未知のフィールドまたは文字列以外のテーブル名は `400` のリクエストエラーになります。
 
@@ -314,7 +333,7 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 ```json
 {
   "error": "Document not found",
-  "error_code": 8
+  "error_code": 4004
 }
 ```
 
@@ -337,7 +356,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.0.0",
+  "version": "1.10.2",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -459,7 +478,7 @@ GET /metrics HTTP/1.1
 ```prometheus
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.0.0"} 1
+mygramdb_server_info{version="1.10.2"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -564,13 +583,15 @@ GET /health HTTP/1.1
 
 トラフィック制御用のレディネスプローブです。初期データの読み込みが完了し、サーバーがロード中ではなく、`SYNC` が実行中ではなく、設定済みレプリケーションを利用できる場合だけ `200 OK` を返します。JSON 本文には `data_initialized`、`loading`、`status`（`"ready"` または `"not_ready"`）が含まれます。条件を満たさない場合は `503 Service Unavailable` を返します。テーブル読み取りルート（search、count、facet、ドキュメントGET）も、対象テーブルの同期中は `503` を返します。
 
+`/health`、`/health/live`、`/health/ready` はレート制限の対象外であるため、プローブに `429` を返しません。詳細なスナップショットを構築する `/health/detail` は引き続きレート制限の対象です。
+
 ::: tip live と ready の使い分け
 Kubernetesでは `/health/live` をLiveness Probe、`/health/ready` をReadiness Probeに使ってください。`live` は「プロセスを再起動すべきか」、`ready` は「検索トラフィックを流してよいか」を見るためのものです。
 :::
 
 ### GET /health/detail
 
-詳細な監視スナップショットです。`"status": "healthy"` または `"status": "degraded"` を含む `200 OK` を返します。ロードバランサーのレディネス判定にはこのエンドポイントではなく `/health/ready` を使用してください。`/health`、`/health/live`、`/health/ready` を含め、すべての HTTP ルートが CIDR 許可リストの対象です。
+詳細な監視スナップショットです。`"status": "healthy"` または `"status": "degraded"` を含む `200 OK` を返します。ロードバランサーのレディネス判定にはこのエンドポイントではなく `/health/ready` を使用してください。このルートは公開されていますが、`api.admin_token` が設定されている場合、`Authorization: Bearer <token>` が有効なリクエストに限り `current_gtid`、`processed_events`、`queue_size`、`crc_errors`、`schema_incompatible` を返します。`/health/ready` も、管理者認証が受理されない場合は `replication_crc_errors` と `replication_schema_incompatible` を省略します。`/health/ready` と `/health/detail` では、生の MySQL エラー文字列ではなくエラーコードの説明を返します。`SYNC` 中は、binlog コンポーネントが切断とは別に同期による一時停止を示します。`/health`、`/health/live`、`/health/ready` を含め、すべての HTTP ルートが CIDR 許可リストの対象です。
 
 ### GET /config
 
@@ -580,7 +601,10 @@ Kubernetesでは `/health/live` をLiveness Probe、`/health/ready` をReadiness
 
 ```http
 GET /config HTTP/1.1
+Authorization: Bearer <token>
 ```
+
+`api.admin_token` が空でない場合、`/config` には正確な `Authorization: Bearer <token>` ヘッダーが必要です。トークンがない、または無効な場合は `401 Unauthorized`、`WWW-Authenticate: Bearer`、`error_code: 7` を返します。管理者トークンを設定していない場合、このルートは公開されます。同じ HTTP バインドアドレスとポートで別のインスタンスを起動すると、`Bind failed (6000)`（`kNetworkBindFailed`）で起動に失敗します。
 
 **レスポンス (200 OK):**
 
@@ -617,7 +641,10 @@ MySQLレプリケーションステータス（レプリケーション有効時
 
 ```http
 GET /replication/status HTTP/1.1
+Authorization: Bearer <token>
 ```
+
+`api.admin_token` が空でない場合、`/replication/status` にも `/config` と同じ Bearer トークン要件と `401` 応答が適用されます。トークンを設定していない場合は公開されます。`enabled` はレプリケーションが実行中かどうかを示し、`status` は `"running"`、`"stopped"`、`"failed"` のいずれかです。完全なレスポンスにはレプリケーションのカウンターと時刻情報が含まれます。
 
 **レスポンス (200 OK):**
 
@@ -627,7 +654,13 @@ GET /replication/status HTTP/1.1
   "status": "running",
   "current_gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
   "processed_events": 12345,
-  "queue_size": 0
+  "queue_size": 0,
+  "crc_errors": 0,
+  "schema_incompatible": false,
+  "last_error_code": 0,
+  "last_error": "",
+  "last_applied_unixtime": 1756149998,
+  "seconds_since_last_applied": 2
 }
 ```
 
@@ -763,9 +796,9 @@ for doc in data['results']:
 |--------|------|
 | 200 | 成功 |
 | 400 | 不正なリクエスト（無効な入力） |
-| 401 | 未認証（`/optimize` に必要な Bearer トークンがない、または無効） |
+| 401 | 未認証（`/config`、`/replication/status`、`/optimize` などの管理ルートに必要な Bearer トークンがない、または無効） |
 | 403 | 禁止（送信元IPが許可されていない） |
-| 404 | 見つかりません（ドキュメントが存在しない） |
+| 404 | 見つかりません（ドキュメントが存在しない場合は `error_code: 4004`） |
 | 413 | Payload Too Large（リクエスト本文が `api.http.max_body_bytes` を超過） |
 | 429 | リクエスト過多（レート制限を超過） |
 | 500 | 内部サーバーエラー |

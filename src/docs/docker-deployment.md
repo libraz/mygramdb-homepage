@@ -35,7 +35,7 @@ nano .env
 ::: warning
 Change the following default values in `.env`:
 
-- `MYSQL_ROOT_PASSWORD` - MySQL root password
+- `MYSQL_ROOT_PASSWORD` - MySQL root password; the `.env.example` placeholder is rejected at startup
 - `MYSQL_PASSWORD` - MySQL replication user password; Compose requires it, and the entrypoint requires it when generating a configuration
 - `API_ADMIN_TOKEN` - high-entropy secret for administrative commands; Compose rejects an unset value and the entrypoint rejects the sample placeholder
 - `REPLICATION_SERVER_ID` - Unique server ID for this MygramDB instance
@@ -45,23 +45,23 @@ Change the following default values in `.env`:
 
 ```bash
 # Build and start all services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Check status
-docker-compose ps
+docker compose ps
 ```
 
 ### 4. Stop Services
 
 ```bash
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (WARNING: This deletes all data)
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Configuration
@@ -115,8 +115,8 @@ REPLICATION_AUTO_INITIAL_SNAPSHOT=true # Build the initial snapshot automaticall
 #### Memory Management
 
 ```bash
-MEMORY_HARD_LIMIT_MB=8192           # Hard memory limit
-MEMORY_SOFT_TARGET_MB=4096          # Soft memory target
+MEMORY_HARD_LIMIT_MB=8192           # Reserved; does not cap process memory
+MEMORY_SOFT_TARGET_MB=4096          # Reserved; not enforced
 MEMORY_NORMALIZE_NFKC=true          # NFKC normalization
 MEMORY_NORMALIZE_WIDTH=narrow       # Width normalization
 MEMORY_VERIFY_TEXT=off              # off, ascii, or all
@@ -176,7 +176,7 @@ API_RATE_LIMIT_REFILL_RATE=10
 API_RATE_LIMIT_MAX_CLIENTS=10000
 ```
 
-`API_ADMIN_TOKEN` is required by Compose because the container listener is non-loopback. Generate it with `openssl rand -hex 32`. Administrative TCP commands require `AUTH <token>` on the connection; `POST /optimize` requires `Authorization: Bearer <token>`.
+`API_ADMIN_TOKEN` is required by Compose because the container listeners are non-loopback. Generate it with `openssl rand -hex 32`. Administrative TCP commands require `AUTH <token>` on the connection. HTTP `GET /config`, `GET /replication/status`, and `POST /optimize` require `Authorization: Bearer <token>`.
 
 #### Network Configuration
 
@@ -211,22 +211,31 @@ services:
       - ./my-config.yaml:/etc/mygramdb/config.yaml:ro
     environment:
       SKIP_CONFIG_GEN: "true"
+      MYGRAM_MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYGRAM_MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYGRAM_MYSQL_USER: ${MYSQL_USER:-repl_user}
+      MYGRAM_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
+      MYGRAM_MYSQL_DATABASE: ${MYSQL_DATABASE:-mydb}
+      MYGRAM_API_ADMIN_TOKEN: ${API_ADMIN_TOKEN:?API_ADMIN_TOKEN must be set}
     command: ["mygramdb", "-c", "/etc/mygramdb/config.yaml"]
 ```
 
-Or run directly with Docker:
+With `SKIP_CONFIG_GEN=true`, the entrypoint does not copy Compose's `MYSQL_*` and `API_ADMIN_TOKEN` values into the mounted file. The `MYGRAM_*` mappings above apply the server's supported overrides directly. In `my-config.yaml`, set `api.tcp.bind: "0.0.0.0"` and, if HTTP is enabled, `api.http.bind: "0.0.0.0"` so the mapped ports can reach the server. Set `network.allow_cidrs` to include the Docker bridge and intended clients; Compose's `API_CONTAINER_BIND`, `API_HTTP_CONTAINER_BIND`, and `NETWORK_ALLOW_CIDRS` no longer change these file settings. Put other settings in `my-config.yaml`. Set a private `MYSQL_ROOT_PASSWORD` in `.env` as well, because the MySQL service still uses it.
+
+For a standalone container, copy the minimal configuration and edit it before starting. Set `mysql.host` to an address reachable **from the container** (its `127.0.0.1` means the container itself), fill in the MySQL credentials, set `api.tcp.bind: "0.0.0.0"`, and add the Docker bridge gateway's CIDR to `network.allow_cidrs`. A non-loopback listener also requires an admin token. Keep the published host port on loopback unless remote access is intended.
 
 ```bash
-# Create your config file
 cp examples/config-minimal.yaml my-config.yaml
-# Edit my-config.yaml as needed
+# Edit mysql.host/credentials, api.tcp.bind, and network.allow_cidrs in my-config.yaml
+export MYGRAM_API_ADMIN_TOKEN="$(openssl rand -hex 32)"
 
-# Run with custom config
-docker run -d --name mygramdb \
-  -p 11016:11016 \
-  -v $(pwd)/my-config.yaml:/etc/mygramdb/config.yaml:ro \
+# Start with the edited config
+docker run -d --name mygramdb-standalone \
+  -p 127.0.0.1:11016:11016 \
+  -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
-  mygramdb:latest \
+  -e MYGRAM_API_ADMIN_TOKEN \
+  ghcr.io/libraz/mygram-db:1.10.2 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -243,8 +252,8 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 # Build with version argument
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
-# Or specify version manually
-docker build --build-arg MYGRAMDB_VERSION=1.2.5 -t mygramdb:1.2.5 .
+# Or specify the released version manually
+docker build --build-arg MYGRAMDB_VERSION=1.10.2 -t mygramdb:1.10.2 .
 
 # Tag as latest
 docker tag mygramdb:$VERSION mygramdb:latest
@@ -252,14 +261,13 @@ docker tag mygramdb:$VERSION mygramdb:latest
 
 **Note:** If `MYGRAMDB_VERSION` build argument is not provided, the build will use version 0.0.0 or attempt to read from git tags if the `.git` directory is present in the build context.
 
-### Using Pre-built Images
+### Using a Pre-built Image
+
+The repository ships `docker-compose.yml`; it has no separate production Compose file. To use the published image instead of building locally, give it the tag expected by that file:
 
 ```bash
-# Pull the latest image from GitHub Container Registry
-docker pull ghcr.io/libraz/mygram-db:latest
-
-# Use production docker-compose file
-docker-compose -f docker-compose.prod.yml up -d
+docker pull ghcr.io/libraz/mygram-db:1.10.2
+docker tag ghcr.io/libraz/mygram-db:1.10.2 mygramdb:1.10.2
 ```
 
 ### Environment Setup
@@ -276,6 +284,7 @@ nano .env.prod
 MYSQL_HOST=production-mysql-host
 MYSQL_PORT=3306
 MYSQL_USER=repl_user
+MYSQL_ROOT_PASSWORD=replace_with_a_private_root_password
 MYSQL_PASSWORD=strong_secure_password_here
 
 # Generate with `openssl rand -hex 32`, then paste the output here.
@@ -295,14 +304,24 @@ LOG_LEVEL=info
 LOG_FORMAT=json
 ```
 
-3. Start with production configuration:
+3. Start with production configuration. The first command uses the published image tagged above; the second builds the image from this checkout instead:
 ```bash
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+MYGRAMDB_VERSION=1.10.2 docker compose --env-file .env.prod up -d --no-build
+# Or build locally:
+MYGRAMDB_VERSION=1.10.2 docker compose --env-file .env.prod up -d --build
 ```
 
 ### Resource Limits
 
-Production compose file includes resource limits:
+The shipped Compose file does not set CPU or memory limits. Add limits to a local `docker-compose.override.yml` before using it in production. For example:
+
+```yaml
+services:
+  mygramdb:
+    mem_limit: 16g
+```
+
+Size the limit from measured RSS and leave headroom for `OPTIMIZE`, which may need roughly another full copy of the index. The following are starting points to measure, not limits supplied by Compose:
 
 **MySQL:**
 
@@ -314,7 +333,7 @@ Production compose file includes resource limits:
 - CPU: 4-8 cores
 - Memory: 10-20 GB
 
-Adjust these in `docker-compose.prod.yml` based on your workload.
+Adjust them for your workload and host capacity.
 
 ## Database Initialization
 
@@ -333,8 +352,8 @@ CREATE TABLE my_table (
 );
 EOF
 
-# Restart MySQL container
-docker-compose restart mysql
+# Apply to an existing MySQL volume; init scripts run automatically only on first initialization
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root "$MYSQL_DATABASE"' < support/docker/mysql/init/02-my-tables.sql
 ```
 
 ## Monitoring
@@ -343,23 +362,25 @@ docker-compose restart mysql
 
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f mygramdb
+docker compose logs -f mygramdb
 
 # Last 100 lines
-docker-compose logs --tail=100 mygramdb
+docker compose logs --tail=100 mygramdb
 ```
 
 ### Health Checks
 
+The image health check probes `/health/live` on `API_HTTP_PORT`. When `API_HTTP_ENABLE=false`, it skips the HTTP probe. The Compose health check follows the same settings.
+
 ```bash
 # Check service health
-docker-compose ps
+docker compose ps
 
 # Manual health check
-docker exec mygramdb pgrep -x mygramdb
+docker compose exec mygramdb curl -fsS http://127.0.0.1:8080/health/live
 ```
 
 ### Metrics
@@ -376,22 +397,22 @@ curl http://localhost:8080/metrics
 
 ```bash
 # Backup MySQL data
-docker exec mygramdb_mysql mysqldump -u root -p${MYSQL_ROOT_PASSWORD} mydb > backup.sql
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root "$MYSQL_DATABASE"' > backup.sql
 
 # Backup MygramDB snapshot
-docker cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
+docker compose cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
 ```
 
 ### Restore
 
 ```bash
 # Restore MySQL data
-docker exec -i mygramdb_mysql mysql -u root -p${MYSQL_ROOT_PASSWORD} mydb < backup.sql
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root "$MYSQL_DATABASE"' < backup.sql
 
 # Restore and explicitly load a MygramDB dump
-docker cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
-docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
-docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker compose cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 ```
 
 ## Troubleshooting
@@ -399,31 +420,30 @@ docker exec -i mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dump
 ### Connection Issues
 
 ```bash
-# Check network connectivity
-docker-compose exec mygramdb ping mysql
+# Check the application and its MySQL-backed readiness (when HTTP is enabled)
+docker compose exec mygramdb curl -fsS http://127.0.0.1:8080/health/ready
 
-# Check MySQL connection
-docker-compose exec mygramdb mysql -h mysql -u repl_user -p${MYSQL_PASSWORD} -e "SELECT 1"
+# Check SQL from the MySQL container, which includes the mysql client
+docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u "$MYSQL_USER" "$MYSQL_DATABASE" -e "SELECT 1"'
 ```
 
 ### Configuration Issues
 
 ```bash
 # Check version
-docker run --rm mygramdb:latest --version
+docker run --rm mygramdb:1.10.2 --version
 
 # Show help
-docker run --rm mygramdb:latest --help
+docker run --rm mygramdb:1.10.2 --help
 
-# Test configuration
-docker-compose exec mygramdb /usr/local/bin/entrypoint.sh test-config
-
-# Or test with environment variables (uses defaults for unspecified values)
-docker run --rm -e MYSQL_HOST=testdb -e TABLE_NAME=test mygramdb:latest test-config
+# Test the running container's configuration
+docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml
 
 # View generated configuration
-docker-compose exec mygramdb cat /etc/mygramdb/config.yaml
+docker compose exec mygramdb cat /etc/mygramdb/config.yaml
 ```
+
+The image also accepts `version` and `help` without a configuration file. The flag forms above work the same way.
 
 ### Performance Issues
 
@@ -432,11 +452,7 @@ docker-compose exec mygramdb cat /etc/mygramdb/config.yaml
 docker stats
 ```
 
-2. Adjust memory limits in `.env`:
-```bash
-MEMORY_HARD_LIMIT_MB=16384
-MEMORY_SOFT_TARGET_MB=8192
-```
+2. Size the Compose `mem_limit` from measured RSS and leave room for maintenance; see [Resource Limits](#resource-limits). `MEMORY_HARD_LIMIT_MB` and `MEMORY_SOFT_TARGET_MB` are reserved settings and do not cap the process.
 
 3. Adjust build parallelism:
 ```bash
@@ -447,27 +463,19 @@ BUILD_PARALLELISM=4
 
 ### Multiple MygramDB Instances
 
-To run multiple MygramDB instances (e.g., for different tables):
+For read capacity or availability, deploy full replicas on separate hosts, each with a unique `REPLICATION_SERVER_ID` and the same MySQL source. Send traffic only to ready instances. Each replica holds the full index, so this does not reduce per-node memory.
 
-```bash
-# Create separate compose files for each instance
-cp docker-compose.yml docker-compose.instance1.yml
-cp docker-compose.yml docker-compose.instance2.yml
-
-# Use different project names and ports
-docker-compose -f docker-compose.instance1.yml -p mygramdb1 up -d
-docker-compose -f docker-compose.instance2.yml -p mygramdb2 up -d
-```
+If several supplied Compose stacks run on one host, give each stack distinct host mappings for MySQL, TCP, and HTTP, plus a distinct `REPLICATION_SERVER_ID` and appropriate credentials. The `-p` project name only separates container and volume names; it does not change published ports. Set `API_PORT` and `API_HTTP_PORT` for the application, and edit the MySQL host port mapping separately while leaving the container's MySQL port at 3306. For different indexed tables, route queries to the appropriate instance in the application.
 
 ### Load Balancing
 
-Use nginx or HAProxy to load balance across multiple MygramDB instances:
+For identical full replicas, an HTTP reverse proxy can distribute requests to each node's HTTP API port (8080 by default):
 
 ```nginx
 upstream mygramdb_backend {
-    server localhost:11016;
-    server localhost:11017;
-    server localhost:11018;
+    server node1.internal:8080;
+    server node2.internal:8080;
+    server node3.internal:8080;
 }
 
 server {
@@ -478,11 +486,13 @@ server {
 }
 ```
 
+Port 11016 speaks MygramDB's TCP protocol; an HTTP proxy cannot use it as an upstream. Use an nginx `stream` block or a TCP load balancer for that port, and gate both surfaces on `/health/ready`.
+
 ## Security Best Practices
 
 1. **Use strong passwords** - Change all default passwords in `.env`
 2. **Network isolation** - Use Docker networks to isolate services
-3. **Bind to localhost** - In production, bind MySQL to `127.0.0.1` only
+3. **Limit host exposure** - Publish MySQL's host port on `127.0.0.1`; keep the container listener reachable from MygramDB over the Compose bridge
 4. **Enable TLS** - Use TLS for MySQL connections
 5. **Regular updates** - Keep Docker images up to date
 6. **Backup regularly** - Automate backups of MySQL and MygramDB snapshots

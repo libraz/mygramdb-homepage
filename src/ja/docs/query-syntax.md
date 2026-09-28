@@ -66,6 +66,8 @@ SEARCH threads golang
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
+`total_count` は `LIMIT` と `OFFSET` を適用する前のマッチ総数で、同じ行のIDは現在のページです。サーバーは総数とページを1回のインデックス読み取りから求めるため、同じ結果集合を示します。
+
 例：
 ```mygram
 OK RESULTS 3 101 205 387
@@ -253,7 +255,10 @@ SEARCH articles "hello \"world\""
 ```mygram
 SEARCH threads "web framework" AND (golang OR python)
 SEARCH posts "machine learning" NOT "deep learning"
+SEARCH articles required AND 'not'
 ```
+
+引用した句のキーワードはリテラルとして扱われます。最後のクエリは `not` という語を必須にし、引用によって `NOT` 句にはなりません。
 
 ---
 
@@ -293,7 +298,7 @@ SEARCH articles tech FILTER status = 1 FILTER category = ai
 **比較演算子:**
 ```mygram
 SEARCH articles tech FILTER views > 1000
-SEARCH articles tech FILTER created_at >= 2024-01-01
+SEARCH articles tech FILTER created_at >= 1704067200
 SEARCH articles tech FILTER priority != 0
 SEARCH articles tech FILTER status <> archived
 ```
@@ -305,20 +310,21 @@ SEARCH threads (golang OR python) AND tutorial FILTER status = published
 
 ### フィルタカラムの型
 
-MygramDBでは、設定ファイルで `filters` に登録したカラムだけを `FILTER` で絞り込めます。
+MygramDBでは、設定ファイルの `filters` または `required_filters` に登録したカラムを `FILTER` で絞り込めます。
 
 - **整数**: `status=1`, `priority=5`
 - **文字列**: `category=tech`, `author=john`
-- **日付/時刻**: `created_at=2024-01-15T10:30:00`, `published_on=2024-01-15`
+- **日付/時刻**: クエリの `date`、`datetime`、`timestamp` には整数の Unix エポック秒（例: `created_at=1704067200`）、`time` には符号付きの時間差を秒で指定し、負値や24時間を超える値も使えます
 
 ::: warning FILTERには設定が必要
-`config.yaml` で `filters` に登録していないカラムは `FILTER` で使えません。行をインデックス対象に含めるかどうかを決める `required_filters` とは別の設定です。
+`config.yaml` で `filters` と `required_filters` のどちらにも登録していないカラムは `FILTER` で使えません。同じカラムを両方に登録できます。`required_filters` は行のインデックス登録を決め、`FILTER` はリクエストごとに登録済みの行を絞り込みます。
 :::
+
+`required_filters` は行をインデックス対象に含めるかを決める設定で、構文も別です。ISO 8601 や時刻文字列の値は、クエリの `FILTER` には使いません。
 
 ### フィルタのパフォーマンス
 
 - **ビットマップインデックス**: 低カーディナリティカラム（例：status, category）で非常に高速
-- **辞書圧縮**: 文字列カラムで効率的
 - **フィルタリング順序**: フィルタはテキスト検索の積集合の後に適用されます
 
 ---
@@ -338,6 +344,8 @@ MygramDBでは `ORDER BY` 構文は使えません。検索結果の並び替え
 :::
 
 `BY` は省略できます。`SORT BY created_at DESC` と `SORT created_at DESC` は同じです。
+
+数値型のフィルタカラムは宣言された型の順序で並びます。`bigint_unsigned` は 2^63 を超える値も符号なし整数として正しく並べます。
 
 ### デフォルトの動作
 
@@ -523,12 +531,11 @@ SEARCH articles golang AND tutorial SORT _score LIMIT 20
 
 ### 前提条件
 
-`SORT _score` には2つの設定が必要です。どちらもデフォルトは無効なので、初期設定のままではクエリが拒否されます。
+`SORT _score` には `bm25.enable: true` が必要です。`memory.verify_text` は N-gram の事後フィルタを制御する設定で、スコア計算に使う正規化済みテキストはこれとは別に保持されます。
 
 | 設定 | 役割 | 未設定時のエラー |
 |------|------|------------------|
 | `bm25.enable: true` | 関連度スコアリングを有効化 | `SORT _score requires BM25 to be enabled in configuration` |
-| `memory.verify_text: "ascii"` または `"all"` | 語句頻度を保存済み正規化テキストから数えるため | `SORT _score requires normalized text storage.` |
 
 ```yaml
 bm25:
@@ -537,7 +544,7 @@ bm25:
   b: 0.75
 
 memory:
-  verify_text: "all"  # または "ascii"
+  verify_text: "off"  # 事後フィルタの設定。スコア用テキストは保持されます
 ```
 
 ### フィルタとの組み合わせ
@@ -552,8 +559,8 @@ SEARCH articles "データベース" SORT _score DESC FILTER category = tech LIM
 
 検索語句をタグで囲んだテキストスニペットを返します。
 
-::: tip verify_text が必要
-ハイライトは保存済みの正規化テキストからスニペットを切り出します。`verify_text: "off"` のままでは本文を保持しないため、ハイライトは利用できません。
+::: tip 正規化済みテキストは保持されます
+サーバーはクエリレベルの `HIGHLIGHT` 用に、`memory.verify_text: "off"` でも正規化済みテキストを保持します。`verify_text` は N-gram の事後フィルタを制御し、スニペット生成を無効にしません。
 :::
 
 ### 構文
@@ -589,7 +596,7 @@ SEARCH articles "データベース" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 L
 
 ### 前提条件
 
-ハイライトには、設定で `verify_text` を `"ascii"` または `"all"` に設定する必要があります。
+ハイライトを使うために、`memory.verify_text` を `"ascii"` または `"all"` に設定する必要はありません。通常のサーバー初期化でスニペットに必要なテキストが保持されます。
 
 ### 他の句との組み合わせ
 
@@ -628,7 +635,7 @@ SEARCH articles "データベス" FUZZY 2 LIMIT 10
 
 ### パフォーマンス
 
-あいまい検索は、不要な距離計算を避けるため、長さの差で事前に候補を絞り込みます。性能を優先する場合は `FUZZY 1`（デフォルト）を使ってください。
+あいまい検索は、不要な距離計算を避けるため、長さの差で事前に候補を絞り込みます。`FUZZY` は同じクエリから `FUZZY` を外した検索結果をすべて含み、N-gramサイズ未満の短い語やCJK/ASCII混在語も保持します。編集距離に一致する追加結果が加わることがあります。性能を優先する場合は `FUZZY 1`（デフォルト）を使ってください。
 
 `FUZZY` に指定できる距離は `1` または `2` だけです。それ以外の値は明示的なクエリエラーになります。
 
@@ -774,6 +781,10 @@ SEARCH articles tech LIMIT 10 OFFSET 10000
 
 深い結果にはカーソルベースのページネーションなどの代替戦略を検討してください。
 
+### 7. ブール検索のキャッシュキーを保持する
+
+ブール検索のキャッシュキーは、解析後のトークン、引用符、括弧の構造を保持します。全角空白、括弧、引用の違いによって別の式になるクエリは別のキャッシュエントリを使い、同じように解析される Unicode 空白は共有されることがあります。
+
 ---
 
 ## COUNTコマンド
@@ -824,7 +835,50 @@ MygramDBはインデックス作成と検索にN-gramトークン化を使用し
 - **CJKテキスト**: 漢字/かなに対して別のN-gramサイズ（設定可能）
 - **Unicode正規化**: NFKC正規化、幅変換、オプションの小文字化
 
-設定したN-gramサイズより短い検索語には、正規化済みテキストの保存が必要です。`memory.verify_text: "ascii"` または `"all"` を設定してください。設定しない場合、サーバーは不完全な結果を返さずにそのクエリを拒否します。
+設定したN-gramサイズより短い検索語は、部分文字列検索のために保存済みの正規化済みテキストを使います。通常のサーバー初期化では `memory.verify_text` とは別にこのテキストが保持されます。明示的にテキスト保持を無効にした構成では、不完全な結果を返さず明示的なクエリエラーになります。
+
+---
+
+## スナップショット同期コマンド
+
+### SYNCコマンド
+
+MySQLからMygramDBへのスナップショット同期を手動で開始します。
+
+**構文:**
+```mygram
+SYNC <table_name>
+```
+
+**例:**
+```mygram
+SYNC articles
+```
+
+**レスポンス:**
+```mygram
+OK SYNC STARTED table=articles
+```
+
+詳しい使い方は [SYNCコマンドガイド](/ja/docs/sync-command) を参照してください。
+
+### SYNC STATUSコマンド
+
+`SYNC` 操作の進捗と状態を確認します。
+
+**構文:**
+```mygram
+SYNC STATUS
+```
+
+**レスポンス例:**
+```mygram
+table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
+table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
+status=IDLE message="No sync operation performed"
+```
+
+各フィールドの詳しい説明は [SYNCコマンドガイド](/ja/docs/sync-command) を参照してください。
 
 ---
 
