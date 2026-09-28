@@ -14,7 +14,7 @@ const copy = computed(() =>
   isJa.value
     ? {
         environment: '計測条件',
-        environmentText: `${benchmark.run.datasetRows.toLocaleString()}件のWikipedia記事、MySQL ${benchmark.run.mysqlVersion} FULLTEXT（ngram パーサー）、MygramDB v${benchmark.run.mygramdbVersion}、verify_text: ${benchmark.run.verifyText}、クエリキャッシュ無効。1クエリあたり${benchmark.run.iterations}回計測（ウォームアップ${benchmark.run.warmup}回は除外）し、p50・p95・p99を出しています。計測機は ${benchmark.run.host}（${benchmark.run.hostCores}コア / ${benchmark.run.hostMemoryGiB}GB）。`,
+        environmentText: `${benchmark.run.datasetRows.toLocaleString()}件のWikipedia記事、MySQL ${benchmark.run.mysqlVersion} FULLTEXT（ngram パーサー）、MygramDB v${benchmark.run.mygramdbVersion}、verify_text: ${benchmark.run.verifyText}、クエリキャッシュ無効。1クエリあたり${benchmark.run.iterations}回計測（ウォームアップ${benchmark.run.warmup}回は除外）し、下表には p50 と p99 を載せています。計測機は ${benchmark.run.host}（${benchmark.run.hostCores}コア / ${benchmark.run.hostMemoryGiB}GB）。`,
         baseline: '対照のMySQLに与えた条件',
         baselineText: `MygramDBはインデックス全体をメモリに置くため、既定の128MBバッファプールのままのMySQLと比べると、相手がしなくてよいディスクI/Oを測ることになります。そこでバッファプールを${base.innodbBufferPoolGiB}GiBに設定しました。テーブル${base.tableDataMb}MB、副次インデックス${base.tableIndexMb}MB、FULLTEXT補助テーブル${base.ftsAuxMb}MBの合計約${(workingSetMb / 1024).toFixed(1)}GiBが丸ごと収まる量です。`,
         baselineEvidence: `チューニングしたという主張の裏付けとして、この計測中にMySQLがバッファプールから応答したページ要求の割合は${base.bufferPoolHitRatioPct}%（ディスク読み込みは${base.diskReadsDuringRun.toLocaleString()}回）でした。つまり両者ともメモリ上で動いており、残った差はインデックス構造の差です。`,
@@ -38,7 +38,7 @@ const copy = computed(() =>
       }
     : {
         environment: 'Benchmark Environment',
-        environmentText: `${benchmark.run.datasetRows.toLocaleString()} Wikipedia articles, MySQL ${benchmark.run.mysqlVersion} FULLTEXT (ngram parser), MygramDB v${benchmark.run.mygramdbVersion}, verify_text: ${benchmark.run.verifyText}, and the query cache disabled. Each query is measured ${benchmark.run.iterations} times after ${benchmark.run.warmup} discarded warmup runs, reported as p50/p95/p99. Measured on ${benchmark.run.host} (${benchmark.run.hostCores} cores, ${benchmark.run.hostMemoryGiB}GB).`,
+        environmentText: `${benchmark.run.datasetRows.toLocaleString()} Wikipedia articles, MySQL ${benchmark.run.mysqlVersion} FULLTEXT (ngram parser), MygramDB v${benchmark.run.mygramdbVersion}, verify_text: ${benchmark.run.verifyText}, and the query cache disabled. Each query is measured ${benchmark.run.iterations} times after ${benchmark.run.warmup} discarded warmup runs; the tables below report p50 and p99. Measured on ${benchmark.run.host} (${benchmark.run.hostCores} cores, ${benchmark.run.hostMemoryGiB}GB).`,
         baseline: 'What the MySQL baseline was given',
         baselineText: `MygramDB holds its whole index in RAM, so a MySQL left on the default 128MB buffer pool would be measured on disk I/O its opponent never had to do. The pool is set to ${base.innodbBufferPoolGiB}GiB instead — enough to hold the ${base.tableDataMb}MB table, its ${base.tableIndexMb}MB of secondary indexes and the ${base.ftsAuxMb}MB of FULLTEXT auxiliary tables outright, about ${(workingSetMb / 1024).toFixed(1)}GiB in all.`,
         baselineEvidence: `Sizing the pool is a claim; the hit ratio is the evidence. During this run MySQL served ${base.bufferPoolHitRatioPct}% of its page requests from the buffer pool, falling to disk ${base.diskReadsDuringRun.toLocaleString()} times. Both engines were working from memory, so what the numbers below compare is the index structure rather than how much disk each one had to touch.`,
