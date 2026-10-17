@@ -58,8 +58,8 @@
   <path class="er" d="M556 244 L636 244"/>
   <rect class="box rose" x="640" y="200" width="456" height="92" rx="12"/>
 
-  <path class="e" d="M556 384 L636 384"/>
-  <rect class="box amber" x="640" y="340" width="456" height="88" rx="12"/>
+  <path class="er" d="M556 384 L636 384"/>
+  <rect class="box rose" x="640" y="340" width="456" height="88" rx="12"/>
 
   <rect class="box green" x="320" y="474" width="456" height="68" rx="12"/>
 
@@ -70,9 +70,9 @@
 
     <text class="l" x="134" y="230" text-anchor="middle">connection lost</text>
 
-    <text class="l" x="134" y="338" text-anchor="middle">reconnect with</text>
-    <text class="l" x="134" y="362" text-anchor="middle">exponential backoff</text>
-    <text class="s" x="134" y="386" text-anchor="middle">500 ms – 10 s</text>
+    <text class="l" x="134" y="338" text-anchor="middle">reconnect using</text>
+    <text class="l" x="134" y="362" text-anchor="middle">built-in retries</text>
+    <text class="s" x="134" y="386" text-anchor="middle">configured endpoint</text>
     <text class="s" x="134" y="446" text-anchor="middle">retry</text>
     <text class="s i-rose" x="152" y="174">network drop</text>
 
@@ -98,13 +98,13 @@
     <text class="s" x="868" y="260" text-anchor="middle">a configured table is missing</text>
     <text class="s" x="868" y="280" text-anchor="middle">manual intervention required</text>
 
-    <text class="l" x="868" y="376" text-anchor="middle">continue with a failover warning</text>
-    <text class="s" x="868" y="404" text-anchor="middle">the server identity changed, but streaming resumes</text>
+    <text class="t i-rose" x="868" y="376" text-anchor="middle">replication STOPPED</text>
+    <text class="s" x="868" y="404" text-anchor="middle">source UUID changed; implicit failover is refused</text>
 
     <text class="l" x="548" y="506" text-anchor="middle">resume streaming from the saved GTID</text>
-    <text class="s" x="548" y="530" text-anchor="middle">no transaction is lost and none is applied twice</text>
+    <text class="s" x="548" y="530" text-anchor="middle">replayed events are applied idempotently</text>
 
-    <text class="s" x="560" y="568" text-anchor="middle">A failure that risks data divergence halts replication; a changed server identity only warns.</text>
+    <text class="s" x="560" y="568" text-anchor="middle">A changed source UUID fails validation; confirm the source and restart with the intended configuration.</text>
   </g>
 
   <!-- ============================= text: ja ============================= -->
@@ -114,9 +114,9 @@
 
     <text class="l" x="134" y="230" text-anchor="middle">接続が切れる</text>
 
-    <text class="l" x="134" y="338" text-anchor="middle">指数バックオフで</text>
+    <text class="l" x="134" y="338" text-anchor="middle">組み込みの間隔で</text>
     <text class="l" x="134" y="362" text-anchor="middle">再接続</text>
-    <text class="s" x="134" y="386" text-anchor="middle">500 ms 〜 10 s</text>
+    <text class="s" x="134" y="386" text-anchor="middle">設定済みの接続先</text>
     <text class="s" x="134" y="446" text-anchor="middle">再試行</text>
     <text class="s i-rose" x="152" y="174">ネットワーク断</text>
 
@@ -142,12 +142,12 @@
     <text class="s" x="868" y="260" text-anchor="middle">設定したテーブルが見つからない</text>
     <text class="s" x="868" y="280" text-anchor="middle">手動での対応が必要</text>
 
-    <text class="l" x="868" y="376" text-anchor="middle">フェイルオーバー警告を出して継続</text>
-    <text class="s" x="868" y="404" text-anchor="middle">サーバーの識別子は変わったが、ストリーミングは再開する</text>
+    <text class="t i-rose" x="868" y="376" text-anchor="middle">レプリケーション停止</text>
+    <text class="s" x="868" y="404" text-anchor="middle">ソース UUID の変更は拒否されます</text>
 
     <text class="l" x="548" y="506" text-anchor="middle">保存した GTID からストリーミングを再開</text>
-    <text class="s" x="548" y="530" text-anchor="middle">取りこぼしも二重適用も起きません</text>
+    <text class="s" x="548" y="530" text-anchor="middle">再送されたイベントの行適用は冪等です</text>
 
-    <text class="s" x="560" y="568" text-anchor="middle">データ不整合の恐れがある失敗はレプリケーションを止め、サーバー識別子の変化は警告のみです。</text>
+    <text class="s" x="560" y="568" text-anchor="middle">ソース UUID が変わると検証に失敗します。接続先を確認し、意図した設定で再起動してください。</text>
   </g>
 </svg>

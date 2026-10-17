@@ -43,9 +43,11 @@ MygramDB operates in three phases:
 
 When `SYNC` is run, or when `replication.auto_initial_snapshot: true` is configured, MygramDB performs a consistent snapshot of the source table. The default is `auto_initial_snapshot: false`, so production operators explicitly choose when the initial MySQL read happens:
 
-<DocDiagram name="initial-snapshot-sequence" alt="MygramDB records a safe lower-bound GTID before opening a consistent-snapshot transaction, streams the table rows into the index, commits, and resumes binlog reading from a safe position." />
+The following sequence shows the MySQL snapshot path:
 
-The pre-snapshot GTID prevents a gap. Commits between that capture and the transaction start may be replayed; row application is idempotent.
+<DocDiagram name="initial-snapshot-sequence" alt="On MySQL, MygramDB records a safe lower-bound GTID before opening a consistent-snapshot transaction, streams the table rows into the index, commits, and resumes binlog reading from a safe position." />
+
+On MySQL, the pre-snapshot GTID prevents a gap. Commits between that capture and the transaction start may be replayed; row application is idempotent. MariaDB instead uses the snapshot's exact binlog file and position, converted to a GTID with `BINLOG_GTID_POS`. See [snapshot and binlog handoff](/docs/replication) for the source-specific behavior.
 
 ### Phase 2: Live Replication
 

@@ -206,13 +206,13 @@ OK FACET <returned_value_count> <total_distinct_values>
 
 値と件数はタブで区切られ、空行でレスポンスが終わります。2つ目の件数には、`LIMIT` や `OFFSET` で省略された値も含まれます。
 
-FACETは `SEARCH` と同じく AND/NOT/FILTER/LIMIT を組み合わせて、特定の検索結果にスコープを絞った集計も可能です。
+件数の多い値から返し、件数が同じ値も安定した順序で並べます。ページ間で同数の値の並びが変わらないため、`OFFSET` で値を重複または取りこぼしません。FACETは `SEARCH` と同じく AND/NOT/FILTER/LIMIT を組み合わせて、特定の検索結果にスコープを絞った集計も可能です。
 
 FACETはHTTPでも `POST /tables/{identity}/facet` から利用できます。HTTPボディでは `column`、任意の `q`、任意の `filters`、任意の `limit` を指定します。
 
 ## シノニム展開
 
-シノニム辞書（`tables[*].synonyms.enable: true`、[設定](/ja/docs/configuration#テーブル単位のシノニム)を参照）が有効な場合、検索語句はクエリ時に同義語のORグループへ自動展開されます。クエリ側の構文変更は不要で、例えば `car` を検索すると、TSV辞書で同じグループに定義された `automobile` や `vehicle` にもマッチします。
+シノニム辞書（`tables[*].synonyms.enable: true`、[設定](/ja/docs/configuration#%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E5%8D%98%E4%BD%8D%E3%81%AE%E3%82%B7%E3%83%8E%E3%83%8B%E3%83%A0)を参照）が有効な場合、検索語句はクエリ時に同義語のORグループへ自動展開されます。クエリ側の構文変更は不要で、例えば `car` を検索すると、TSV辞書で同じグループに定義された `automobile` や `vehicle` にもマッチします。
 
 シノニムはテーブルごとの設定です。ファジー検索は別の実行パスを使うため、同じクエリ内ではシノニム展開と組み合わせません。
 

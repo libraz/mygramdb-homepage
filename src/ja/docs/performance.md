@@ -45,8 +45,8 @@ import { VERIFY_ALL_PER_MILLION_GB } from '../../data/memory'
 ```yaml
 tables:
   - name: "articles"
-    ngram_size: 2          # ASCII/英数字: バイグラム（推奨）
-    kanji_ngram_size: 1    # CJK文字: ユニグラム（推奨）
+    ngram_size: 2          # ASCII/英数字・かななど漢字以外: バイグラム
+    kanji_ngram_size: 1    # CJK漢字: ユニグラム（推奨）
 ```
 
 **推奨事項:**

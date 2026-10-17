@@ -28,6 +28,10 @@ This page covers the application clients for Node.js, Python, and Go, plus where
 The clients are thin wrappers around MygramDB server commands. If existing rows have not been loaded yet, run `SYNC <table>` first. See [SYNC Command](/docs/sync-command).
 :::
 
+::: warning Rebuild C/C++ programs
+The shared library uses soname 2 (`VERSION 2.0.0`); public search-expression structures changed layout. Rebuild and relink native programs against the current headers. See [libmygramclient](/docs/client-library) for the C/C++ API.
+:::
+
 ## Shared Concepts
 
 ::: info What is raw boolean search?
@@ -38,12 +42,12 @@ The clients are thin wrappers around MygramDB server commands. If existing rows 
 - `search()` / `Search()` is best for simple terms and AND/NOT-style searches.
 - For `OR` and parentheses, convert the expression and pass it to `searchRaw()` / `SearchRaw()` / `search_raw()`.
 - The web-syntax converter recognizes whole-word `or` as `OR`, quotes literal words such as `order` and terms with apostrophes, and turns a minus inside a group into `NOT`. It emits phrases and OR/groups once; pass its output directly to the raw search method.
-- Search responses expose the total number of matches before `limit`/`offset` as well as the current page of results.
+- Search responses expose the total number of matches before `limit`/`offset` as well as the current page of results. FACET values are ordered by count, with a stable order for equal counts across pages.
 - BM25 scoring, highlighting, fuzzy search, and facets depend on the server-side table configuration.
 - Runtime variables and `SYNC` are TCP commands exposed by the client libraries.
 
 ::: warning Administrative commands require authentication
-`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication. On an already connected client, send `AUTH` with `MYGRAM_API_ADMIN_TOKEN` before using them. Authentication belongs to the underlying TCP connection, so repeat it after every reconnect. Automatic reconnect cannot preserve authenticated state; authenticate before the next administrative operation after a reconnect. `search`, `count`, `get`, `facet`, and `INFO` remain unauthenticated.
+`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication. On an already connected client, send `AUTH` with `MYGRAM_API_ADMIN_TOKEN` before using them. Authentication belongs to the underlying TCP connection, so repeat it after every reconnect. Automatic reconnect cannot preserve authenticated state; authenticate before the next administrative operation after a reconnect. `search`, `count`, `get`, `facet`, and `INFO` remain available without authentication. When `api.admin_token` is set, `INFO` omits its replication section until the connection completes `AUTH`.
 :::
 
 ## Node.js / TypeScript

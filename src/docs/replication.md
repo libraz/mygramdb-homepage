@@ -27,6 +27,7 @@ MygramDB requires:
 - **Supported database matrix**: MySQL 8.4 and 9.7, or MariaDB 10.11, 11.8, and 12.3
 - **GTID Mode**: Must be enabled for MySQL; MariaDB uses its native GTID format
 - **Binary Log Format**: ROW format required
+- **Row metadata**: `binlog_row_metadata=FULL` is required so each `TABLE_MAP` event includes column names
 - **Privileges**: Replication user needs specific privileges
 
 ### Enable GTID Mode
@@ -64,16 +65,56 @@ Ensure binary logging is enabled with ROW format:
 ```sql
 -- Check binary log format
 SHOW VARIABLES LIKE 'binlog_format';
+SHOW VARIABLES LIKE 'binlog_row_metadata';
 
 -- Set to ROW format (add to my.cnf and restart)
 SET GLOBAL binlog_format = ROW;
 ```
+
+`binlog_row_metadata` is dynamic. On MySQL, run `SET PERSIST binlog_row_metadata = FULL`; on MariaDB, run `SET GLOBAL binlog_row_metadata = FULL` and add `binlog_row_metadata = FULL` to the server's `[mysqld]` configuration so it survives restart. Add the same setting to `[mysqld]` in the server configuration file alongside `binlog_format` and `binlog_row_image`.
+
+::: code-group
+
+```sql [MySQL]
+SET PERSIST binlog_row_metadata = FULL;
+```
+
+```sql [MariaDB]
+SET GLOBAL binlog_row_metadata = FULL;
+```
+
+:::
+
+Events already written without full metadata stay that way. If those events are still in the replay window, run `SYNC` for every replicated table after changing the source setting. A monitored table event missing metadata stops replication with `2017` and names the required setting; malformed optional metadata also stops with `2017`.
 
 Keep event-level binlog compression disabled. MygramDB does not decode MySQL
 `TRANSACTION_PAYLOAD_EVENT` output from `binlog_transaction_compression` or
 MariaDB compressed query/row events from `log_bin_compress`. This is separate
 from MariaDB `COMPRESSED` `VARCHAR`/`TEXT` row columns, which MygramDB inflates
 and decodes as part of an ordinary row event.
+
+### Source and table validation
+
+MygramDB validates the source before building a snapshot and repeats the checks on every reconnect. It also validates each configured table at startup and after DDL that affects it. A failure stops replication with the listed code.
+
+| Requirement | Refusal |
+| --- | --- |
+| MySQL `gtid_mode=ON` | `2006` |
+| `binlog_format=ROW`, `binlog_row_image=FULL`, and `binlog_row_metadata=FULL` | `2008` |
+| `binlog_checksum=CRC32`, no binlog transaction/event compression, and no MySQL `PARTIAL_JSON` row values | `2008` |
+| A source that is itself a replica has `log_replica_updates=ON` on MySQL or `log_slave_updates=ON` on MariaDB | `2008` |
+| MariaDB has `binlog_storage_engine` unset | `2008` |
+| MySQL `gtid_executed` contains no tagged GTID (`UUID:tag:txn`) | `2005` |
+
+When checking a MySQL source for replica status, MygramDB runs `SHOW REPLICA STATUS`; the replication account therefore needs `REPLICATION CLIENT`. MariaDB's check uses `gtid_slave_pos` and does not need that extra query privilege.
+
+Each monitored table's `primary_key` must have an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. A nullable single-column unique key is refused with `2012`; if uniqueness comes only from a composite `PRIMARY KEY` or `UNIQUE` key, the column is refused with `2011`. A column that also appears in a composite key is accepted when it has its own qualifying single-column constraint. A table that is the child of a foreign key with `ON UPDATE` or `ON DELETE CASCADE`, `SET NULL`, or `SET DEFAULT` is refused with `2012`, because InnoDB does not write row events for those child changes. MySQL 9.x with `innodb_native_foreign_keys=OFF` is exempt because the server writes an event for every child row.
+
+On MariaDB, any column in the table, including an unconfigured column, using old-format `TIME(n)`, `DATETIME(n)`, or `TIMESTAMP(n)` with `n > 0` is refused with `2012`; TABLE_MAP does not carry its width. The same types with `n = 0` are accepted. A configured `year(2)` column is also refused with `2012`. Changes to a configured column's type, nullability, collation, generated kind, or generated expression are treated as schema changes.
+
+Name matching follows the source's `lower_case_table_names`. With `0`, database and table names in both row events and DDL must match configured names byte-for-byte. With any other value, both paths match ASCII case-insensitively.
+
+Snapshot loading, `SYNC`, and binlog ingestion enforce the same document limits in bytes: primary keys 1 MiB, 1,000 filters per document, filter names 1 KiB, string filter values 64 KiB, and normalized and original text 16 MiB each. An over-limit row fails the initial load or `SYNC`; during replication the error is reported without advancing the GTID position.
 
 ### Create Replication User
 
@@ -167,7 +208,7 @@ When automatic startup snapshots are enabled, use `start_from: "snapshot"` for b
 
 Every table has an effective identity of `<database>.<table>`. If all configured tables are in one database, bare names such as `articles` remain accepted. When the configuration spans two or more databases, use qualified names in `SYNC`, `SEARCH`, and all client APIs.
 
-When replication is enabled and more than one table is configured, the initial snapshot captures a shared conservative GTID lower bound before one `START TRANSACTION WITH CONSISTENT SNAPSHOT` across the configured tables. This keeps related tables aligned at the same MySQL point-in-time while allowing a short interval of idempotent replay when binlog streaming resumes.
+When replication is enabled and more than one table is configured, all configured tables are read in one `START TRANSACTION WITH CONSISTENT SNAPSHOT`. MySQL captures a shared conservative GTID lower bound before that transaction; a short interval of changes may be replayed idempotently. MariaDB records the exact binlog position of the snapshot and converts it to a GTID with `BINLOG_GTID_POS`.
 
 ## Replication Start Options
 
@@ -175,21 +216,21 @@ Configure `replication.start_from` in your config file:
 
 ### snapshot (Recommended)
 
-Starts from the conservative GTID lower bound captured before the initial snapshot transaction:
+On MySQL, starts from the conservative GTID lower bound captured before the initial snapshot transaction. On MariaDB, starts from the exact binlog position captured by the snapshot and converted to a GTID:
 
 ```yaml
 replication:
   start_from: "snapshot"
 ```
 
-The diagram below traces the lower-bound handoff across the transaction boundary: MygramDB captures a conservative GTID position before opening the consistent snapshot transaction, reads tables inside that frozen view while new writes keep accumulating in the binlog, and then streams from that lower bound after the snapshot completes. A commit in the interval between the capture and transaction start may be replayed, which is safe for the idempotent row application and avoids missing it.
+The diagram below illustrates the MySQL handoff across the transaction boundary: MygramDB captures a conservative GTID position before opening the consistent snapshot transaction, reads tables inside that frozen view while new writes keep accumulating in the binlog, and then streams from that lower bound after the snapshot completes. A commit in the interval between capture and transaction start may be replayed. MariaDB instead resumes from the snapshot's own binlog position.
 
-<DocDiagram name="gtid-snapshot-handoff" alt="A timeline showing that MygramDB captures a conservative GTID lower bound before opening the consistent snapshot transaction, reads all table data inside that frozen view while new writes accumulate in the binlog, and then starts binlog streaming from that lower bound so commits are not missed even if one is replayed." />
+<DocDiagram name="gtid-snapshot-handoff" alt="A MySQL timeline showing that MygramDB captures a conservative GTID lower bound before opening the consistent snapshot transaction, reads table data inside that frozen view while new writes accumulate in the binlog, and then starts streaming from the lower bound so commits are not missed even if one is replayed." />
 
 **How it works:**
 - Uses `START TRANSACTION WITH CONSISTENT SNAPSHOT` for data consistency
-- Captures a conservative GTID lower bound before opening the snapshot transaction
-- Avoids missing commits between snapshot capture and binlog streaming; commits in that interval may be applied again idempotently
+- MySQL captures a conservative GTID lower bound before opening the snapshot transaction; MariaDB records the snapshot's exact binlog position
+- MySQL avoids missing commits by allowing commits in the short pre-transaction interval to be applied again idempotently
 
 **When to use:**
 - Initial setup (recommended for most cases)
@@ -213,9 +254,9 @@ replication:
 - When you only need real-time changes
 - When historical data is not important
 
-### gtid=UUID:txn
+### `gtid=<position>`
 
-Starts from specific GTID position:
+Starts from a validated GTID set or list. MySQL accepts `UUID:txn[-txn]` intervals, comma-separated by source UUID; transaction numbers must be below `2^63−1`. MariaDB accepts comma-separated `domain-server-seq` entries under its own grammar.
 
 ```yaml
 replication:
@@ -225,6 +266,8 @@ replication:
 **When to use:**
 - Manual recovery from specific point
 - Testing or debugging
+
+A MySQL position written as `UUID:txn` means through `txn`; MygramDB widens it to `UUID:1-txn` so reconnects do not request earlier transactions. A value accepted by neither server's GTID grammar is rejected before it reaches `SET GTID_NEXT`.
 
 ## Supported Operations
 
@@ -295,6 +338,13 @@ GTID. A rename that changes a configured table identity stops replication;
 update the configuration and run `SYNC` after the schema is in its intended
 state.
 
+Partition `DROP`, `TRUNCATE`, `EXCHANGE`, or `CONVERT`, tablespace `DISCARD` or
+`IMPORT`, and `CREATE OR REPLACE TABLE` stop replication with `2017` when they
+remove, replace, or move rows of a configured table without row events. Run
+`SYNC` after addressing the change. `DROP DATABASE` of a configured database
+stops with `2012`, regardless of identifier case. Ordinary `TRUNCATE TABLE`
+continues to clear the table's index and document store as described above.
+
 ## Supported Column Types
 
 MygramDB can replicate these MySQL column types:
@@ -340,25 +390,34 @@ are rejected.
 
 MygramDB consumes each column's `TABLE_MAP` metadata before it decides whether
 the table is configured. An unknown or unsizeable type therefore stops the
-reader even for an unconfigured table in the streamed binlog; it reconnects
-from the last applied GTID instead of treating the event as skippable. The
-metadata decoder consumes each type's byte order and payload length, including
-`DECIMAL`, `CHAR`, `ENUM`, `SET`, `JSON`, and `GEOMETRY`, for the supported
-MySQL 8.4/9.7 and MariaDB 10.11/11.8/12.3 streams. Configured-column
-acceptance still follows the restrictions above.
+reader with `2017` even for an unconfigured table in the streamed binlog; the
+same event remains at the last applied GTID, so reconnecting alone meets it
+again. Missing or malformed optional metadata stops a monitored table with
+`2017`. Optional metadata for an unconfigured table, or for rows covered by
+its `SYNC` snapshot, is not parsed; base `TABLE_MAP` column-type metadata is
+still decoded for every streamed table so row widths can be determined. The
+source must have `binlog_row_metadata=FULL` when it writes monitored table
+events. The metadata decoder consumes each type's byte order and payload
+length, including `DECIMAL`, `CHAR`, `ENUM`, `SET`, `JSON`, and `GEOMETRY`, for
+the supported MySQL 8.4/9.7 and MariaDB 10.11/11.8/12.3 streams.
+Configured-column acceptance still follows the restrictions above.
+
+An unrecognized event type is skipped only when its header sets the ignorable
+flag (`LOG_EVENT_IGNORABLE_F`). Without that flag, replication stops with
+`2017`.
 
 ## Replication Features
 
 ### GTID Consistency
 
 - Snapshot and binlog replication are coordinated via a consistent snapshot transaction
-- A conservative GTID lower bound avoids missing commits; commits in the short pre-transaction interval may be replayed idempotently
+- MySQL uses a conservative GTID lower bound, so commits in the short pre-transaction interval may be replayed idempotently; MariaDB records the snapshot's exact binlog position
 
 ### GTID Position and Recovery
 
-- `start_from: snapshot` uses the conservative GTID lower bound captured before the initial snapshot transaction, while `latest` and an explicit `gtid=...` use the configured starting position
+- `start_from: snapshot` uses the MySQL lower bound or MariaDB snapshot position; `latest` and an explicit `gtid=...` use the configured starting position
 - `DUMP SAVE` records its GTID in the dump; `DUMP LOAD` or startup restore sets that GTID as the reader's next position. A manual `DUMP LOAD` leaves a reader that was already stopped in the stopped state.
-- An initial `SYNC` captures a conservative snapshot GTID lower bound before its transaction; its normal handoff restarts the shared reader from the drained pre-SYNC GTID, while the `2017` recovery path uses that snapshot marker to pass the undecodable interval
+- An initial `SYNC` captures a MySQL lower bound or the exact MariaDB snapshot position; its normal handoff restarts the shared reader from the drained pre-SYNC GTID, while the `2017` recovery path uses the snapshot marker to pass the undecodable interval
 
 ### Automatic Validation
 
@@ -494,7 +553,7 @@ replication:
 
 ### Recovering from an undecodable binlog event
 
-If replication stops with error code `2017`, the stream encountered an event this build cannot decode, such as an XA prepare event, a MySQL `TRANSACTION_PAYLOAD_EVENT`, a `PARTIAL_UPDATE_ROWS_EVENT`, or a MariaDB event compressed by `log_bin_compress`. Event-level MariaDB compression remains unsupported. Changing the server setting that produced it does not remove the already-written event, so starting again from the old GTID stops at the same place.
+If replication stops with error code `2017`, the stream encountered an event this build cannot decode, such as missing or malformed TABLE_MAP metadata for a monitored table, a TABLE_MAP column type this build cannot size, an XA prepare event, a MySQL `TRANSACTION_PAYLOAD_EVENT`, a `PARTIAL_UPDATE_ROWS_EVENT`, or a MariaDB event compressed by `log_bin_compress`. Event-level MariaDB compression remains unsupported. Changing the server setting that produced an already-written event does not remove it, so starting again from the old GTID stops at the same place.
 
 This is different from a MariaDB `COMPRESSED` `VARCHAR`/`TEXT` column inside an
 ordinary row event. MygramDB inflates that column before indexing; an invalid,
@@ -505,6 +564,8 @@ case.
 Run `SYNC` for the table that is most important first, wait for it to complete with `replication=STARTED`, then run `SYNC` for every other replicated table. That first SYNC restarts the shared reader from the new snapshot marker and skips the undecodable interval. A table that you do not rebuild keeps its prior state for writes from that skipped interval.
 
 For every other replication failure, SYNC uses the drained position rather than skipping an interval. See [SYNC command](/docs/sync-command#error-2017-undecodable-binlog-event) for the command sequence.
+
+MySQL reports fatal binlog dump failures as error `1236`. Only a message saying that the required GTIDs were purged is treated as an unavailable position and directs recovery to `SYNC`. A replica that is ahead of the source, an oversized packet, or a corrupt/truncated binlog stops with `2008` and the server's message. On MariaDB, `REPLICATION START` refuses a purged position before starting.
 
 ## Best Practices
 
@@ -534,7 +595,7 @@ mysql:
 replication:
   enable: true
   server_id: 83917                # Unique value from 1 to 4294967295
-  start_from: "snapshot"          # snapshot|latest|gtid=<UUID:txn>
+  start_from: "snapshot"          # snapshot|latest|gtid=<position>
   queue_size: 10000
   reconnect_backoff_min_ms: 500   # Reserved / not yet enforced
   reconnect_backoff_max_ms: 10000 # Reserved / not yet enforced

@@ -17,6 +17,8 @@ MygramDB の設定には二種類あります。小さな許可リストにあ�
 
 有効な値は `SHOW VARIABLES` で確認し、許可された変数は `SET` で変更します。
 
+`SET` は設定ファイルと同じスキーマ規則で値を検証します。複数代入は原子的に処理され、1つでも `1004` で拒否されると全ての変更が適用されません。エラーには拒否された変数名が含まれます。`replication.server_id` の0以外チェックと、有効なキャッシュが検出済み物理メモリの50%を超えない制約も、実行時の `SET` 検証に適用されます。
+
 ```sql
 SHOW VARIABLES LIKE 'cache%'
 SET logging.level = 'debug'
@@ -72,7 +74,7 @@ readiness: ready
 
 ## レプリケーション診断
 
-レプリケーションの状態は `INFO`、`/health/ready`、`/health/detail`、`/metrics` で確認します。公開ヘルスエンドポイントは、レプリケーションの実行・開始状態、要約した最後のエラーと数値コード、最後に適用した時刻、その後の経過秒数を返します。現在の GTID、処理済みイベント数とキュー数、CRC 件数、スキーマ非互換の詳細、MySQL の生のエラー文は返しません。管理者トークン付きのリクエストでは保護されたレプリケーション詳細を取得できます。`api.admin_token` を設定している場合、`/replication/status` にはそのトークンが必要です。完全なエラー文は認証済みクライアントとログで確認できます。
+レプリケーションの状態は `INFO`、`/health/ready`、`/health/detail`、`/metrics` で確認します。`api.admin_token` を設定している場合、TCP `INFO` は接続が `AUTH` を完了するまで `# Replication` セクション全体を表示しません。HTTP `/metrics` 自体は公開のままですが、Bearerトークンがなければ `mygramdb_replication_` で始まるメトリクスを省きます。ヘルスエンドポイントは公開され、現在の GTID、処理済みイベント数とキュー数、CRC 件数、スキーマ非互換の詳細、MySQL の生のエラー文を秘匿します。`api.admin_token` を設定している場合、`/replication/status` にもトークンが必要です。完全なエラー文は認証済みクライアントとログで確認できます。
 
 遅延の時刻は、MygramDB が適用済み GTID を進めたときに更新されます。`replication_seconds_since_last_applied` は経過時間の指標であり、MySQL に新しいコミットがない証明ではありません。ソースがアイドル中でも最近の適用イベントはありません。MySQL の書き込み状況、レプリケーション状態、エラー項目と合わせて監視してください。
 

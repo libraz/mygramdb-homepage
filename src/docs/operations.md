@@ -21,6 +21,8 @@ MygramDB has two kinds of configuration. A small allowlist can be changed with `
 
 Use `SHOW VARIABLES` to inspect the effective values, and `SET` for the runtime allowlist.
 
+`SET` validates assigned values against the same schema rules used when loading the configuration. A multi-assignment command is atomic: if one value fails with `1004`, none of the assignments are applied, and the error identifies the rejected variable. The `replication.server_id` non-zero check and the enabled-cache ceiling of 50% of detected physical memory also apply to runtime `SET` validation.
+
 ```sql
 SHOW VARIABLES LIKE 'cache%'
 SET logging.level = 'debug'
@@ -76,7 +78,7 @@ Readiness stays false while any configured table has not been initialized. A suc
 
 ## Replication diagnostics
 
-Use `INFO`, `/health/ready`, `/health/detail`, or `/metrics` to observe replication. Open health routes report whether replication is running or starting, a summarized last error and numeric code, the last applied timestamp, and seconds since the last applied event. They redact the current GTID, processed-event and queue counters, CRC counts, schema-incompatibility details, and raw MySQL error text. A request carrying the admin token can receive the protected replication details; `/replication/status` requires that token when `api.admin_token` is configured. The full error remains available to authorized clients and in the logs.
+Use `INFO`, `/health/ready`, `/health/detail`, or `/metrics` to observe replication. When `api.admin_token` is set, TCP `INFO` omits the entire `# Replication` section until the connection completes `AUTH`. HTTP `/metrics` remains public but omits all `mygramdb_replication_` metrics unless the request carries the bearer token. The health routes remain public and redact the current GTID, processed-event and queue counters, CRC counts, schema-incompatibility details, and raw MySQL error text. `/replication/status` also requires the token when `api.admin_token` is configured. The full error remains available to authorized clients and in the logs.
 
 The lag timestamp is updated when MygramDB advances the applied GTID. Treat `replication_seconds_since_last_applied` as an elapsed-time signal, not proof that MySQL currently has no new commits: an idle source also has no recent applied event. Alert on it together with MySQL write activity, replication state, and the error fields.
 

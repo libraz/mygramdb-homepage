@@ -54,6 +54,8 @@ docker compose logs -f
 docker compose ps
 ```
 
+同梱の Compose ファイルは、MySQLソースを `--binlog-row-metadata=FULL` 付きで起動します。別の MySQL / MariaDB ソースへ接続する場合は、ソースサーバー側でこの設定を行ってください。MygramDBの環境変数ではありません。
+
 ### 4. サービスの停止
 
 ```bash
@@ -95,16 +97,16 @@ MYSQL_USE_GTID=true                 # GTID ベースのレプリケーション�
 TABLE_NAME=articles                 # インデックス対象のテーブル
 TABLE_PRIMARY_KEY=id                # プライマリキーカラム
 TABLE_TEXT_COLUMN=content           # インデックス対象のテキストカラム
-TABLE_NGRAM_SIZE=2                  # ASCII用のN-gramサイズ
-TABLE_KANJI_NGRAM_SIZE=1            # CJK用のN-gramサイズ
+TABLE_NGRAM_SIZE=2                  # かな、ASCII など漢字以外の N-gram サイズ
+TABLE_KANJI_NGRAM_SIZE=1            # CJK の漢字用の N-gram サイズ
 ```
 
 #### レプリケーション設定
 
 ```bash
 REPLICATION_ENABLE=true             # レプリケーションを有効化
-REPLICATION_SERVER_ID=12345         # 一意なサーバーID（重要）
-REPLICATION_START_FROM=snapshot     # 開始位置: snapshot, latest, または gtid=<UUID:txn>
+REPLICATION_SERVER_ID=12345         # 1〜4294967295の0以外の値
+REPLICATION_START_FROM=snapshot     # snapshot、latest、MySQL GTIDセット、MariaDB GTIDリスト
 REPLICATION_AUTO_INITIAL_SNAPSHOT=true # 初期スナップショットを自動作成
 ```
 
@@ -235,7 +237,7 @@ docker run -d --name mygramdb-standalone \
   -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
   -e MYGRAM_API_ADMIN_TOKEN \
-  ghcr.io/libraz/mygram-db:1.10.2 \
+  ghcr.io/libraz/mygram-db:1.11.0 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -253,7 +255,7 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
 # または、リリース済みバージョンを手動で指定
-docker build --build-arg MYGRAMDB_VERSION=1.10.2 -t mygramdb:1.10.2 .
+docker build --build-arg MYGRAMDB_VERSION=1.11.0 -t mygramdb:1.11.0 .
 
 # latest タグを付与
 docker tag mygramdb:$VERSION mygramdb:latest
@@ -266,8 +268,8 @@ docker tag mygramdb:$VERSION mygramdb:latest
 リポジトリにあるのは `docker-compose.yml` で、本番専用の Compose ファイルはありません。ローカルビルドの代わりに公開イメージを使う場合は、このファイルが参照するタグを付けます。
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.10.2
-docker tag ghcr.io/libraz/mygram-db:1.10.2 mygramdb:1.10.2
+docker pull ghcr.io/libraz/mygram-db:1.11.0
+docker tag ghcr.io/libraz/mygram-db:1.11.0 mygramdb:1.11.0
 ```
 
 ### 環境設定
@@ -306,9 +308,9 @@ LOG_FORMAT=json
 
 3. 本番設定で起動します。1 行目は上でタグを付けた公開イメージを使い、2 行目はこのチェックアウトからビルドします。
 ```bash
-MYGRAMDB_VERSION=1.10.2 docker compose --env-file .env.prod up -d --no-build
+MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --no-build
 # またはローカルでビルド
-MYGRAMDB_VERSION=1.10.2 docker compose --env-file .env.prod up -d --build
+MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --build
 ```
 
 ### リソース制限
@@ -389,10 +391,10 @@ docker compose exec mygramdb curl -fsS http://127.0.0.1:8080/health/live
 
 ### メトリクス
 
-MygramDB はHTTP APIポート（デフォルトは8080）でメトリクスを公開します。アクセス方法：
+MygramDB はHTTP APIポート（デフォルトは8080）でメトリクスを公開します。エンドポイントは公開のままですが、`API_ADMIN_TOKEN` が設定されている場合、Bearerトークンのないリクエストには `mygramdb_replication_` で始まるメトリクスを含めません。
 
 ```bash
-curl http://localhost:8080/metrics
+curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
 ```
 
 ## バックアップとリストア
@@ -435,10 +437,10 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 
 
 ```bash
 # バージョンを確認
-docker run --rm mygramdb:1.10.2 --version
+docker run --rm mygramdb:1.11.0 --version
 
 # ヘルプを表示
-docker run --rm mygramdb:1.10.2 --help
+docker run --rm mygramdb:1.11.0 --help
 
 # 実行中のコンテナの設定を検証
 docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml

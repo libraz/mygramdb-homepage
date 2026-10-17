@@ -25,7 +25,7 @@ MygramDBは既存のデータベースの隣に配置するサイドカーです
 :::
 
 ::: warning MySQL側の準備も必要です
-MygramDBはMySQL / MariaDBのbinlogを読むため、MySQL側でGTID、ROW形式binlog、`binlog_row_image=FULL`、レプリケーションユーザー、対象テーブルへの `SELECT` 権限を用意してください。詳しい設定は[MySQLレプリケーション](/ja/docs/replication)を参照してください。
+MygramDBはMySQL / MariaDBのbinlogを読むため、MySQL側でGTID、ROW形式binlog、`binlog_row_image=FULL`、`binlog_row_metadata=FULL`、レプリケーションユーザー、対象テーブルへの `SELECT` 権限を用意してください。詳しい設定は[MySQLレプリケーション](/ja/docs/replication)を参照してください。
 :::
 
 ## インストール
@@ -41,7 +41,7 @@ sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ### Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.10.2
+docker pull ghcr.io/libraz/mygram-db:1.11.0
 ```
 
 ## 最小構成
@@ -140,4 +140,4 @@ OK RESULTS 3 101 205 387
 - [設定リファレンス（詳細）](/ja/docs/configuration)
 - [MySQLレプリケーション](/ja/docs/replication)
 - [運用ガイド](/ja/docs/operations)
-- [v1.10 へのアップグレード](/ja/docs/upgrade-v1.10)
+- [v1.11 へのアップグレード](/ja/docs/upgrade-v1.11)

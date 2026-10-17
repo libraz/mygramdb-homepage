@@ -30,6 +30,8 @@ Startup restore follows the same handoff. With replication enabled, `dump.load_o
 
 An automatic reconnect stays on the configured endpoint. If that endpoint resolves to a MySQL server with a different source UUID, MygramDB rejects it instead of following it. Investigate the promotion or endpoint change, update the configuration when appropriate, and restart against the intended source.
 
+Error `1236` alone does not mean that the required GTIDs were purged. MygramDB directs recovery to `SYNC` only when the source confirms that position was purged; other `1236` failures, including a replica ahead of the source, an oversized packet, or a corrupt binlog, stop with `2008` and the source message. MariaDB `REPLICATION START` refuses a purged position before starting.
+
 ## Readiness while replication is paused
 
 Temporary maintenance pauses do not by themselves mean the reader has failed. `/health/ready` and `INFO` account for the operation in progress. They remain not ready for an active `SYNC` or dump load, for uninitialized data, and for a replication reader that is neither running nor starting once no coordinated pause applies.

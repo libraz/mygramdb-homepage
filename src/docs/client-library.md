@@ -48,6 +48,10 @@ sudo make install
 
 This installs headers under `<prefix>/include/mygramdb`, libraries under `<prefix>/lib` (or the platform library directory), a `MygramDBClient` CMake package, and `mygramclient.pc`. Set your build tool's prefix or `PKG_CONFIG_PATH` when installing to a non-default location.
 
+::: warning Rebuild native clients
+The shared library uses soname 2 (`VERSION 2.0.0`). Rebuild and relink C/C++ programs against the current headers because public search-expression structures changed layout.
+:::
+
 ## C++ API
 
 ### Basic Usage
@@ -146,6 +150,8 @@ auto result = client.Search(
 ```
 
 Literal search text, `and_terms`, `not_terms`, filter values, and highlight tags use one wire-quoting rule. Empty values, clause keywords such as `AND`, `OR`, `NOT`, and `ORDER`, Unicode whitespace (including full-width and no-break spaces), quotes, backslashes, and parentheses are quoted and escaped so they arrive as one value. Boolean query text passed with `query_mode = QueryMode::kBoolean` or to `SearchRaw` is an expression and is sent as written; use `ConvertSearchExpression()` when constructing it from web syntax.
+
+Table names, column names, filter keys, and names passed to `SetVariable` must not contain Unicode whitespace. The client rejects such identifiers before sending the command.
 
 ### Typed Search Options
 
@@ -301,7 +307,10 @@ if (!parsed) {
 }
 
 const auto& expr = *parsed;
-// expr.required_terms contains the required terms.
+// Current fields: required_terms, excluded_terms, raw_expression,
+// required_is_group, and excluded_is_group.
+// The group-flag vectors parallel their term vectors; true marks a grouped entry.
+// For this expression, required_is_group is [false, true] and excluded_is_group is [false].
 // expr.excluded_terms contains "old".
 ```
 
@@ -462,7 +471,7 @@ For new code, use `MygramSearchOptions_C` and `mygramclient_search_with_options`
 
 `MygramClientConfigV2_C` is the preferred configuration for new C programs. `timeout_ms` is the ordinary operation deadline; `connect_timeout_ms` is the connection deadline and falls back to `timeout_ms` when zero. `max_response_bytes` limits a response frame and defaults to 64 MiB when zero. The dedicated `dump_*_timeout_ms` and `optimize_timeout_ms` fields use the client defaults when zero or unavailable in an older structure. Set `unix_socket_path` to use a Unix socket; it takes precedence over TCP host and port.
 
-Both `MygramClientConfigV2_C` and `MygramSearchOptions_C` are append-only, size-aware structures. Set `struct_size` to the size your caller knows. The library ignores later fields and supplies their defaults, which lets an older binary use a newer library safely. V2 configurations also set `version` to `MYGRAMCLIENT_CONFIG_V2_VERSION`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain available for ABI compatibility.
+Both `MygramClientConfigV2_C` and `MygramSearchOptions_C` are append-only, size-aware structures within the same shared-library ABI major. Set `struct_size` to the size your caller knows. The library ignores later fields and supplies their defaults. V2 configurations also set `version` to `MYGRAMCLIENT_CONFIG_V2_VERSION`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain available as the legacy API.
 
 ```c
 MygramFilter_C filters[] = {
@@ -484,6 +493,20 @@ if (mygramclient_search_with_options(client, "app_db.articles",
 ```
 
 Use `mygramclient_facet_paged(client, table, column, query, limit, offset, &result)` for a facet page. Its `result->total_count` is the total number of distinct values before pagination; release it with `mygramclient_free_facet_result`.
+
+### C parsed expression fields
+
+`MygramParsedExpression_C` contains `main_term`, `and_terms` with `and_count`, and `not_terms` with `not_count`. It has no optional-term fields. Use the converter API for expressions containing OR or grouping.
+
+```c
+typedef struct {
+    char* main_term;
+    char** and_terms;
+    size_t and_count;
+    char** not_terms;
+    size_t not_count;
+} MygramParsedExpression_C;
+```
 
 ### C expression diagnostics
 

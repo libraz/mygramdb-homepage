@@ -202,7 +202,7 @@ OK FACET <returned_value_count> <total_distinct_values>
 
 ```
 
-The value and count are separated by a tab, and an empty line terminates the response. The second header count includes values omitted by `LIMIT` or `OFFSET`.
+The value and count are separated by a tab, and an empty line terminates the response. The second header count includes values omitted by `LIMIT` or `OFFSET`. Equal-count values keep a stable order, so pages do not reshuffle ties between requests.
 
 FACET supports the same AND/NOT/FILTER/LIMIT clauses as `SEARCH` when scoping aggregation to a query.
 
@@ -210,7 +210,7 @@ FACET is also exposed over HTTP at `POST /tables/{identity}/facet`. The HTTP bod
 
 ## Synonym Expansion
 
-When a synonym dictionary is configured (`tables[*].synonyms.enable: true`, see [Configuration](/docs/configuration#synonym-dictionary)), search terms are transparently expanded to OR-groups of their synonyms at query time. No query-side syntax change is needed — a query for `car` will also match `automobile` and `vehicle` when they are grouped in the TSV dictionary.
+When a synonym dictionary is configured (`tables[*].synonyms.enable: true`, see [Configuration](/docs/configuration#per-table-synonyms)), search terms are transparently expanded to OR-groups of their synonyms at query time. No query-side syntax change is needed — a query for `car` will also match `automobile` and `vehicle` when they are grouped in the TSV dictionary.
 
 Synonyms are configured per table under `tables[*].synonyms`. Fuzzy search takes a separate execution path and is not combined with synonym expansion for the same query.
 

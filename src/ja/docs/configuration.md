@@ -37,7 +37,7 @@ network:
     - "127.0.0.1/32"
 ```
 
-`mysql.user`、`mysql.database`、1つ以上のテーブルは、環境変数の上書きを適用した後に必須です。`MYGRAM_MYSQL_USER` と `MYGRAM_MYSQL_DATABASE` で必須値を指定する場合は、`mysql` ブロックを省略できます。`replication.enable` が true（デフォルト）の場合、`replication.server_id` も必須で、MySQLレプリカおよびMygramDBインスタンス間で一意である必要があります。
+`mysql.user`、`mysql.database`、1つ以上のテーブルは、環境変数の上書きを適用した後に必須です。`MYGRAM_MYSQL_USER` と `MYGRAM_MYSQL_DATABASE` で必須値を指定する場合は、`mysql` ブロックを省略できます。レプリケーションはデフォルトで有効です。有効な場合、`replication.server_id` には `1` から `4294967295` までの0以外の値を指定し、MySQLレプリカやMygramDBインスタンス間で重複させないでください。
 
 ::: tip 最小設定の次に行うこと
 設定ファイルを書いただけでは既存データは読み込まれません。起動後に `SYNC articles` のように対象テーブルを同期し、`SYNC STATUS` で完了を確認してください。
@@ -86,12 +86,17 @@ MySQLの `DATETIME` はタイムゾーン情報を持たない日時です。Myg
 
 `mysql.ignored_ddl_prefixes` はデフォルトが空の起動時専用リストです。分類されていない単独の DDL `QUERY_EVENT` を安全にスキップできると確認した場合だけ、レビュー済みの単一ステートメントのプレフィックスを追加します。各エントリは空でなく、セミコロンを含まず、`ALTER`、`ANALYZE`、`CHECK`、`CREATE`、`DROP`、`OPTIMIZE`、`RENAME`、`REPAIR`、`TRUNCATE` のいずれかで始めます（大文字小文字は区別しません）。DML のプレフィックスは拒否されます。設定済みテーブルまたはデータベースの安全性は上書きされないため、設定済みデータベースに対する `DROP DATABASE` または `DROP SCHEMA` は `DROP` を指定していてもレプリケーションを停止します。変更は再起動後に反映されます。
 
+`mysql.binlog_format` と `mysql.binlog_row_image` はソースサーバーの値を検証する項目で、MySQLやMariaDBの設定を変更しません。ソースでは `binlog_row_metadata=FULL` も設定してください。これはサーバー側の設定で、MygramDBの設定キーではありません。必要なソース・テーブル要件と拒否理由は[MySQLレプリケーション](/ja/docs/replication#%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%A8%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E3%81%AE%E6%A4%9C%E8%A8%BC)を参照してください。
+
 ### 必須のMySQL設定
 
 ```ini
 binlog_format = ROW
 binlog_row_image = FULL
+binlog_row_metadata = FULL
 ```
+
+これらはMySQLまたはMariaDBのソース側に設定します。MygramDBは起動時と再接続時に値を検証します。YAMLの `mysql` セクションからソースサーバーの設定は変更できません。
 
 MySQLではGTIDを有効にします。
 
@@ -116,6 +121,8 @@ FLUSH PRIVILEGES;
 ## テーブル設定
 
 各テーブルは `<database>.<table>` の有効識別子を持ちます。`tables[*].database` を省略した場合、`mysql.database` が使われます。
+
+レプリケーションを始める前に、MygramDBはソース要件、主キーの一意性、外部キーの更新・削除動作、カラム定義を検証します。拒否条件とエラーコードは[MySQLレプリケーション](/ja/docs/replication#%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%A8%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E3%81%AE%E6%A4%9C%E8%A8%BC)を参照してください。
 
 ```yaml
 mysql:
@@ -220,7 +227,7 @@ tables:
       use_roaring: "auto"
 ```
 
-`ngram_size` はASCII/英数字に適用されます。省略時のデフォルトは `2` です。ユニグラムの挙動が必要な場合だけ `ngram_size: 1` を明示してください。`kanji_ngram_size` はCJK文字に適用され、`0` の場合は `ngram_size` を使います。`cross_boundary_ngrams` は `字A` のような文字種境界をまたぐN-gramを生成するかを制御します。
+`ngram_size` は、かな、ASCII/英数字など CJK の漢字以外の文字種に適用されます。省略時のデフォルトは `2` です。ユニグラムの挙動が必要な場合だけ `ngram_size: 1` を明示してください。`kanji_ngram_size` は CJK の漢字だけに適用され、`0` の場合は `ngram_size` を使います。`cross_boundary_ngrams` は `字A` のような文字種境界をまたぐ N-gram を生成するかを制御します。
 
 ::: info 用語補足
 **N-gram** は文字列を小さな断片に分けたものです。日本語のように単語の区切りが空白で分からない言語でも、文字単位・2文字単位で分けることで辞書なしに検索できます。
@@ -278,8 +285,10 @@ replication:
 | 値 | 挙動 |
 |----|------|
 | `snapshot` | スナップショット/ダンプが取得したGTIDから再開 |
-| `latest` | 現在のMySQL GTIDから開始し、過去変更は無視 |
-| `gtid=<UUID:txn>` | 指定したMySQL GTIDから開始 |
+| `latest` | ソースの現在のGTIDから開始し、過去変更は無視 |
+| `gtid=<position>` | MySQL GTIDセット（`UUID:txn[-txn]`、カンマ区切り）またはMariaDB GTIDリスト（`domain-server-seq`、カンマ区切り）から開始 |
+
+MySQL GTIDのトランザクション番号は `2^63−1` 未満でなければなりません。MariaDBは別形式の `domain-server-seq` を使います。単一のMySQL `UUID:txn` は、そのトランザクションまでを意味します。`gtid=...` がどちらの形式にも合わない場合は設定検証で拒否します。ソースが `binlog_row_metadata=FULL` を有効にする前の TABLE_MAP イベントを再生する可能性がある場合は、ソース設定を変えた後、レプリケーション対象の全テーブルで `SYNC` を実行してください。
 
 ## メモリ
 
@@ -295,7 +304,7 @@ memory:
   verify_text: "off"
 ```
 
-`hard_limit_mb`、`soft_target_mb`、`arena_chunk_mb`、`minute_epoch` は予約項目で、現時点では強制されません。インデックス全体と保存する正規化テキストがRAMに収まるようにホストを用意してください。
+`hard_limit_mb` と `soft_target_mb` は予約項目で、プロセスのメモリ使用量を制限しません。ただし設定値には範囲があります。`hard_limit_mb` は `256` から `2147483647`、`soft_target_mb` は `128` から `2147483647` までです。`arena_chunk_mb` と `minute_epoch` も予約項目です。インデックス全体と保存する正規化テキストがRAMに収まるようにホストを用意してください。
 
 ::: warning メモリ上限について
 `hard_limit_mb` は現在、OSレベルのメモリ使用を強制的に止める仕組みではありません。実運用では、データ件数・保存テキスト・`verify_text`・キャッシュ量を見積もり、十分なRAMを確保してください。
@@ -469,6 +478,8 @@ network:
 ```
 
 `allow_cidrs` が空または未設定の場合、接続は拒否されます。アクセスが必要なアプリケーションサーバーや運用ネットワークだけを追加してください。MygramDBにはネイティブTLSはないため、必要に応じてリバースプロキシやロードバランサーでTLSを終端してください。管理コマンドは `api.admin_token` で認証します。通常の検索エンドポイントはバインドアドレスとCIDR許可リストで保護します。
+
+IPv4に対応しない範囲を表すため、プレフィックスが `/96` より短いIPv4-mapped IPv6 CIDRは拒否されます。`/96` から `/128` までは対応するIPv4範囲に変換されます。
 
 ::: danger 公開ネットワークへ直接出さない
 MygramDBをインターネットへ直接公開しないでください。`allow_cidrs` に `0.0.0.0/0` または `::/0` を指定し、非ループバックのTCPまたは有効なHTTPをバインドする設定は起動時に拒否されます。制限したCIDRリストを使うか、リスナーをループバックに置いてリバースプロキシの背後で公開してください。

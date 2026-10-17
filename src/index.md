@@ -66,18 +66,23 @@ SET GLOBAL gtid_mode = ON_PERMISSIVE;
 SET GLOBAL gtid_mode = ON;
 SET GLOBAL binlog_format = ROW;
 SET GLOBAL binlog_row_image = FULL;
+SET GLOBAL binlog_row_metadata = FULL;
 CREATE USER 'repl_user'@'%' IDENTIFIED BY 'your_password';
 -- SELECT: for initial snapshot of search target tables
-GRANT REPLICATION SLAVE, REPLICATION CLIENT, SELECT ON mydb.* TO 'repl_user'@'%';
+GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'repl_user'@'%';
+GRANT SELECT ON mydb.* TO 'repl_user'@'%';
 ```
 
 ::: warning Persist MySQL settings
-`SET GLOBAL` changes the running MySQL server, but the values may reset after restart. For production, also set `gtid_mode=ON`, `binlog_format=ROW`, and `binlog_row_image=FULL` in `my.cnf` or your managed MySQL parameter group.
+`SET GLOBAL` changes the running MySQL server, but the values may reset after restart. For production, also set `gtid_mode=ON`, `binlog_format=ROW`, `binlog_row_image=FULL`, and `binlog_row_metadata=FULL` in `my.cnf` or your managed MySQL parameter group. For an existing deployment, follow the [upgrade checklist](/docs/upgrade-v1.11) before restarting MygramDB.
 :::
 
 ```bash
+export API_ADMIN_TOKEN="$(openssl rand -hex 32)"
 docker run -d --name mygramdb \
-  -p 11016:11016 -p 8080:8080 \
+  -p 127.0.0.1:11016:11016 -p 127.0.0.1:8080:8080 \
+  -e API_BIND=0.0.0.0 -e API_HTTP_BIND=0.0.0.0 \
+  -e API_ADMIN_TOKEN \
   -e MYSQL_HOST=your-mysql-host \
   -e MYSQL_USER=repl_user \
   -e MYSQL_PASSWORD=your_password \
@@ -87,12 +92,12 @@ docker run -d --name mygramdb \
   -e TABLE_TEXT_COLUMN=content \
   -e TABLE_NGRAM_SIZE=2 \
   -e REPLICATION_SERVER_ID=12345 \
-  -e NETWORK_ALLOW_CIDRS=0.0.0.0/0 \
-  ghcr.io/libraz/mygram-db:1.10.2
+  -e NETWORK_ALLOW_CIDRS=127.0.0.1/32,::1/128,172.16.0.0/12 \
+  ghcr.io/libraz/mygram-db:1.11.0
 ```
 
 ::: warning
-`NETWORK_ALLOW_CIDRS=0.0.0.0/0` allows connections from any IP. For production, restrict to specific ranges (e.g., `10.0.0.0/8,172.16.0.0/12`).
+Set `NETWORK_ALLOW_CIDRS` to the client or Docker bridge subnet MygramDB actually sees; `172.16.0.0/12` is an example for a local Docker bridge. Keep the loopback entries for in-container clients and health checks. Host ports above are published on loopback. An open `0.0.0.0/0` allowlist with a non-loopback container listener is rejected. See [Docker deployment](/docs/docker-deployment) for network and credential configuration.
 :::
 
 ::: tip Initial load
@@ -112,7 +117,7 @@ SEARCH articles hello world
 
 See [Official Clients](/docs/client-libraries) for full Node.js, Python, and Go usage.
 
-### Node.js <span class="version-badge">v1.10 compatible</span>
+### Node.js
 
 ::: code-group
 
@@ -143,7 +148,7 @@ const results = await client.search('app_db.articles', 'hello world', {
 
 <a href="https://github.com/libraz/node-mygramdb-client" class="vp-button" target="_blank"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5c.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34c-.46-1.16-1.11-1.47-1.11-1.47c-.91-.62.07-.6.07-.6c1 .07 1.53 1.03 1.53 1.03c.87 1.52 2.34 1.07 2.91.83c.09-.65.35-1.09.63-1.34c-2.22-.25-4.55-1.11-4.55-4.92c0-1.11.38-2 1.03-2.71c-.1-.25-.45-1.29.1-2.64c0 0 .84-.27 2.75 1.02c.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02c.55 1.35.2 2.39.1 2.64c.65.71 1.03 1.6 1.03 2.71c0 3.82-2.34 4.66-4.57 4.91c.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2Z"/></svg>mygramdb-client on GitHub</a>
 
-### Go <span class="version-badge">v1.10 compatible</span>
+### Go
 
 ```bash
 go get github.com/libraz/go-mygram-client
@@ -163,7 +168,7 @@ resp, _ := client.Search("app_db.articles", "hello world", mygram.SearchOptions{
 
 <a href="https://github.com/libraz/go-mygram-client" class="vp-button" target="_blank"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5c.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34c-.46-1.16-1.11-1.47-1.11-1.47c-.91-.62.07-.6.07-.6c1 .07 1.53 1.03 1.53 1.03c.87 1.52 2.34 1.07 2.91.83c.09-.65.35-1.09.63-1.34c-2.22-.25-4.55-1.11-4.55-4.92c0-1.11.38-2 1.03-2.71c-.1-.25-.45-1.29.1-2.64c0 0 .84-.27 2.75 1.02c.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02c.55 1.35.2 2.39.1 2.64c.65.71 1.03 1.6 1.03 2.71c0 3.82-2.34 4.66-4.57 4.91c.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2Z"/></svg>go-mygram-client on GitHub</a>
 
-### Python <span class="version-badge">v1.10 compatible</span>
+### Python
 
 ```bash
 pip install mygramdb-client

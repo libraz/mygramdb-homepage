@@ -24,6 +24,7 @@ MygramDB には以下が必要です:
 - **GTID モード**: MySQLでは有効化必須。MariaDBはネイティブGTID形式を使用
 - **バイナリログ形式**: ROW 形式が必要
 - **行イメージ**: `binlog_row_image=FULL` が必要
+- **行メタデータ**: 各 `TABLE_MAP` イベントにカラム名を含めるため、`binlog_row_metadata=FULL` が必要
 - **権限**: レプリケーションユーザーに特定の権限が必要
 
 ::: info 用語補足
@@ -66,13 +67,53 @@ ROW 形式でバイナリログが有効化されているか確認：
 -- バイナリログ形式を確認
 SHOW VARIABLES LIKE 'binlog_format';
 SHOW VARIABLES LIKE 'binlog_row_image';
+SHOW VARIABLES LIKE 'binlog_row_metadata';
 
 -- ROW 形式に設定（my.cnf に追加して再起動）
 SET GLOBAL binlog_format = ROW;
 SET GLOBAL binlog_row_image = FULL;
 ```
 
+`binlog_row_metadata` は動的に変更できます。MySQLでは `SET PERSIST binlog_row_metadata = FULL` を実行します。MariaDBでは `SET GLOBAL binlog_row_metadata = FULL` を実行し、再起動後も維持するためサーバーの `[mysqld]` 設定にも `binlog_row_metadata = FULL` を追加してください。サーバー設定ファイルでは `binlog_format` と `binlog_row_image` と一緒に設定します。
+
+::: code-group
+
+```sql [MySQL]
+SET PERSIST binlog_row_metadata = FULL;
+```
+
+```sql [MariaDB]
+SET GLOBAL binlog_row_metadata = FULL;
+```
+
+:::
+
+すでに書き込まれたイベントのメタデータは変わりません。変更前のイベントが再生範囲に残る場合は、ソース設定を変えた後、レプリケーション対象の全テーブルで `SYNC` を実行してください。監視対象テーブルのイベントにメタデータがない場合は `2017` で停止し、エラーに必要な設定を示します。不正なオプションメタデータの場合も `2017` で停止します。
+
 イベント単位の binlog 圧縮は無効にしてください。MygramDB は `binlog_transaction_compression` による MySQL の `TRANSACTION_PAYLOAD_EVENT` や、`log_bin_compress` による MariaDB の圧縮 query/row イベントをデコードしません。これは通常の row イベント内にある MariaDB の `COMPRESSED` `VARCHAR`/`TEXT` カラムとは別であり、こちらは MygramDB が展開してデコードします。
+
+### ソースとテーブルの検証
+
+MygramDBはスナップショット作成前にソースを検証し、再接続時にも同じ確認を行います。設定済みテーブルも起動時と、そのテーブルに影響するDDLの後に検証します。条件を満たさない場合は、記載したコードでレプリケーションを停止します。
+
+| 要件 | 拒否コード |
+| --- | --- |
+| MySQLの `gtid_mode=ON` | `2006` |
+| `binlog_format=ROW`、`binlog_row_image=FULL`、`binlog_row_metadata=FULL` | `2008` |
+| `binlog_checksum=CRC32`、binlogのトランザクション/イベント圧縮なし、MySQLの `PARTIAL_JSON` 行値なし | `2008` |
+| ソース自体がレプリカの場合、MySQLでは `log_replica_updates=ON`、MariaDBでは `log_slave_updates=ON` | `2008` |
+| MariaDBで `binlog_storage_engine` が未設定 | `2008` |
+| MySQLの `gtid_executed` にタグ付きGTID（`UUID:tag:txn`）が含まれない | `2005` |
+
+MySQLでソースがレプリカかどうかを調べるため、MygramDBは `SHOW REPLICA STATUS` を実行します。そのため、レプリケーションユーザーには `REPLICATION CLIENT` が必要です。MariaDBでは `gtid_slave_pos` を使うため、この追加権限を必要とするクエリはありません。
+
+各監視対象テーブルの `primary_key` は、単独カラムの `PRIMARY KEY` または `UNIQUE NOT NULL` 制約で独立して一意性が保証されている必要があります。NULLを許す単独カラムのUNIQUEキーは `2012` で拒否されます。一意性が複合 `PRIMARY KEY` / `UNIQUE` 制約だけで保証され、独立した単独カラム制約がない場合は `2011` で拒否されます。複合キーにも含まれるカラムでも、条件を満たす単独カラム制約があれば使用できます。子テーブルに対して `ON UPDATE` または `ON DELETE CASCADE`、`SET NULL`、`SET DEFAULT` を指定した外部キーがある場合は `2012` で拒否されます。InnoDBはこうした子行の変更をrowイベントに記録しないためです。MySQL 9.xで `innodb_native_foreign_keys=OFF` の場合は、サーバー層が各子行のイベントを書き込むため対象外です。
+
+MariaDBでは、未設定カラムも含むテーブル内のどのカラムも、旧形式の `TIME(n)`、`DATETIME(n)`、`TIMESTAMP(n)`（`n > 0`）を使えません。TABLE_MAPに幅が記録されないため、`2012` で拒否されます。同じ型でも `n = 0` は使用できます。設定カラムの `year(2)` も `2012` で拒否されます。DDL後に設定カラムの型、NULL可否、照合順序、生成方法、生成式が変わった場合もスキーマ変更として扱います。
+
+名前の照合方法はソースの `lower_case_table_names` に従います。値が `0` の場合、rowイベントとDDLのデータベース名・テーブル名は設定名とバイト単位で一致する必要があります。それ以外の値では、どちらの経路もASCIIの大文字小文字を区別しません。
+
+スナップショット読込、`SYNC`、binlog取込は同じドキュメント上限をバイト単位で適用します。主キーは1 MiB、フィルタは1ドキュメントあたり最大1,000個、フィルタ名は1 KiB、文字列フィルタ値は64 KiB、正規化テキストと元テキストはそれぞれ16 MiBです。上限を超える行は初期読込または `SYNC` に失敗します。レプリケーション中に超過するとエラーを報告し、GTID位置を進めません。
 
 ::: info binlog_row_image=FULL が必要な理由
 UPDATEやDELETEで、MygramDBがテキスト列・主キー・フィルタ列を正しく更新するには、行の十分な情報がbinlogに含まれている必要があります。`MINIMAL` では必要な列が欠けることがあります。
@@ -138,7 +179,7 @@ OK SYNC STARTED table=app_db.articles
 
 各テーブルには `<database>.<table>` という有効識別子があります。すべてのテーブルが 1 つの DB にある場合は、`articles` のような修飾なしの名前も使えます。設定が 2 つ以上の DB にまたがる場合、`SYNC`、`SEARCH`、各種クライアント API では修飾名を使ってください。
 
-レプリケーションが有効で複数テーブルが設定されている場合、初期スナップショットは1つの `START TRANSACTION WITH CONSISTENT SNAPSHOT` を開始する前に共有の保守的な GTID 下限を取得します。これにより、binlog ストリーミング再開時に短い区間の変更を冪等に再適用する可能性を許容しながら、関連テーブルを同じ MySQL 時点に揃えます。
+レプリケーションが有効で複数テーブルが設定されている場合、すべてのテーブルを1つの `START TRANSACTION WITH CONSISTENT SNAPSHOT` で読み込みます。MySQLではそのトランザクション前に共有の保守的なGTID下限を取得するため、短い区間の変更が冪等に再適用されることがあります。MariaDBではスナップショット自体のbinlog位置を記録し、`BINLOG_GTID_POS` でGTIDに変換します。
 
 ## レプリケーション開始オプション
 
@@ -146,21 +187,21 @@ OK SYNC STARTED table=app_db.articles
 
 ### snapshot（推奨）
 
-初期スナップショットトランザクションの開始前に取得した保守的な GTID 下限から開始します：
+MySQLでは、初期スナップショットトランザクションの開始前に取得した保守的なGTID下限から開始します。MariaDBでは、スナップショットが記録した正確なbinlog位置をGTIDに変換して開始します：
 
 ```yaml
 replication:
   start_from: "snapshot"
 ```
 
-下の図は、トランザクション境界をまたぐ下限値の引き継ぎを示しています。MygramDB はコンシステントスナップショットトランザクションを開始する前に保守的な GTID 位置を取得し、その凍結ビュー内でテーブルを読み取ります。新規書き込みは binlog に蓄積され続け、スナップショット完了後はその下限値からストリーミングを開始します。取得からトランザクション開始までの変更は再適用されることがありますが、行適用は冪等であり、変更の欠落を防ぎます。
+下の図はMySQLでのトランザクション境界をまたぐ引き継ぎを示しています。MygramDBは一貫性スナップショットの開始前に保守的なGTID位置を取得し、凍結ビューでテーブルを読み込みます。その間も新規書き込みはbinlogに蓄積され、スナップショット完了後に下限値からストリーミングを開始します。取得からトランザクション開始までの変更は再適用されることがあります。MariaDBではスナップショット自体のbinlog位置から再開します。
 
-<DocDiagram name="gtid-snapshot-handoff" alt="MygramDBがコンシステントスナップショットトランザクションを開始する前に保守的なGTID下限を取得し、その凍結ビュー内でテーブルを読み取る間に新規書き込みがbinlogに蓄積され、下限値からストリーミングを開始して変更の欠落を防ぐ一方で一部の再適用を許容することを示すタイムライン図" />
+<DocDiagram name="gtid-snapshot-handoff" alt="MySQLで、MygramDBが一貫性スナップショットを開始する前に保守的なGTID下限を取得し、凍結ビュー内での読み込み中にbinlogへ蓄積した変更をその下限から再生するタイムライン図" />
 
 **動作:**
 - データ一貫性のため `START TRANSACTION WITH CONSISTENT SNAPSHOT` を使用
-- スナップショットトランザクションの開始前に保守的な GTID 下限を取得
-- スナップショット取得から binlog ストリーミングまでの変更の欠落を防ぎ、短い区間の変更は冪等に再適用されることがある
+- MySQLではスナップショットトランザクション開始前に保守的なGTID下限を取得し、MariaDBではスナップショット自体のbinlog位置を記録
+- MySQLではトランザクション開始前の短い区間の変更を冪等に再適用し、変更の欠落を防止
 
 **使うタイミング:**
 - 初期セットアップ（ほとんどの場合に推奨）
@@ -184,9 +225,9 @@ replication:
 - リアルタイム変更のみが必要な場合
 - 履歴データが重要でない場合
 
-### gtid=UUID:txn
+### `gtid=<position>`
 
-特定の GTID ポジションから開始：
+検証済みのGTIDセットまたはリストから開始します。MySQLは `UUID:txn[-txn]` の区間をUUIDごとにカンマ区切りで受け付け、トランザクション番号は `2^63−1` 未満でなければなりません。MariaDBは独自の形式で `domain-server-seq` をカンマ区切りで受け付けます。
 
 ```yaml
 replication:
@@ -196,6 +237,8 @@ replication:
 **使うタイミング:**
 - 特定のポイントからの手動リカバリ
 - テストやデバッグ
+
+MySQLの単一の `UUID:txn` は、そのトランザクションまでを意味します。MygramDBは再接続時にそれ以前のトランザクションを要求しないよう `UUID:1-txn` に広げます。どちらのGTID形式にも合わない値は `SET GTID_NEXT` に渡す前に拒否されます。
 
 ## サポートされている操作
 
@@ -263,6 +306,8 @@ RENAME TABLE articles_archive TO articles;
 
 リーダーは GTID を進める前に変更前と変更後の修飾名を照合します。設定済みテーブルの識別子が変わる名前変更ではレプリケーションを停止するため、スキーマを意図した状態にして設定を更新してから `SYNC` を実行してください。
 
+設定済みテーブルを対象に、rowイベントを伴わず行を削除・置換・移動する次のDDLは `2017` で停止します：パーティションの `DROP`、`TRUNCATE`、`EXCHANGE`、`CONVERT`、テーブルスペースの `DISCARD`、`IMPORT`、`CREATE OR REPLACE TABLE`。変更に対処してから `SYNC` を実行してください。設定済みデータベースに対する `DROP DATABASE` は、識別子の大文字小文字にかかわらず `2012` で停止します。上記の通常の `TRUNCATE TABLE` は引き続きインデックスとドキュメントストアをクリアします。
+
 ## サポートされているカラム型
 
 MygramDB はこれらの MySQL カラム型をレプリケートできます：
@@ -292,20 +337,22 @@ MygramDB はこれらの MySQL カラム型をレプリケートできます：
 
 ### TABLE_MAP メタデータ
 
-MygramDB はテーブルが設定対象かを判断する前に、各カラムの `TABLE_MAP` メタデータを消費します。そのため、未知またはサイズを決められない型は、未設定テーブルのイベントでもリーダーを停止させます。リーダーは最後に適用した GTID から再接続し、イベントをスキップ可能とは扱いません。メタデータデコーダーは `DECIMAL`、`CHAR`、`ENUM`、`SET`、`JSON`、`GEOMETRY` を含む各型のバイト順とペイロード長を、対応する MySQL 8.4/9.7 と MariaDB 10.11/11.8/12.3 のストリームで処理します。設定済みカラムの可否は上記の制限に従います。
+MygramDB はテーブルが設定対象かを判断する前に、各カラムの `TABLE_MAP` 型メタデータを消費します。そのため、未知またはサイズを決められない型は `2017` でリーダーを停止させ、未設定テーブルのイベントでもスキップしません。同じイベントは最後に適用したGTID位置に残るため、再接続だけでは先へ進めません。監視対象テーブルのオプションカラムメタデータが欠落または不正な場合も `2017` で停止します。未設定テーブルや `SYNC` スナップショットが対象行をカバーする場合、そのオプションメタデータは解析しません。ただし、行幅を判定するため、binlogに流れるすべてのテーブルの基本的な `TABLE_MAP` 型メタデータはデコードします。監視対象のイベントは、ソースが `binlog_row_metadata=FULL` を有効にしてから書き込む必要があります。メタデータデコーダーは `DECIMAL`、`CHAR`、`ENUM`、`SET`、`JSON`、`GEOMETRY` を含む各型のバイト順とペイロード長を、対応する MySQL 8.4/9.7 と MariaDB 10.11/11.8/12.3 のストリームで処理します。設定済みカラムの可否は上記の制限に従います。
+
+未知のイベント型は、イベントヘッダーにスキップ可能を示す `LOG_EVENT_IGNORABLE_F` フラグがある場合だけ読み飛ばします。フラグがない場合は `2017` で停止します。
 
 ## レプリケーション機能
 
 ### GTID 一貫性
 
 - スナップショットと binlog レプリケーションは一貫性のあるスナップショットトランザクションにより調整
-- 保守的な GTID 下限で変更の欠落を防ぎ、トランザクション開始前の短い区間の変更は冪等に再適用されることがある
+- MySQLでは保守的なGTID下限を使うため、トランザクション開始前の短い区間の変更が冪等に再適用されることがあります。MariaDBではスナップショット自体の正確なbinlog位置を記録します
 
 ### GTID ポジションと復旧
 
-- `start_from: snapshot` は初期スナップショットトランザクションの開始前に取得した保守的な GTID 下限を使い、`latest` と明示的な `gtid=...` は設定した開始位置を使う
+- `start_from: snapshot` はMySQLでは保守的なGTID下限、MariaDBではスナップショット位置を使い、`latest` と明示的な `gtid=...` は設定した開始位置を使う
 - `DUMP SAVE` は GTID をダンプに記録し、`DUMP LOAD` または起動時復元はその GTID をリーダーの次の位置として設定します。手動の `DUMP LOAD` 前からリーダーが停止していた場合は、読み込み後も停止したままです。
-- 初期 `SYNC` はトランザクション開始前に保守的なスナップショット GTID 下限を取得します。通常の引き継ぎでは SYNC 前にドレインした GTID から共有リーダーを再開し、`2017` の復旧ではそのスナップショットマーカーから再開してデコードできない区間を越えます
+- 初期 `SYNC` はMySQLでは保守的な下限、MariaDBではスナップショット自体のbinlog位置を使います。通常の引き継ぎでは SYNC 前にドレインした GTID から共有リーダーを再開し、`2017` の復旧ではスナップショットマーカーから再開してデコードできない区間を越えます
 
 ### 自動検証
 
@@ -440,13 +487,15 @@ replication:
 
 ### デコードできない binlog イベントから復旧する
 
-レプリケーションがエラーコード `2017` で停止した場合、そのビルドではデコードできないイベントに到達しています。XA prepare イベント、MySQL の `TRANSACTION_PAYLOAD_EVENT`、`PARTIAL_UPDATE_ROWS_EVENT`、`log_bin_compress` で圧縮された MariaDB イベントが該当します。イベント単位の MariaDB 圧縮は引き続き未対応です。生成元のサーバー設定を変えても、すでに書かれたイベントは binlog から消えません。古い GTID から再開すると同じ位置で再び停止します。
+レプリケーションがエラーコード `2017` で停止した場合、そのビルドではデコードできないイベントに到達しています。監視対象テーブルのTABLE_MAPメタデータが欠落または不正な場合や、サイズを計算できないカラム型、XA prepare イベント、MySQL の `TRANSACTION_PAYLOAD_EVENT`、`PARTIAL_UPDATE_ROWS_EVENT`、`log_bin_compress` で圧縮された MariaDB イベントが該当します。イベント単位の MariaDB 圧縮は引き続き未対応です。生成元のサーバー設定を変えても、すでに書かれたイベントは binlog から消えません。古い GTID から再開すると同じ位置で再び停止します。
 
 これは通常の row イベント内にある MariaDB の `COMPRESSED` `VARCHAR`/`TEXT` カラムとは異なります。MygramDB はカラムをインデックス化する前に展開します。カラムのペイロードが不正、未知、破損している場合は row デコード失敗としてエラー `2008` になり、通常の再接続処理に進みます。`2017` の復旧手順には該当しません。
 
 まず最も重要なテーブルに `SYNC` を実行し、`replication=STARTED` を伴って完了するまで待ちます。その後、他のすべてのレプリケーション対象テーブルにも `SYNC` を実行してください。最初の SYNC は新しいスナップショットマーカーから共有リーダーを再開し、デコードできない区間を飛ばします。再構築しないテーブルには、その区間にあった書き込みが反映されません。
 
-他のレプリケーション失敗では、SYNC は区間を飛ばさず、ドレイン済み位置から再開します。コマンドの手順は [SYNC コマンド](/ja/docs/sync-command#エラー-2017-デコードできない-binlog-イベント) を参照してください。
+他のレプリケーション失敗では、SYNC は区間を飛ばさず、ドレイン済み位置から再開します。コマンドの手順は [SYNC コマンド](/ja/docs/sync-command#%E3%82%A8%E3%83%A9%E3%83%BC-2017-%E3%83%86%E3%82%99%E3%82%B3%E3%83%BC%E3%83%88%E3%82%99%E3%81%A6%E3%82%99%E3%81%8D%E3%81%AA%E3%81%84-binlog-%E3%82%A4%E3%83%98%E3%82%99%E3%83%B3%E3%83%88) を参照してください。
+
+MySQLは致命的なbinlogダンプ失敗をエラー `1236` で報告します。必要なGTIDがパージされたとソースメッセージに明記されている場合だけ、利用できない位置として扱い `SYNC` による復旧を案内します。ソースより先行したレプリカ、過大なパケット、破損または切り詰められたbinlogの場合は、ソースのメッセージを含む `2008` で停止します。MariaDBの `REPLICATION START` はパージ済みの位置を開始前に拒否します。
 
 ## 推奨事項
 
@@ -476,7 +525,7 @@ mysql:
 replication:
   enable: true
   server_id: 83917                # 1 から 4294967295 の一意な値
-  start_from: "snapshot"          # snapshot|latest|gtid=<UUID:txn>
+  start_from: "snapshot"          # snapshot|latest|gtid=<position>
   queue_size: 10000
   reconnect_backoff_min_ms: 500   # 予約済み / 現在は未強制
   reconnect_backoff_max_ms: 10000 # 予約済み / 現在は未強制

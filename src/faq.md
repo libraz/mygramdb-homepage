@@ -143,7 +143,7 @@ Yes. MygramDB includes a custom C++ binlog parser that uses the MySQL C API (`my
 
 ### How fast is replication? INSERT to searchable?
 
-Lag depends on source transactions, network conditions, event queueing, and index updates. Monitor `mygramdb_replication_last_applied_unixtime` and `mygramdb_replication_seconds_since_last_applied` at `/metrics`, alongside MySQL write activity. An idle source can have an old last-applied time without being behind.
+Lag depends on source transactions, network conditions, event queueing, and index updates. Monitor `mygramdb_replication_last_applied_unixtime` and `mygramdb_replication_seconds_since_last_applied` at [`/metrics`](/docs/http-api#get-metrics), alongside MySQL write activity. When `api.admin_token` is configured, Prometheus must send a valid Bearer token to receive these metrics. An idle source can have an old last-applied time without being behind.
 
 ### What happens during MySQL failover?
 

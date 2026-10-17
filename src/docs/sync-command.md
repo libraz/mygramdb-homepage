@@ -12,7 +12,7 @@ head:
 ## Overview
 
 ::: info What is snapshot synchronization?
-**Snapshot synchronization** reads the target MySQL table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication normally resumes from the drained pre-SYNC GTID; the `2017` recovery path uses the conservative snapshot lower-bound marker to pass the undecodable interval.
+**Snapshot synchronization** reads the target MySQL/MariaDB table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication normally resumes from the drained pre-SYNC GTID; the `2017` recovery path uses the snapshot marker to pass the undecodable interval. MySQL captures a conservative GTID lower bound before the snapshot opens; MariaDB converts the snapshot's own binlog file and position to a GTID.
 :::
 
 The `SYNC` command allows manual control over snapshot synchronization from MySQL to MygramDB. This prevents unexpected load on the MySQL master server during startup.
@@ -91,7 +91,7 @@ ERROR 4010 Table 'products' not found
 - Runs asynchronously in the background
 - Returns immediately after starting
 - Builds snapshot from MySQL SELECT query
-- Captures a conservative GTID lower bound before opening the initial snapshot transaction
+- Captures a conservative pre-snapshot GTID on MySQL, or the snapshot's exact binlog position converted to a GTID on MariaDB
 - Drains replication and normally restarts it from the drained pre-SYNC GTID, so commits for other tables are not skipped; the `2017` recovery path uses the snapshot marker to pass the undecodable interval
 
 ### SYNC STOP - Cancel Synchronization
@@ -161,7 +161,7 @@ status=IDLE message="No sync operation performed"
 | `rate` | Processing rate | `5000 rows/s` |
 | `rows` | Total rows processed | `25000` |
 | `time` | Total processing time | `5.2s` |
-| `gtid` | Conservative GTID lower bound captured before the snapshot transaction | `uuid:123` |
+| `gtid` | MySQL: conservative pre-snapshot GTID; MariaDB: snapshot binlog position converted to a GTID | `uuid:123` |
 | `replication` | Replication status | `STARTED`, `DISABLED`, `FAILED` |
 | `error` | Error message (if failed) | `MySQL connection lost` |
 
@@ -362,6 +362,8 @@ INFO: TCP server stopped
 XA prepare events, MariaDB event-level compressed query/row events, MySQL `TRANSACTION_PAYLOAD_EVENT` events (transaction compression), and `PARTIAL_UPDATE_ROWS_EVENT` events (partial JSON row updates) can remain in the binlog after the server setting that produced them has changed. Repeating a normal restart from the old position replays the same event and stops replication again.
 
 When replication stops with error code `2017`, run `SYNC` for the table that matters first. MygramDB rebuilds that table and restarts the shared stream from its snapshot marker, past the undecodable interval. Then run `SYNC` for every other replicated table, one at a time. The first recovery moves the shared stream forward; a table not rebuilt retains whatever writes in the skipped interval would have changed.
+
+A monitored table's `TABLE_MAP` without full row metadata, with malformed optional metadata, or with an unsizeable column type stops with `2017`. Ensure the source runs `binlog_row_metadata=FULL` before rebuilding; changing that setting does not repair older binlog events.
 
 MariaDB event-level compression from `log_bin_compress` remains unsupported and
 is one of the `2017` recovery cases. A `COMPRESSED` `VARCHAR`/`TEXT` column in

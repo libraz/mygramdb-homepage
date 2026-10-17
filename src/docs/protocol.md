@@ -46,7 +46,7 @@ The TCP protocol suits `mygram-cli` and administrative commands. For web applica
 
 Commands are text-based, one command per line. Responses are terminated with newline.
 
-If the thread-pool queue is full while a connection drain task is being scheduled, the server returns `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` on that connection, sends responses already queued for it, and then closes the connection. A pending-frame or shared-buffer limit can also produce a best-effort `ERROR 6030` before close.
+If the thread-pool queue is full while a connection drain task is being scheduled, the server stops accepting normal responses, drains responses already queued for that connection, then sends terminal `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` and closes the connection. A pending-frame or shared-buffer limit can also produce a best-effort `ERROR 6030` before close.
 
 `SEARCH`, `COUNT`, `GET`, and `FACET` do not require authentication. When an administrative token is configured, `AUTH` is required for configuration commands, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` commands. A request made before authentication returns `ERROR 7 Administrative command requires AUTH`.
 
@@ -166,13 +166,13 @@ INFO
 
 ### Response
 
-Returns server information in Redis-style key-value format with multiple sections:
+Returns server information in Redis-style key-value format with multiple sections. This sample shows the replication section available after `AUTH` when `api.admin_token` is configured; before authentication, the entire `# Replication` section is omitted.
 
 ```mygram
 OK INFO
 
 # Server
-version: 1.10.2
+version: 1.11.0
 uptime_seconds: 3600
 data_initialized: true
 readiness: ready
@@ -457,7 +457,7 @@ OK DUMP_STARTED <filepath>
 DUMP SAVE mygramdb.dmp
 ```
 
-The filename resolves under `dump.dir`; a path outside that directory is refused. Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown `DUMP SAVE` flag.
+The filename resolves under `dump.dir`; a path outside that directory is refused. `mygram-cli` reads the filepath as the last non-empty token, decoded with the server escape rules, so quote a path containing spaces. If a token starts with `-`, the CLI sends the line to the server, which rejects it as an unknown `DUMP SAVE` flag. Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown flag.
 
 ### DUMP LOAD
 
@@ -746,9 +746,9 @@ ERROR 4010 Table '<name>' not found
 - Runs asynchronously in the background
 - Returns immediately after starting
 - Builds snapshot from MySQL using SELECT query
-- Captures a safe lower-bound GTID before `START TRANSACTION WITH CONSISTENT SNAPSHOT`
-- Commits between the GTID capture and the snapshot transaction may be replayed during replication; this at-least-once replay is intentional and idempotent
-- Drains replication and normally restarts it from the GTID drained before SYNC, so commits for other tables are not skipped; only recovery from an undecodable 2017 event restarts from the snapshot lower-bound GTID
+- Captures a conservative pre-snapshot GTID on MySQL, or the snapshot's exact binlog position converted to a GTID on MariaDB
+- On MySQL, commits between the GTID capture and the snapshot transaction may be replayed during replication; this at-least-once replay is intentional and idempotent
+- Drains replication and normally restarts it from the GTID drained before SYNC, so commits for other tables are not skipped; the `2017` recovery path restarts from the snapshot marker (the MySQL lower bound or MariaDB's exact snapshot position converted to a GTID)
 
 ### Cancel a SYNC
 
@@ -849,7 +849,7 @@ END
 | `rate` | Processing rate (rows/s) |
 | `rows` | Total rows processed |
 | `time` | Total processing time |
-| `gtid` | Snapshot lower-bound GTID marker; normal restart uses the drained pre-SYNC GTID, while undecodable-event (2017) recovery may restart from this marker |
+| `gtid` | Snapshot marker: MySQL's conservative lower-bound GTID or MariaDB's exact snapshot binlog position converted to a GTID; normal restart uses the drained pre-SYNC GTID, while undecodable-event (`2017`) recovery may restart from this marker |
 | `replication` | Replication status: `STARTED`, `DISABLED`, `FAILED` |
 | `error` | Error message (if failed) |
 
@@ -1008,7 +1008,10 @@ optimization: <strategy>
 order_by: <column> <direction>
 limit: <value> [(default)]
 offset: <value> [(default)]
+[cache_key: <canonical-key>]
 ```
+
+The `cache_key` line is included in SEARCH and COUNT responses whenever a canonical query key exists.
 
 ### Debug Metrics Explained
 
@@ -1093,7 +1096,7 @@ SHOW VARIABLES [LIKE '<pattern>']
 
 The compact form is also valid: `SET api.default_limit=50`. It can be mixed with comma-separated assignments.
 
-`SHOW VARIABLES LIKE` accepts exactly one pattern.
+`SHOW VARIABLES LIKE` accepts exactly one pattern and matches it case-insensitively.
 
 ### Responses
 
@@ -1114,7 +1117,7 @@ The compact form is also valid: `SET api.default_limit=50`. It can be mixed with
 +---------------------+-----------+---------+
 ```
 
-`SET cache.enabled = true` can fail with `ERROR 8001 Failed to set variable 'cache.enabled': Cache cannot be enabled`. `cache.min_query_cost_ms` must be a finite, non-negative number; values such as `nan`, `inf`, and `-inf` are rejected with `ERROR 1004`.
+`SET` validates each value with the configuration schema used at startup. A multi-assignment command applies all changes or none; an invalid assignment is named in the `ERROR 1004` response. The same `server_id` and `cache.max_memory_mb` limits apply at runtime. `SET cache.enabled = true` can fail with `ERROR 8001 Failed to set variable 'cache.enabled': Cache cannot be enabled`. `cache.min_query_cost_ms` must be a finite, non-negative number; values such as `nan`, `inf`, and `-inf` are rejected with `ERROR 1004`.
 
 When `SHOW VARIABLES` returns a sensitive field, its value is masked as `***`. This includes `mysql.password`, `mysql.ssl_key`, and fields whose names contain `password`, `secret`, `ssl_key`, `api_key`, `auth_key`, `private_key`, `access_key`, or `token`. Empty values remain empty.
 
@@ -1147,10 +1150,11 @@ The CLI client (`mygram-cli`) provides an interactive shell with:
 - **Command History**: Use ↑/↓ arrow keys to navigate history (requires GNU Readline)
 - **Line Editing**: Full line editing with Ctrl+A, Ctrl+E, etc. (requires GNU Readline)
 - **Error Handling**: Graceful error messages (does not crash)
-- **Quoting**: Search text, filter values, and `AND`/`NOT` terms are quoted using the same wire rule as the SDK and C API. Unicode whitespace and literal command keywords remain part of the value.
+- **Command input**: Commands are sent as entered; the CLI does not quote search or filter values using the SDK wire rules. In command-line arguments, a tab becomes a space and other control bytes below `0x20` are dropped.
 - **Complete Reads**: Multi-line responses, including highlighted results, `DEBUG` output, and `SHOW VARIABLES`, are read completely even when the receive buffer is small.
 - **IPv6**: Connect using an IPv6 literal or a hostname that resolves to IPv6.
 - **Search Output**: Prints one row per primary key and decodes quoted keys containing spaces or other whitespace.
+- **DUMP SAVE paths**: Reads the filepath as the last non-empty token using the server escape rules; quote paths that contain spaces. A dash-leading token is forwarded to the server and rejected as an unknown flag.
 - **Dump Errors**: Prints the numeric server error code when `DUMP SAVE` fails. With `--wait-ready`, it retries the command while the server is loading or not ready; `INFO` reporting `readiness: not_ready` is not treated as success.
 
 ### Interactive Mode
@@ -1187,7 +1191,7 @@ OK AUTHENTICATED
 | `-p PORT` | Server port (default: `11016`) |
 | `-s SOCKET_PATH` | Unix domain socket path; overrides `-h`/`-p` |
 | `--retry N` | Retry the connection N times if refused (default: `0`) |
-| `--wait-ready` | Keep retrying until the server is ready |
+| `--wait-ready` | Retry within the configured budget until the server is ready (100 retries by default; `--retry N` overrides it); exit non-zero if it is still not ready |
 | `--version` | Print the client version and exit |
 | `--help` | Print usage and exit |
 

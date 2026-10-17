@@ -53,7 +53,7 @@ identity segment `/tables/{identity}`, where `{identity}` is the database-qualif
 (for example, table `articles` in database `app_db` is addressed as `/tables/app_db.articles`). In a
 single-database deployment (only one distinct database is configured), a bare `table` name also works
 and resolves to that database — for example `/tables/articles`. A qualifier is required only when the
-configuration spans two or more databases; a bare name is then rejected as ambiguous.
+configuration spans two or more databases; a bare name is then rejected as ambiguous with `404 Not Found` and `error_code: 4007`.
 
 ::: tip Thinking about identity
 `identity` is the name that uniquely designates the table to search. With one database it is `articles`; with several it is `app_db.articles`.
@@ -97,6 +97,8 @@ Content-Type: application/json
 | `sort` | object | No | Sort configuration (e.g., `{"column": "_score", "order": "DESC"}`) |
 | `highlight` | object | No | Highlight configuration (see below) |
 | `fuzzy` | integer | No | Fuzzy search edit distance (`1` or `2`) |
+
+`limit` must be between 1 and 1000. A value above 1000 or more than 64 filter conditions returns `400 Bad Request` with `error_code: 3000`. A non-integer `limit` or a value below 1 returns `error_code: 3008`.
 
 Omit `sort.column` to sort by the primary key. To sort by a named column, provide that column and `order: "ASC"` or `"DESC"`; for example, `{ "sort": { "column": "created_at", "order": "DESC" } }`.
 
@@ -254,7 +256,7 @@ Return facet buckets for a column, optionally scoped by a query and filters.
 | `limit` | integer | No | Maximum number of facet buckets (1-1000) |
 | `offset` | integer | No | Number of facet buckets to skip (default: 0) |
 
-`sort`, `highlight`, and `fuzzy` are not supported by FACET and are rejected.
+`sort`, `highlight`, and `fuzzy` are not supported by FACET and are rejected. A syntactically invalid facet column name returns `400 Bad Request` with `error_code: 3000`. A well-formed name that does not identify a configured filter column returns `400` with `error_code: 4000`.
 
 **Request:**
 
@@ -302,7 +304,7 @@ Authorization: Bearer <token>
 {"table":"app_db.articles"}
 ```
 
-`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header; otherwise it returns `401`, sets `WWW-Authenticate: Bearer`, and includes `error_code: 7`. The token comparison is constant-time. The only HTTP routes that use this token as an admission requirement are `GET /config`, `GET /replication/status`, and `POST /optimize`. `GET /health/ready` and `GET /health/detail` may inspect the same credential to reveal protected replication fields, but remain open; other routes do not use it for authentication.
+`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header; otherwise it returns `401`, sets `WWW-Authenticate: Bearer`, and includes `error_code: 7`. The token comparison is constant-time. The only HTTP routes that use this token as an admission requirement are `GET /config`, `GET /replication/status`, and `POST /optimize`. `GET /health/ready`, `GET /health/detail`, and `GET /metrics` may inspect the same credential to reveal protected replication data, but remain open.
 
 Successful requests return `200` with `{ "status": "ok", "result": "OPTIMIZED ..." }`. The body accepts only `table`; an unknown field or a non-string table is a `400` request error.
 
@@ -356,7 +358,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.10.2",
+  "version": "1.11.0",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -478,7 +480,7 @@ GET /metrics HTTP/1.1
 ```prometheus
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.10.2"} 1
+mygramdb_server_info{version="1.11.0"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -530,11 +532,16 @@ mygramdb_command_total{command="get"} 3000
 scrape_configs:
   - job_name: 'mygramdb'
     scrape_interval: 15s
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/mygramdb_admin_token
     static_configs:
       - targets: ['localhost:8080']
         labels:
           environment: 'production'
 ```
+
+When `api.admin_token` is configured, Prometheus must send the token to receive `mygramdb_replication_*` metrics. Store only the token in the file named by `credentials_file` and restrict access to it. Without accepted credentials, `/metrics` remains public but omits the complete replication metric family, including its HELP and TYPE lines.
 
 **Key Features:**
 
@@ -554,7 +561,7 @@ scrape_configs:
 | Multi-dimensional | Limited | Full label support |
 | Compatibility | Any HTTP client | Prometheus ecosystem |
 
-Both endpoints provide the same underlying data but in different formats. Use `/metrics` for Prometheus integration and `/info` for general-purpose monitoring or human-readable output.
+Both endpoints include server status, memory health, and index statistics, but the available fields and detail differ. Replication series are available only from `/metrics`; when `api.admin_token` is configured, a valid Bearer token is required to receive them. Use `/metrics` for Prometheus integration and `/info` for general-purpose monitoring or human-readable output.
 
 ### GET /health
 
@@ -604,7 +611,7 @@ GET /config HTTP/1.1
 Authorization: Bearer <token>
 ```
 
-When `api.admin_token` is non-empty, `/config` requires an exact `Authorization: Bearer <token>` header. A missing or invalid token returns `401 Unauthorized`, includes `WWW-Authenticate: Bearer`, and uses `error_code: 7`. If no admin token is configured, the route is open. Starting another instance with the same HTTP bind address and port fails with `Bind failed (6000)` (`kNetworkBindFailed`).
+When `api.admin_token` is non-empty, `/config` requires an exact `Authorization: Bearer <token>` header. A missing or invalid token returns `401 Unauthorized`, includes `WWW-Authenticate: Bearer`, and uses `error_code: 7`. If no admin token is configured, the route is open. If no configuration object is loaded, it returns `503 Service Unavailable` with `error_code: 6026`. Starting another instance with the same HTTP bind address and port fails with `Bind failed (6000)` (`kNetworkBindFailed`).
 
 **Response (200 OK):**
 
@@ -644,7 +651,7 @@ GET /replication/status HTTP/1.1
 Authorization: Bearer <token>
 ```
 
-When `api.admin_token` is non-empty, `/replication/status` has the same bearer-token requirement and `401` response as `/config`; with no configured token it is open. The `enabled` field reflects whether replication is running, and `status` is `"running"`, `"stopped"`, or `"failed"`. The full response includes replication counters and timestamps:
+When `api.admin_token` is non-empty, `/replication/status` has the same bearer-token requirement and `401` response as `/config`; with no configured token it is open. In a MySQL-enabled build with no binlog reader, it returns `200 OK` with `{"enabled":false,"status":"not_configured"}`. When a reader is present, the `enabled` field reflects whether replication is running, and `status` is `"running"`, `"stopped"`, or `"failed"`. The full response includes replication counters and timestamps:
 
 **Response (200 OK):**
 
@@ -664,7 +671,16 @@ When `api.admin_token` is non-empty, `/replication/status` has the same bearer-t
 }
 ```
 
-**Error Response (503 Service Unavailable):**
+**Response when replication is not configured in a MySQL-enabled build (200 OK):**
+
+```json
+{
+  "enabled": false,
+  "status": "not_configured"
+}
+```
+
+**Response in a build without MySQL support (503 Service Unavailable):**
 
 ```json
 {
@@ -798,11 +814,11 @@ Handler-generated error responses follow this format:
 | 400 | Bad Request (invalid input) |
 | 401 | Unauthorized (missing or invalid Bearer token for an administrative route such as `/config`, `/replication/status`, or `/optimize`) |
 | 403 | Forbidden (source IP is not allowed) |
-| 404 | Not Found (document doesn't exist; `error_code: 4004` for a missing document) |
+| 404 | Not Found (missing document: `error_code: 4004`; unresolved table identity, including a bare name under a multi-database configuration: `4007`) |
 | 413 | Payload Too Large (request body exceeds `api.http.max_body_bytes`) |
 | 429 | Too Many Requests (rate limit exceeded) |
 | 500 | Internal Server Error |
-| 503 | Service unavailable, feature not enabled, replication unavailable, or table synchronization in progress |
+| 503 | Service unavailable (`error_code: 6026` when `GET /config` has no loaded configuration), feature not enabled, replication unavailable in a build without MySQL support (`error_code: 4`), or table synchronization in progress |
 
 ## Monitoring
 

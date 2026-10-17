@@ -25,7 +25,7 @@ MygramDB queries are a small search command language, not SQL. A query such as `
 - [Filter Conditions](#filter-conditions)
 - [Sorting (SORT clause)](#sorting-sort-clause)
 - [Pagination (LIMIT/OFFSET)](#pagination-limit-offset)
-- [BM25 Relevance Scoring (SORT _score)](#bm25-relevance-scoring-sort-_score)
+- [BM25 Relevance Scoring (SORT _score)](#bm25-relevance-scoring-sort-score)
 - [Highlighting (HIGHLIGHT)](#highlighting-highlight)
 - [Fuzzy Search (FUZZY)](#fuzzy-search-fuzzy)
 - [Error Handling](#error-handling)
@@ -704,8 +704,8 @@ ERROR 4007 Table not found: nonexistent
 
 **Invalid filter column:**
 ```mygram
-SEARCH articles tech FILTER invalid_column=1
-ERROR 3006 Filter column not found: invalid_column
+SEARCH articles tech FILTER bad!name=1
+ERROR 3006 Invalid filter column
 ```
 
 ### Invalid Sorting
@@ -843,10 +843,10 @@ primary   → TERM | '(' or_expr ')'
 MygramDB uses n-gram tokenization for indexing and search:
 
 - **Default n-gram size**: 2 (bigrams) - configurable per table
-- **CJK text**: Separate n-gram size for kanji/kana (configurable)
+- **CJK ideographs**: Separate n-gram size for kanji/hanzi (configurable); kana and other scripts use `ngram_size`
 - **Unicode normalization**: NFKC normalization, width conversion, optional lowercasing
 
-Terms shorter than the configured n-gram size use stored normalized text for substring matching. Standard server initialization retains this text independently of `memory.verify_text`; a setup that explicitly disables text retention returns an explicit query error instead of an incomplete result.
+Terms shorter than the configured n-gram size use stored normalized text for substring matching, including terms under `NOT`. Standard server initialization retains this text independently of `memory.verify_text`. If a store has no normalized text for fallback, the query returns `ERROR 4000` instead of ignoring a short `NOT` term or returning an incomplete result.
 
 ---
 

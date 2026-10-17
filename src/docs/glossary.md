@@ -25,6 +25,10 @@ A binlog format that records which row changed and how. MygramDB requires `binlo
 
 A setting that includes enough before-and-after row data for UPDATE and DELETE events. It lets MygramDB update text and filter columns correctly.
 
+### binlog_row_metadata=FULL
+
+A MySQL or MariaDB source-server setting that includes optional column metadata, such as names, in `TABLE_MAP` events. MygramDB uses that event metadata to decode rows against the table definition that was in effect when they were written.
+
 ### GTID
 
 A unique identifier for a MySQL transaction. MygramDB stores GTIDs in snapshots and dumps so it can resume from the correct replication position after a restart.

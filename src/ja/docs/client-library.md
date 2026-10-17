@@ -48,6 +48,10 @@ sudo make install
 
 ヘッダーは `<prefix>/include/mygramdb` に、ライブラリは `<prefix>/lib`（またはプラットフォームのライブラリディレクトリ）にインストールされます。さらに `MygramDBClient` CMakeパッケージと `mygramclient.pc` も入ります。標準外の場所へインストールした場合は、ビルドツールのprefixまたは `PKG_CONFIG_PATH` を設定してください。
 
+::: warning C/C++ クライアントの再ビルド
+共有ライブラリの soname は 2（`VERSION 2.0.0`）です。公開検索式構造体のレイアウトが変わったため、現在のヘッダーで C/C++ プログラムを再ビルドしてリンクし直してください。
+:::
+
 ## C++ API
 
 ### 基本的な使い方
@@ -142,6 +146,8 @@ auto result = client.Search(
 ```
 
 リテラル検索語、`and_terms`、`not_terms`、フィルター値、ハイライトタグには同じワイヤー引用規則が適用されます。空の値、`AND`、`OR`、`NOT`、`ORDER` などの句キーワード、全角・ノーブレークスペースを含む Unicode 空白、引用符、バックスラッシュ、括弧は、1つの値として届くように引用・エスケープされます。`query_mode = QueryMode::kBoolean` や `SearchRaw` に渡す検索文は式としてそのまま送られるため、Web構文から組み立てる場合は `ConvertSearchExpression()` を使ってください。
+
+テーブル名、カラム名、フィルタキー、`SetVariable` に渡す名前には Unicode 空白を含められません。クライアントは送信前にこうした識別子を拒否します。
 
 ### 型付き検索オプション
 
@@ -297,7 +303,10 @@ if (!parsed) {
 }
 
 const auto& expr = *parsed;
-// expr.required_terms には必須語句が入ります。
+// 現在のフィールドは required_terms、excluded_terms、raw_expression、
+// required_is_group、excluded_is_group です。
+// グループフラグの配列は各語句の配列と対応し、true は括弧付きグループを示します。
+// この式では required_is_group が [false, true]、excluded_is_group が [false] です。
 // expr.excluded_terms には "古い" が入ります。
 ```
 
@@ -458,7 +467,7 @@ if (!authenticated) {
 
 新しいCプログラムでは `MygramClientConfigV2_C` を使います。`timeout_ms` は通常操作の期限です。`connect_timeout_ms` は接続の期限で、0なら `timeout_ms` を使います。`max_response_bytes` はレスポンスフレームの上限で、0なら64 MiBが既定です。`dump_*_timeout_ms` と `optimize_timeout_ms` は操作別の期限で、0または古い構造体にない場合はクライアントの既定値を使います。`unix_socket_path` を設定するとUnixソケットを使い、TCPのhost/portより優先されます。
 
-`MygramClientConfigV2_C` と `MygramSearchOptions_C` は末尾追加を前提にしたサイズ認識構造体です。呼び出し側が知っているサイズを `struct_size` に設定してください。ライブラリは後ろのフィールドを無視して既定値を使うので、古いバイナリも新しいライブラリを安全に利用できます。V2設定では `version` に `MYGRAMCLIENT_CONFIG_V2_VERSION` も設定します。従来の `MygramClientConfig_C` と `mygramclient_create()` はABI互換のために残っています。
+`MygramClientConfigV2_C` と `MygramSearchOptions_C` は同じ共有ライブラリ ABI メジャー内で末尾追加できるサイズ認識構造体です。呼び出し側が把握しているサイズを `struct_size` に設定してください。ライブラリは後ろのフィールドを無視し、既定値を使います。V2設定では `version` に `MYGRAMCLIENT_CONFIG_V2_VERSION` も設定します。従来の `MygramClientConfig_C` と `mygramclient_create()` は旧APIとして引き続き利用できます。
 
 ```c
 MygramFilter_C filters[] = {
@@ -480,6 +489,20 @@ if (mygramclient_search_with_options(client, "app_db.articles",
 ```
 
 FACETのページには `mygramclient_facet_paged(client, table, column, query, limit, offset, &result)` を使います。`result->total_count` はページネーション前の異なる値の総数です。結果は `mygramclient_free_facet_result` で解放してください。
+
+### Cの解析済み検索式のフィールド
+
+`MygramParsedExpression_C` は `main_term`、`and_count` 個の `and_terms`、`not_count` 個の `not_terms` を持ちます。削除された `optional_terms` と `optional_count` のフィールドはありません。OR やグループ化を含む式には変換 API を使ってください。
+
+```c
+typedef struct {
+    char* main_term;
+    char** and_terms;
+    size_t and_count;
+    char** not_terms;
+    size_t not_count;
+} MygramParsedExpression_C;
+```
 
 ### Cの検索式診断
 

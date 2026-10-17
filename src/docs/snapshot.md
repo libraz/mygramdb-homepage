@@ -30,6 +30,8 @@ DUMP SAVE /var/lib/mygramdb/dumps/before-maintenance.dmp
 
 Saving pauses and drains a running replication reader to record a consistent GTID, then resumes that reader. A reader that was already manually stopped remains stopped. When replication is enabled, a current GTID is required. Before writing the file, `DUMP SAVE` applies the restore limits to the live data and refuses an oversized primary key, filter value, text field, or data that would exceed `dump.restore_memory_budget_mb`. A dump whose status is `COMPLETED` therefore does not fail later because the restore path is stricter. `DUMP SAVE .` is rejected because `.` resolves to the dump directory itself rather than a file below it. Search stays available, but replication lag may grow during a large save. `SYNC`, `DUMP LOAD`, `OPTIMIZE`, and scheduled snapshots cannot run at the same time.
 
+Dump paths containing control bytes are refused, and `DUMP SAVE` and `DUMP LOAD` replies do not echo control characters from a path. The writer uses a temporary file and commits it by rename; on POSIX, it fsyncs the file before the atomic rename. V2 limits each encoded section to 4 GiB, and `DUMP SAVE` refuses data that exceeds that format limit.
+
 ```mygram
 DUMP SAVE .
 ```
@@ -45,7 +47,7 @@ DUMP INFO /var/lib/mygramdb/dumps/mygramdb.dmp
 
 `DUMP VERIFY` checks file and section integrity without changing live data. `DUMP INFO` exposes the file format, GTID, table count, flags, size, and timestamp. Verify the intended file before a manual load, but remember that integrity alone does not prove it belongs to this MySQL source.
 
-For format 2 dumps, verification streams CRC data and refuses a section larger than `dump.restore_max_section_mb`. Restore also stages data within `dump.restore_memory_budget_mb` before replacing live tables. Defaults are 2048 MiB per encoded section and 4096 MiB aggregate staging memory. Set both limits for the capacity of the host and the largest trusted dump; a limit rejection protects the process from unbounded allocation.
+For format 2 dumps, verification streams file and section CRC checks and refuses a header without the required CRC flag. It also refuses a section larger than `dump.restore_max_section_mb`. Restore stages data within `dump.restore_memory_budget_mb` before replacing live tables. Defaults are 2048 MiB per encoded section and 4096 MiB aggregate staging memory. Set both limits for the capacity of the host and the largest trusted dump; a limit rejection protects the process from unbounded allocation.
 
 ## Manual restore
 
@@ -56,6 +58,8 @@ DUMP LOAD mygramdb.dmp
 ```
 
 `DUMP LOAD` replaces the live index and document store. It pauses replication, validates the dump before replacement, sets the loaded GTID, rebuilds search statistics, clears the query cache, and then restores replication. A successful load marks all restored tables initialized. If the reader fails to restart after the replacement, MygramDB keeps serving the restored data with replication stopped and readiness false.
+
+The loader stages restored tables before installing them. If validation or decoding fails, the current live index and document store remain untouched.
 
 The load rejects a dump whose indexed-table compatibility settings do not match, whose MySQL host, port, or database differs from the configured source, or whose recorded source UUID differs from the running source. A dump without a recorded source UUID is accepted as source-unknown. Replacing a non-empty replication position with a dump that has no GTID is also refused.
 
@@ -86,7 +90,7 @@ dump:
   retain: 3
 ```
 
-`dump.retain` accepts 1–100 files and defaults to 3. Scheduled dumps use timestamped `auto_*.dmp` filenames, and retention removes older automatic files beyond that count. Manual `DUMP SAVE` files are not removed by this retention. Dumps contain indexed content and connection metadata, so restrict access, store them on protected storage, and test a restore in an isolated environment.
+`dump.retain` accepts 1–100 files and defaults to 3. Scheduled dumps use timestamped `auto_*.dmp` filenames, and retention removes older automatic files beyond that count. Scheduled snapshots wait until all configured tables have completed their initial load. Manual `DUMP SAVE` files are not removed by this retention. Dumps contain indexed content and connection metadata, so restrict access, store them on protected storage, and test a restore in an isolated environment.
 
 ## Troubleshooting
 

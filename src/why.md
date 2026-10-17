@@ -43,7 +43,7 @@ The search index and stored document data are held in memory. The server does no
 
 ### Compressed Posting Lists
 
-Posting lists use Delta encoding or Roaring bitmaps according to density. The memory saving depends on the indexed data; see the [memory sizing reference](/docs/performance#memory-sizing).
+Posting lists use Delta encoding or Roaring bitmaps according to density. The memory saving depends on the indexed data; see the [memory sizing reference](/docs/performance#_1-memory-sizing).
 
 ### SIMD-Accelerated Operations
 

@@ -53,7 +53,7 @@ api:
 です（たとえば `app_db` データベースの `articles` テーブルは `/tables/app_db.articles` と指定します）。
 単一データベース構成（設定されている個別のデータベースが1つだけ）の場合は、修飾なしの `table` 名も
 そのデータベースに解決されます。たとえば `/tables/articles` です。2つ以上のデータベースにまたがる構成の
-場合にのみ修飾が必要となり、修飾なしの名前は曖昧として拒否されます。
+場合にのみ修飾が必要となり、修飾なしの名前は曖昧として `404 Not Found` と `error_code: 4007` で拒否されます。
 
 v1.7.0 で旧ルートの `/{table}/search`、`/{table}/count`、`/{table}/{primary_key}` は削除されました。テーブル操作はすべて `/tables/{identity}/...` を使ってください。
 
@@ -99,6 +99,8 @@ Content-Type: application/json
 | `fuzzy` | integer | いいえ | あいまい検索の編集距離（`1` または `2`） |
 
 `sort.column` を省略すると主キーでソートします。カラム名を指定する場合は、`order: "ASC"` または `"DESC"` と組み合わせます。たとえば `{ "sort": { "column": "created_at", "order": "DESC" } }` のように指定します。
+
+`limit` は 1～1000 の範囲で指定します。1000 を超える値と 64 件を超えるフィルタ条件は `400 Bad Request` と `error_code: 3000` になります。整数以外の `limit` と 1 未満の値は `error_code: 3008` で拒否されます。
 
 ### リテラル検索とBoolean検索
 
@@ -254,7 +256,7 @@ Content-Type: application/json
 | `limit` | integer | いいえ | 返すファセットバケット数の上限（1-1000） |
 | `offset` | integer | いいえ | スキップするファセットバケット数（既定: 0） |
 
-`sort`、`highlight`、`fuzzy` は FACET ではサポートされず、指定するとエラーになります。
+`sort`、`highlight`、`fuzzy` は FACET ではサポートされず、指定するとエラーになります。FACET のカラム名の構文が不正な場合は `400 Bad Request` と `error_code: 3000` を返します。名前の形式が正しくても、設定済みのフィルタカラムがなければ `400` と `error_code: 4000` を返します。
 
 **リクエスト:**
 
@@ -302,7 +304,7 @@ Authorization: Bearer <token>
 {"table":"app_db.articles"}
 ```
 
-`Content-Type` は `application/json` でなければなりません。`api.admin_token` が空でない場合、このエンドポイントには正確な `Authorization: Bearer <token>` ヘッダーが必要です。満たさない場合は `WWW-Authenticate: Bearer` と `error_code: 7` を含む `401` を返します。トークンは定数時間で比較します。このトークンをアクセス許可の条件にする HTTP ルートは `GET /config`、`GET /replication/status`、`POST /optimize` の3つだけです。`GET /health/ready` と `GET /health/detail` は同じ認証情報を参照して保護されたレプリケーションフィールドを表示することがありますが、ルート自体は公開されています。それ以外のルートでは認証に使いません。
+`Content-Type` は `application/json` でなければなりません。`api.admin_token` が空でない場合、このエンドポイントには正確な `Authorization: Bearer <token>` ヘッダーが必要です。満たさない場合は `WWW-Authenticate: Bearer` と `error_code: 7` を含む `401` を返します。トークンは定数時間で比較します。このトークンをアクセス許可の条件にする HTTP ルートは `GET /config`、`GET /replication/status`、`POST /optimize` の3つだけです。`GET /health/ready`、`GET /health/detail`、`GET /metrics` は同じ認証情報を参照して保護されたレプリケーション情報を表示しますが、ルート自体は公開されています。
 
 成功時は `{ "status": "ok", "result": "OPTIMIZED ..." }` を含む `200` を返します。本文で受け付けるフィールドは `table` だけです。未知のフィールドまたは文字列以外のテーブル名は `400` のリクエストエラーになります。
 
@@ -356,7 +358,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.10.2",
+  "version": "1.11.0",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -478,7 +480,7 @@ GET /metrics HTTP/1.1
 ```prometheus
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.10.2"} 1
+mygramdb_server_info{version="1.11.0"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -530,11 +532,16 @@ mygramdb_command_total{command="get"} 3000
 scrape_configs:
   - job_name: 'mygramdb'
     scrape_interval: 15s
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/mygramdb_admin_token
     static_configs:
       - targets: ['localhost:8080']
         labels:
           environment: 'production'
 ```
+
+`api.admin_token` を設定している場合、Prometheus が `mygramdb_replication_*` メトリクスを取得するにはトークンが必要です。`credentials_file` のファイルにはトークンだけを保存し、アクセスを制限してください。認証情報が受理されない場合も `/metrics` は公開されたままですが、HELP / TYPE 行を含むレプリケーションメトリクス全体を省略します。
 
 **主要機能:**
 
@@ -554,7 +561,7 @@ scrape_configs:
 | 多次元対応 | 限定的 | 完全なラベルサポート |
 | 互換性 | 任意のHTTPクライアント | Prometheusエコシステム |
 
-両方のエンドポイントは同じ基礎データを提供しますが、異なる形式です。Prometheus統合には`/metrics`を使用し、一般的な監視や人間が読みやすい出力には`/info`を使用してください。
+両方のエンドポイントにはサーバー状態、メモリヘルス、インデックス統計が含まれますが、項目と詳細度は異なります。レプリケーション系列は `/metrics` でのみ取得でき、`api.admin_token` を設定している場合は有効な Bearer トークンが必要です。Prometheus 連携には `/metrics` を、一般的な監視や人間が読みやすい出力には `/info` を使ってください。
 
 ### GET /health
 
@@ -604,7 +611,7 @@ GET /config HTTP/1.1
 Authorization: Bearer <token>
 ```
 
-`api.admin_token` が空でない場合、`/config` には正確な `Authorization: Bearer <token>` ヘッダーが必要です。トークンがない、または無効な場合は `401 Unauthorized`、`WWW-Authenticate: Bearer`、`error_code: 7` を返します。管理者トークンを設定していない場合、このルートは公開されます。同じ HTTP バインドアドレスとポートで別のインスタンスを起動すると、`Bind failed (6000)`（`kNetworkBindFailed`）で起動に失敗します。
+`api.admin_token` が空でない場合、`/config` には正確な `Authorization: Bearer <token>` ヘッダーが必要です。トークンがない、または無効な場合は `401 Unauthorized`、`WWW-Authenticate: Bearer`、`error_code: 7` を返します。管理者トークンを設定していない場合、このルートは公開されます。設定オブジェクトが読み込まれていない場合は `503 Service Unavailable` と `error_code: 6026` を返します。同じ HTTP バインドアドレスとポートで別のインスタンスを起動すると、`Bind failed (6000)`（`kNetworkBindFailed`）で起動に失敗します。
 
 **レスポンス (200 OK):**
 
@@ -644,7 +651,7 @@ GET /replication/status HTTP/1.1
 Authorization: Bearer <token>
 ```
 
-`api.admin_token` が空でない場合、`/replication/status` にも `/config` と同じ Bearer トークン要件と `401` 応答が適用されます。トークンを設定していない場合は公開されます。`enabled` はレプリケーションが実行中かどうかを示し、`status` は `"running"`、`"stopped"`、`"failed"` のいずれかです。完全なレスポンスにはレプリケーションのカウンターと時刻情報が含まれます。
+`api.admin_token` が空でない場合、`/replication/status` にも `/config` と同じ Bearer トークン要件と `401` 応答が適用されます。トークンを設定していない場合は公開されます。MySQL 対応ビルドで binlog reader がない場合は、`200 OK` と `{"enabled":false,"status":"not_configured"}` を返します。reader がある場合、`enabled` は実行中かどうかを示し、`status` は `"running"`、`"stopped"`、`"failed"` のいずれかです。完全なレスポンスにはレプリケーションのカウンターと時刻情報が含まれます。
 
 **レスポンス (200 OK):**
 
@@ -664,7 +671,16 @@ Authorization: Bearer <token>
 }
 ```
 
-**エラーレスポンス (503 Service Unavailable):**
+**MySQL 対応ビルドでレプリケーション未設定の場合 (200 OK):**
+
+```json
+{
+  "enabled": false,
+  "status": "not_configured"
+}
+```
+
+**MySQL 非対応ビルドの場合 (503 Service Unavailable):**
 
 ```json
 {
@@ -798,11 +814,11 @@ for doc in data['results']:
 | 400 | 不正なリクエスト（無効な入力） |
 | 401 | 未認証（`/config`、`/replication/status`、`/optimize` などの管理ルートに必要な Bearer トークンがない、または無効） |
 | 403 | 禁止（送信元IPが許可されていない） |
-| 404 | 見つかりません（ドキュメントが存在しない場合は `error_code: 4004`） |
+| 404 | 見つかりません（ドキュメントがない場合は `error_code: 4004`、複数DB構成で修飾なしの名前を指定した場合など、テーブル名を解決できない場合は `4007`） |
 | 413 | Payload Too Large（リクエスト本文が `api.http.max_body_bytes` を超過） |
 | 429 | リクエスト過多（レート制限を超過） |
 | 500 | 内部サーバーエラー |
-| 503 | サービス利用不可、機能無効、レプリケーション利用不可、またはテーブル同期中 |
+| 503 | サービス利用不可（`GET /config` の設定未読み込みは `error_code: 6026`）、機能無効、MySQL 非対応ビルドでのレプリケーション要求（`error_code: 4`）、またはテーブル同期中 |
 
 ## 監視
 

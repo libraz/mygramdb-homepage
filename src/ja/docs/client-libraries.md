@@ -28,18 +28,22 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 クライアントライブラリはMygramDBサーバーへコマンドを送るための薄いラッパーです。既存データがまだ読み込まれていない場合は、先に `SYNC <table>` を実行してください。詳しくは [SYNCコマンド](/ja/docs/sync-command) を参照してください。
 :::
 
+::: warning C/C++ プログラムの再ビルド
+共有ライブラリの soname は 2（`VERSION 2.0.0`）で、公開検索式構造体のレイアウトが変わりました。現在のヘッダーでネイティブプログラムを再ビルドしてリンクし直してください。C/C++ API は [libmygramclient](/ja/docs/client-library) を参照してください。
+:::
+
 ## 共通の考え方
 
 - テーブル名には、単一DB構成では `articles`、複数DB構成では `app_db.articles` のようなDB修飾名を使います。
 - 通常の `search()` / `Search()` は、単純な検索語やAND/NOT中心の検索に向いています。
 - `OR` や括弧を含むブール式は、検索式パーサーで変換して `searchRaw()` / `SearchRaw()` / `search_raw()` に渡します。
 - Web構文の変換関数は、単独の `or` を `OR` として認識し、`order` のようなリテラル語やアポストロフィを含む語を引用し、グループ内のマイナスを `NOT` に変換します。フレーズとOR/グループは1回だけ変換されるため、結果をそのままRaw検索メソッドへ渡してください。
-- 検索レスポンスには、`limit`/`offset` 適用前のマッチ総数と現在のページの結果が含まれます。
+- 検索レスポンスには、`limit`/`offset` 適用前のマッチ総数と現在のページの結果が含まれます。FACET の値は件数順に並び、件数が同じ値もページ間で安定した順序を保ちます。
 - BM25関連度ソート、ハイライト、ファジー検索、FACETはサーバー側の設定にも依存します。
 - `SET`、`SHOW VARIABLES`、`SYNC` などの管理系操作はTCP経由で実行されます。
 
 ::: warning 管理系コマンドには認証が必要です
-`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には認証が必要です。すでに接続済みのクライアントでは、実行前に `MYGRAM_API_ADMIN_TOKEN` を使って `AUTH` を送信してください。認証は基底のTCP接続ごとに設定されるため、再接続のたびに繰り返す必要があります。自動再接続でも認証状態は保持されないので、再接続後の次の管理系操作の前に認証してください。`search`、`count`、`get`、`facet`、`INFO` は認証不要です。
+`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には認証が必要です。すでに接続済みのクライアントでは、実行前に `MYGRAM_API_ADMIN_TOKEN` を使って `AUTH` を送信してください。認証は基底の TCP 接続ごとに設定されるため、再接続のたびに繰り返す必要があります。自動再接続でも認証状態は保持されないので、再接続後の次の管理系操作の前に認証してください。`search`、`count`、`get`、`facet`、`INFO` は認証なしで利用できます。ただし `api.admin_token` を設定した場合、`INFO` は接続が `AUTH` を完了するまでレプリケーションのセクションを省略します。
 :::
 
 ::: info 用語補足
@@ -418,9 +422,9 @@ Goクライアントは並行利用を想定した実装です。リクエスト
 | 機能 | サーバー側ドキュメント |
 |------|------------------------|
 | 検索構文、`AND` / `OR` / `NOT` | [クエリ構文](/ja/docs/query-syntax) |
-| BM25 `_score` | [クエリガイド - 関連度ソート](/ja/docs/queries#関連度ソートbm25) |
+| BM25 `_score` | [クエリガイド - 関連度ソート](/ja/docs/queries#%E9%96%A2%E9%80%A3%E5%BA%A6%E3%82%BD%E3%83%BC%E3%83%88-bm25) |
 | HIGHLIGHT | [クエリガイド - ハイライト](/ja/docs/queries#ハイライト) |
-| FUZZY | [クエリガイド - ファジー検索](/ja/docs/queries#ファジー検索) |
+| FUZZY | [クエリガイド - ファジー検索](/ja/docs/queries#%E3%83%95%E3%82%A1%E3%82%B7%E3%82%99%E3%83%BC%E6%A4%9C%E7%B4%A2) |
 | FACET | [クエリガイド - FACET集計](/ja/docs/queries#facet集計) |
 | `SYNC` | [SYNCコマンド](/ja/docs/sync-command) |
 | ランタイム変数 | [運用ガイド](/ja/docs/operations) |

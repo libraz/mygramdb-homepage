@@ -37,7 +37,7 @@ network:
     - "127.0.0.1/32"
 ```
 
-`mysql.user`, `mysql.database`, and at least one table are required after environment overrides are applied. The `mysql` block may be omitted when the required values come from `MYGRAM_MYSQL_USER` and `MYGRAM_MYSQL_DATABASE`. When `replication.enable` is true (the default), `replication.server_id` is also required and must be unique among MySQL replicas and MygramDB instances.
+`mysql.user`, `mysql.database`, and at least one table are required after environment overrides are applied. The `mysql` block may be omitted when the required values come from `MYGRAM_MYSQL_USER` and `MYGRAM_MYSQL_DATABASE`. When replication is enabled (the default), `replication.server_id` must be a unique non-zero value from `1` to `4294967295` among MySQL replicas and MygramDB instances.
 
 ::: tip What to do after the minimal config
 Writing the config file does not load any data. After starting the server, synchronize each table you want with `SYNC articles` and confirm completion with `SYNC STATUS`.
@@ -82,6 +82,8 @@ Environment variables can override `mysql.host`, `mysql.port`, `mysql.user`, `my
 
 `mysql.ignored_ddl_prefixes` is an empty startup-only list by default. Add reviewed single-statement prefixes only when an otherwise unclassified standalone DDL `QUERY_EVENT` is known to be safe to skip. Each entry must be non-empty, contain no semicolon, and begin (case-insensitively) with one of `ALTER`, `ANALYZE`, `CHECK`, `CREATE`, `DROP`, `OPTIMIZE`, `RENAME`, `REPAIR`, or `TRUNCATE`; DML prefixes are rejected. The list does not override configured-table or configured-database safety: `DROP DATABASE` or `DROP SCHEMA` for a configured database still stops replication, even when `DROP` is listed. Changes take effect after restart.
 
+`mysql.binlog_format` and `mysql.binlog_row_image` assert the source server's values; they do not change MySQL or MariaDB settings. Set `binlog_row_metadata=FULL` on the source as well. It is a server setting, not a MygramDB configuration key. See [MySQL Replication](/docs/replication) for the required source and table checks.
+
 ::: tip DATETIME vs TIMESTAMP
 MySQL `DATETIME` carries no timezone. MygramDB uses `datetime_timezone` to decide which timezone those values are in. `TIMESTAMP` is already normalized to UTC by MySQL, so this setting does not affect it.
 :::
@@ -91,7 +93,10 @@ MySQL `DATETIME` carries no timezone. MygramDB uses `datetime_timezone` to decid
 ```ini
 binlog_format = ROW
 binlog_row_image = FULL
+binlog_row_metadata = FULL
 ```
+
+These settings belong on the MySQL or MariaDB source. MygramDB validates them at startup and on reconnect; its YAML `mysql` block does not configure the source server.
 
 For MySQL, enable GTID:
 
@@ -116,6 +121,8 @@ In production you can scope `SELECT` to just the searchable databases instead of
 ## Table Configuration
 
 Each table gets an effective identity of `<database>.<table>`. If `tables[*].database` is omitted, it defaults to `mysql.database`.
+
+MygramDB checks source requirements, primary-key uniqueness, foreign-key actions, and column definitions before replication. See [MySQL Replication](/docs/replication#source-and-table-validation) for the refusal conditions and error codes.
 
 ```yaml
 mysql:
@@ -220,7 +227,7 @@ tables:
       use_roaring: "auto"
 ```
 
-`ngram_size` applies to ASCII/alphanumeric text. The omitted default is `2`; set `ngram_size: 1` explicitly only if you need unigram behavior. `kanji_ngram_size` applies to CJK characters; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
+`ngram_size` applies to kana, ASCII/alphanumeric text, and other scripts outside CJK ideographs. The omitted default is `2`; set `ngram_size: 1` explicitly only if you need unigram behavior. `kanji_ngram_size` applies only to CJK ideographs; `0` means use `ngram_size`. `cross_boundary_ngrams` controls whether mixed-script boundary n-grams such as `字A` are generated.
 
 ::: info What is an N-gram?
 An **N-gram** is a short slice of a string. Because it splits by character rather than by word, it works without a dictionary even in languages that do not separate words with spaces.
@@ -278,8 +285,10 @@ replication:
 | Value | Behavior |
 |-------|----------|
 | `snapshot` | Resume from the GTID captured by the snapshot/dump |
-| `latest` | Start from current MySQL GTID, ignoring older changes |
-| `gtid=<UUID:txn>` | Start from a specific MySQL GTID |
+| `latest` | Start from the source's current GTID, ignoring older changes |
+| `gtid=<position>` | Start from a MySQL GTID set (`UUID:txn[-txn]`, comma-separated) or MariaDB GTID list (`domain-server-seq`, comma-separated) |
+
+MySQL GTID transaction numbers must be below `2^63−1`; MariaDB uses its separate `domain-server-seq` grammar. A single MySQL `UUID:txn` position means through that transaction. For a `gtid=...` value, malformed positions are rejected during config validation. If replay can include TABLE_MAP events written before the source enabled `binlog_row_metadata=FULL`, run `SYNC` for every replicated table after changing the source setting.
 
 ## Memory
 
@@ -295,7 +304,7 @@ memory:
   verify_text: "off"
 ```
 
-`hard_limit_mb`, `soft_target_mb`, `arena_chunk_mb`, and `minute_epoch` are reserved/not yet enforced. Size the host so the full index and stored normalized text fit in RAM.
+`hard_limit_mb` and `soft_target_mb` are reserved and do not enforce a process memory limit. They still have configuration bounds: `hard_limit_mb` accepts `256` through `2147483647`, and `soft_target_mb` accepts `128` through `2147483647`. `arena_chunk_mb` and `minute_epoch` are also reserved. Size the host so the full index and stored normalized text fit in RAM.
 
 ::: warning About the memory limit
 `hard_limit_mb` does not currently stop the process at the OS level. In production, estimate from the row count, stored text, `verify_text` mode, and cache size, then provision enough RAM.
@@ -469,6 +478,8 @@ network:
 ```
 
 If `allow_cidrs` is empty or omitted, connections are denied. Add only the application server and operator networks that need access. MygramDB has no native TLS, so terminate TLS at a reverse proxy or load balancer when needed. Administrative commands use `api.admin_token`; ordinary search endpoints remain protected by the bind address and CIDR allowlist.
+
+IPv4-mapped IPv6 CIDRs with prefixes shorter than `/96` are rejected because they do not map to a valid IPv4 range. Prefixes from `/96` through `/128` are folded into the corresponding IPv4 range.
 
 ::: danger Never expose it directly to a public network
 Do not publish MygramDB directly to the internet. A configuration with `0.0.0.0/0` or `::/0` in `allow_cidrs` and a non-loopback TCP or enabled HTTP bind is rejected at startup. Use a restrictive CIDR list, or keep the listener on loopback behind a reverse proxy.

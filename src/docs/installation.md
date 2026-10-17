@@ -46,17 +46,17 @@ For production use under Docker, mount a config file containing the MySQL connec
 :::
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.10.2
+docker pull ghcr.io/libraz/mygram-db:1.11.0
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
-  ghcr.io/libraz/mygram-db:1.10.2
+  ghcr.io/libraz/mygram-db:1.11.0
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.10.2`
+- `ghcr.io/libraz/mygram-db:1.11.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
@@ -148,7 +148,7 @@ sudo journalctl -u mygramdb -f
 ## Verify Installation
 
 ::: info What is still needed after installing
-Installing the package or pulling the image does not load any searchable data. After configuring the MySQL connection, the target tables, and the allowed network range, run `SYNC <table>` once to build the index from existing rows.
+Installing the package or pulling the image does not load any searchable data. Configure the MySQL source requirements, the target tables, and the allowed network range, then run `SYNC <table>` once to build the index from existing rows. See [MySQL Replication](/docs/replication) for source settings.
 :::
 
 ```bash
@@ -171,4 +171,4 @@ MygramDB **refuses to run as root** for security. Always run it as a dedicated n
 
 - [Docker Deployment](/docs/docker-deployment)
 - [Operations Guide](/docs/operations)
-- [Upgrade to v1.10](/docs/upgrade-v1.10)
+- [Upgrade to v1.11](/docs/upgrade-v1.11)

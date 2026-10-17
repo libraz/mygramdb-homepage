@@ -42,7 +42,7 @@ OK AUTHENTICATED
 
 コマンドはテキストベースで、1行に1コマンドです。レスポンスは改行で終了します。
 
-スレッドプールのキューが満杯で接続のドレインタスクをスケジュールできない場合、サーバーはその接続に `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` を返し、すでにキューに入っているレスポンスを送ってから接続を閉じます。保留フレーム数や共有バッファの上限に達した場合も、切断前にベストエフォートで `ERROR 6030` を返すことがあります。
+接続のドレインタスクをスケジュールするときにスレッドプールが満杯の場合、サーバーは通常レスポンスの受け付けを止め、その接続にすでにキューイングされたレスポンスを送信してから、終端の `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` を送り、接続を閉じます。保留フレーム数や共有バッファの上限に達した場合も、切断前にベストエフォートで `ERROR 6030` を返すことがあります。
 
 `SEARCH`、`COUNT`、`GET`、`FACET` は認証不要です。管理トークンを設定している場合、設定コマンド、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には `AUTH` が必要です。認証前の管理コマンドは `ERROR 7 Administrative command requires AUTH` を返します。
 
@@ -166,13 +166,13 @@ INFO
 
 ### レスポンス
 
-Redis形式のキー・バリュー形式で複数のセクションを返します：
+Redis形式のキー・バリュー形式で複数のセクションを返します。この例では、`api.admin_token` を設定した場合に `AUTH` 後に表示されるレプリケーションセクションも示しています。認証前は `# Replication` セクション全体を省略します。
 
 ```mygram
 OK INFO
 
 # Server
-version: 1.10.2
+version: 1.11.0
 uptime_seconds: 3600
 data_initialized: true
 readiness: ready
@@ -457,7 +457,7 @@ OK DUMP_STARTED <filepath>
 DUMP SAVE mygramdb.dmp
 ```
 
-`DUMP STATUS` で進捗を監視し、完了を確認できます。`--with-stats` は文法から削除されており、指定すると未知の `DUMP SAVE` フラグとして拒否されます。
+`mygram-cli` はサーバーと同じエスケープ規則でコマンドを解析し、最後の空でないトークンをファイルパスとして扱います。空白を含むパスは引用符で囲んでください。`-` で始まるトークンがある場合、CLI はコマンド行をサーバーへ送り、未知の `DUMP SAVE` フラグとして拒否されます。`DUMP STATUS` で進捗を監視し、完了を確認できます。`--with-stats` は文法から削除されており、未知のフラグとして拒否されます。
 
 ### DUMP LOAD
 
@@ -746,9 +746,9 @@ ERROR 4010 Table '<name>' not found
 - バックグラウンドで非同期に実行されます
 - 開始後すぐにレスポンスを返します
 - MySQL の SELECT でスナップショットを構築します
-- `START TRANSACTION WITH CONSISTENT SNAPSHOT` の前に安全な下限 GTID を取得します
-- GTID の取得からスナップショットトランザクション開始までにコミットされた変更は、レプリケーションで再適用されることがあります。これは意図した at-least-once 処理であり、冪等に適用されます
-- 完了時は通常、SYNC 前にドレインして保存した GTID からレプリケーションを再開するため、他テーブルのコミットを飛ばしません。デコード不能な2017イベントからの特殊な回復時だけ、スナップショットの下限 GTID から再開します
+- MySQLでは `START TRANSACTION WITH CONSISTENT SNAPSHOT` の前に保守的なGTID下限を取得し、MariaDBではスナップショット自体の正確なbinlog位置をGTIDに変換します
+- MySQLではGTID取得からスナップショットトランザクション開始までにコミットされた変更が再適用されることがあります。これは意図した at-least-once 処理であり、冪等に適用されます
+- 完了時は通常、SYNC前にドレインして保存したGTIDからレプリケーションを再開するため、他テーブルのコミットを飛ばしません。`2017` の復旧ではスナップショットマーカー（MySQLの下限GTID、またはMariaDBの正確なbinlog位置を変換したGTID）から再開します
 
 同期中は対象テーブルへの `SEARCH`、`COUNT`、`GET`、`FACET` が拒否されます。進捗と失敗理由は `SYNC STATUS` で確認してください。
 
@@ -849,7 +849,7 @@ END
 | `rate` | 処理速度（行/秒） |
 | `rows` | 処理した行の総数 |
 | `time` | 処理時間の合計 |
-| `gtid` | スナップショットの下限 GTID マーカー。通常の再開には SYNC 前にドレインした GTID を使い、デコード不能イベント（2017）の回復時だけこのマーカーから再開することがあります |
+| `gtid` | スナップショットマーカー。MySQLでは保守的な下限GTID、MariaDBではスナップショットの正確なbinlog位置を変換したGTIDです。通常の再開にはSYNC前にドレインしたGTIDを使い、デコード不能イベント（`2017`）の回復時はこのマーカーから再開することがあります |
 | `replication` | レプリケーション状態（`STARTED`、`DISABLED`、`FAILED`） |
 | `error` | 失敗時のエラーメッセージ |
 
@@ -1013,7 +1013,10 @@ optimization: <strategy>
 order_by: <column> <direction>
 limit: <value> [(default)]
 offset: <value> [(default)]
+[cache_key: <canonical-key>]
 ```
+
+正規化されたクエリキーがある場合、SEARCH と COUNT のレスポンスに `cache_key` 行を含めます。
 
 ### デバッグメトリクスの説明
 
@@ -1098,7 +1101,7 @@ SHOW VARIABLES [LIKE '<pattern>']
 
 `SET api.default_limit=50` のように、空白を入れない形式も使えます。カンマで区切った複数代入にも混在させられます。
 
-`SHOW VARIABLES LIKE` に指定できるパターンはちょうど1つです。
+`SHOW VARIABLES LIKE` に指定できるパターンは1つだけで、大文字と小文字を区別せず照合します。
 
 ### レスポンス
 
@@ -1119,7 +1122,7 @@ SHOW VARIABLES [LIKE '<pattern>']
 +---------------------+-----------+---------+
 ```
 
-`SET cache.enabled = true` は、キャッシュを起動できない場合に `ERROR 8001 Failed to set variable 'cache.enabled': Cache cannot be enabled` で失敗します。`cache.min_query_cost_ms` は有限かつ 0 以上の値でなければならず、`nan`、`inf`、`-inf` などは `ERROR 1004` で拒否されます。
+`SET` は起動時と同じ設定スキーマで各値を検証します。複数代入はすべて成功した場合だけ適用し、無効な値があればどの代入が失敗したかを `ERROR 1004` で示します。`server_id` と `cache.max_memory_mb` の上限も起動時と同じです。`SET cache.enabled = true` は、キャッシュを起動できない場合に `ERROR 8001 Failed to set variable 'cache.enabled': Cache cannot be enabled` で失敗します。`cache.min_query_cost_ms` は有限かつ 0 以上の値でなければならず、`nan`、`inf`、`-inf` などは `ERROR 1004` で拒否されます。
 
 `SHOW VARIABLES` で機密フィールドを返す場合、値は `***` にマスクされます。`mysql.password`、`mysql.ssl_key` のほか、名前に `password`、`secret`、`ssl_key`、`api_key`、`auth_key`、`private_key`、`access_key`、`token` を含むフィールドが対象です。空の値は空のままです。
 
@@ -1152,10 +1155,11 @@ CLIクライアント（`mygram-cli`）は対話型シェルを提供：
 - **コマンド履歴**: ↑/↓矢印キーで履歴をナビゲート（GNU Readline必須）
 - **行編集**: Ctrl+A、Ctrl+Eなどでフル行編集（GNU Readline必須）
 - **エラーハンドリング**: グレースフルなエラーメッセージ（クラッシュしない）
-- **引用処理**: 検索テキスト、フィルタ値、`AND` / `NOT` の語は SDK と C API と同じワイヤ形式で引用します。Unicode 空白やリテラルとして使うコマンドキーワードも値の一部として保持されます。
+- **コマンド入力**: 入力したコマンドをそのまま送信します。SDK の引用規則で検索語やフィルタ値を自動引用することはありません。コマンドライン引数ではタブを空白に置き換え、それ以外の `0x20` 未満の制御文字を除去します。
 - **完全な読み取り**: ハイライト結果、`DEBUG` 出力、`SHOW VARIABLES` を含む複数行レスポンスを、受信バッファが小さくても最後まで読み取ります。
 - **IPv6**: IPv6 リテラル、または IPv6 に解決されるホスト名で接続できます。
 - **検索結果**: 主キーごとに1行を表示し、空白を含む引用済み主キーもデコードします。
+- **DUMP SAVE のパス**: サーバーと同じエスケープ規則で最後の空でないトークンをパスとして扱います。空白を含むパスは引用符で囲んでください。`-` で始まるトークンはサーバーに渡し、未知のフラグとして拒否します。
 - **ダンプのエラー**: `DUMP SAVE` が失敗した場合はサーバーの数値エラーコードを表示します。`--wait-ready` を指定すると、サーバーがロード中または未準備の間はコマンドを再試行します。`INFO` が `readiness: not_ready` を返している状態は成功として扱いません。
 
 ### 対話モード
@@ -1192,7 +1196,7 @@ OK AUTHENTICATED
 | `-p PORT` | サーバーのポート（デフォルト: `11016`） |
 | `-s SOCKET_PATH` | Unixドメインソケットのパス。`-h`/`-p` より優先されます |
 | `--retry N` | 接続を拒否された場合にN回リトライ（デフォルト: `0`） |
-| `--wait-ready` | サーバーが準備完了になるまでリトライを続ける |
+| `--wait-ready` | 設定された回数だけ準備完了まで再試行（既定は100回、`--retry N` で上書き）。準備完了しなければ非ゼロで終了 |
 | `--version` | クライアントのバージョンを表示して終了 |
 | `--help` | 使い方を表示して終了 |
 

@@ -5,6 +5,10 @@ description: "Upgrade checklist for MygramDB v1.10.1 and v1.10.2: authentication
 
 # Upgrade to v1.10.2
 
+::: info Upgrading to the current release
+Also follow the [v1.11 upgrade checklist](/docs/upgrade-v1.11), including the required source metadata setting and native client rebuild.
+:::
+
 The v1.10.1 and v1.10.2 patch releases correct replication safety, configuration validation, dump recovery, API authentication, and protocol-wide rate limiting. Review these actions before replacing a running node.
 
 ## Before You Upgrade
@@ -103,7 +107,7 @@ After upgrading and synchronizing, create and verify a new dump before relying o
 
 ## Replication Recovery
 
-An undecodable binlog event reports error code `2017`. A `TABLE_MAP` event with column metadata this build cannot size also stops replication and reconnects from the last applied GTID, even when the table is not configured, because the event must be sized before the table can be ignored. Fix the source schema or setting, run `SYNC` for the highest-priority table first, then rebuild every other replicated table.
+An undecodable binlog event stops replication with error code `2017`. A `TABLE_MAP` column type this build cannot size stops even for an unconfigured table, because row widths must be decoded before the table can be ignored. The event remains at the last applied GTID, so reconnecting alone meets it again. Missing or malformed optional metadata on a monitored table also stops with `2017`; set `binlog_row_metadata=FULL` on the source before recovery. Run `SYNC` for the highest-priority table first, then run it for every other replicated table, one at a time. See the [SYNC recovery procedure](/docs/sync-command#error-2017-undecodable-binlog-event).
 
 `ALTER TABLE ... RENAME TO ...` that renames a table onto a configured name now stops replication with a renamed-table diagnostic. Resolve the schema change and rebuild the affected table before resuming normal writes.
 

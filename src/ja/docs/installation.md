@@ -42,17 +42,17 @@ sudo systemctl enable --now mygramdb
 ## Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.10.2
+docker pull ghcr.io/libraz/mygram-db:1.11.0
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
-  ghcr.io/libraz/mygram-db:1.10.2
+  ghcr.io/libraz/mygram-db:1.11.0
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.10.2`
+- `ghcr.io/libraz/mygram-db:1.11.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
@@ -153,7 +153,7 @@ mygram-cli --help
 ```
 
 ::: info インストール後に必要な作業
-パッケージやDockerイメージを入れただけでは、検索対象のデータは読み込まれません。MySQL接続、対象テーブル、ネットワーク許可範囲を設定したあと、初回は `SYNC <table>` を実行して既存データからインデックスを作成してください。
+パッケージやDockerイメージを入れただけでは、検索対象のデータは読み込まれません。MySQLソースの要件、対象テーブル、ネットワーク許可範囲を設定したあと、初回は `SYNC <table>` を実行して既存データからインデックスを作成してください。ソース側の設定は[MySQLレプリケーション](/ja/docs/replication)を参照してください。
 :::
 
 ## セキュリティ
@@ -171,4 +171,4 @@ MygramDBはセキュリティのため**root権限での実行を拒否**しま�
 
 - [Dockerデプロイ](/ja/docs/docker-deployment)
 - [運用ガイド](/ja/docs/operations)
-- [v1.10 へのアップグレード](/ja/docs/upgrade-v1.10)
+- [v1.11 へのアップグレード](/ja/docs/upgrade-v1.11)

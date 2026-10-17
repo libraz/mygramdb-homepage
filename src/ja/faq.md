@@ -73,7 +73,7 @@ MygramDBはインメモリ検索エンジンです。データセットが利用
 
 ### ファジー検索（タイポ補正）には対応していますか？
 
-はい。クエリに `FUZZY`（または `FUZZY 2`）を追加すると、Levenshtein 編集距離 1 または 2 以内の語句にマッチします。短い語や CJK/ASCII 混在語も含め、同じクエリの通常検索結果はすべて残ります。詳しくは[クエリガイド — ファジー検索](/ja/docs/queries#ファジー検索)を参照してください。
+はい。クエリに `FUZZY`（または `FUZZY 2`）を追加すると、Levenshtein 編集距離 1 または 2 以内の語句にマッチします。短い語や CJK/ASCII 混在語も含め、同じクエリの通常検索結果はすべて残ります。詳しくは[クエリガイド — ファジー検索](/ja/docs/queries#%E3%83%95%E3%82%A1%E3%82%B7%E3%82%99%E3%83%BC%E6%A4%9C%E7%B4%A2)を参照してください。
 
 ### 検索結果のハイライトには対応していますか？
 
@@ -133,7 +133,7 @@ MygramDBは[CRoaring](https://github.com/RoaringBitmap/CRoaring)をリンクし�
 1. **デルタエンコーディング**: 単調増加する DocID を差分に変換します。例：`[1000, 1002, 1005]` → `[1000, 2, 3]`。現行の表現では各差分を `uint32_t` で保持します。
 2. **Roaring Bitmap圧縮**: 密な転置リストはRoaringのコンテナ最適化を使用。連続範囲にはランレングスエンコーディング、散在する密な領域にはビットマップコンテナ。
 
-データセットを問わず一定の圧縮率になるわけではありません。実データでインデックスメモリを測定し、[公開ベンチマークの内訳](/ja/docs/architecture#メモリ構成)も参照してください。
+データセットを問わず一定の圧縮率になるわけではありません。実データでインデックスメモリを測定し、[公開ベンチマークの内訳](/ja/docs/architecture#%E3%83%A1%E3%83%A2%E3%83%AA%E3%83%AC%E3%82%A4%E3%82%A2%E3%82%A6%E3%83%88)も参照してください。
 
 ## レプリケーションとデータ同期
 
@@ -143,7 +143,7 @@ MygramDBは[CRoaring](https://github.com/RoaringBitmap/CRoaring)をリンクし�
 
 ### レプリケーションの速度は？INSERTから検索可能になるまで？
 
-遅延はソースのトランザクション、ネットワーク、イベントキュー、インデックス更新によって変わります。`/metrics` の `mygramdb_replication_last_applied_unixtime` と `mygramdb_replication_seconds_since_last_applied` を MySQL の書き込み状況と併せて監視してください。ソースがアイドルなら、最後に適用した時刻が古くても遅延しているとは限りません。
+遅延はソースのトランザクション、ネットワーク、イベントキュー、インデックス更新によって変わります。[HTTP API の `/metrics`](/ja/docs/http-api#get-metrics) にある `mygramdb_replication_last_applied_unixtime` と `mygramdb_replication_seconds_since_last_applied` を MySQL の書き込み状況と併せて監視してください。`api.admin_token` を設定している場合、Prometheus がこれらのメトリクスを取得するには有効な Bearer トークンが必要です。ソースがアイドルなら、最後に適用した時刻が古くても遅延しているとは限りません。
 
 ### MySQLフェイルオーバー時の挙動は？
 

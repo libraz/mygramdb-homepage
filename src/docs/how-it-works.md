@@ -10,7 +10,7 @@ head:
 # How It Works
 
 ::: info Reading this the first time
-This page describes internals. On a first pass, three steps are enough: split text into n-grams, find candidate documents from those n-grams, and — if configured — verify candidates against the original text.
+This page describes internals. On a first pass, three steps are enough: split text into n-grams, find candidate documents from those n-grams, and — if configured — verify candidates against stored normalized text.
 :::
 
 MygramDB is an in-memory full-text search engine built around n-gram indexing. This page covers the core mechanisms: how text is indexed, how searches execute, and how the cache stays consistent.
@@ -78,7 +78,7 @@ A search query flows through a series of stages:
 
 5. **Column filters** -- Filter conditions (e.g., `category = 'science'`) are evaluated. When the candidate set is small, filters are applied per-document. When the filter is highly selective, a bitmap fast path intersects the filter bitmap directly.
 
-6. **verify_text** -- Optional post-filter that checks candidates against the original document text to eliminate false positives (see below).
+6. **verify_text** -- Optional post-filter that checks candidates against stored normalized text to eliminate false positives (see below).
 
 7. **Sort and paginate** -- Results are sorted by the requested column and sliced to the requested OFFSET/LIMIT.
 
@@ -128,6 +128,8 @@ When a document is inserted, updated, or deleted via binlog replication:
 1. The changed document's text is tokenized into n-grams.
 2. Entries whose n-gram sets overlap with the change are invalidated. Entries with filters are also found directly when a filter column changes, and text-sensitive entries, such as NOT queries, are found directly when text changes.
 3. Unrelated queries remain cached.
+
+Before caching a query result, MygramDB rechecks its pending invalidation registration or captured table data version. A matching write that invalidated the registration, or a version change during execution, rejects the insert and increments `cache_rejections`. With replication enabled, TCP request dispatch waits until the cache is wired to replication invalidation, so an untracked cache entry cannot be served during startup.
 
 <DocDiagram name="cache-invalidation" alt="A changed row is tokenized into the n-grams qu, ua and an; the reverse index maps them to the cached “quantum” query, which is evicted, while the “algorithm” and “database” entries are kept." />
 

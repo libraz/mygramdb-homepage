@@ -23,7 +23,7 @@ A **GTID** is a unique identifier attached to each change in MySQL. MygramDB use
 :::
 
 ::: warning MySQL needs preparation too
-MygramDB reads the MySQL/MariaDB binlog, so the upstream server needs GTID enabled, ROW-format binlog, `binlog_row_image=FULL`, a replication user, and `SELECT` on the target tables. See [MySQL Replication](/docs/replication) for the full setup.
+MygramDB reads the MySQL/MariaDB binlog, so the upstream server needs GTID enabled, ROW-format binlog, `binlog_row_image=FULL`, `binlog_row_metadata=FULL`, a replication user, and `SELECT` on the target tables. See [MySQL Replication](/docs/replication) for the full setup.
 :::
 
 <DocDiagram name="deployment-topology" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." />
@@ -41,7 +41,7 @@ sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ### Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.10.2
+docker pull ghcr.io/libraz/mygram-db:1.11.0
 ```
 
 ## Minimal Configuration
@@ -141,4 +141,4 @@ Check synchronization with `SYNC STATUS`, confirm MySQL actually has rows contai
 - [Full Configuration Reference](/docs/configuration)
 - [MySQL Replication](/docs/replication)
 - [Operations Guide](/docs/operations)
-- [Upgrade to v1.10](/docs/upgrade-v1.10)
+- [Upgrade to v1.11](/docs/upgrade-v1.11)

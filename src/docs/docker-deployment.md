@@ -54,6 +54,8 @@ docker compose logs -f
 docker compose ps
 ```
 
+The bundled Compose file starts its MySQL source with `--binlog-row-metadata=FULL`. If MygramDB connects to another MySQL or MariaDB source, configure that setting on the source server; it is not a MygramDB environment variable.
+
 ### 4. Stop Services
 
 ```bash
@@ -95,8 +97,8 @@ MYSQL_USE_GTID=true                 # Use GTID-based replication
 TABLE_NAME=articles                 # Table to index
 TABLE_PRIMARY_KEY=id                # Primary key column
 TABLE_TEXT_COLUMN=content           # Text column to index
-TABLE_NGRAM_SIZE=2                  # N-gram size for ASCII
-TABLE_KANJI_NGRAM_SIZE=1            # N-gram size for CJK
+TABLE_NGRAM_SIZE=2                  # N-gram size for kana, ASCII, and other non-ideograph scripts
+TABLE_KANJI_NGRAM_SIZE=1            # N-gram size for CJK ideographs
 ```
 
 #### Replication Configuration
@@ -107,8 +109,8 @@ TABLE_KANJI_NGRAM_SIZE=1            # N-gram size for CJK
 
 ```bash
 REPLICATION_ENABLE=true             # Enable replication
-REPLICATION_SERVER_ID=12345         # Unique server ID (IMPORTANT)
-REPLICATION_START_FROM=snapshot     # Start from: snapshot, latest, or gtid=<UUID:txn>
+REPLICATION_SERVER_ID=12345         # Unique non-zero ID from 1 to 4294967295
+REPLICATION_START_FROM=snapshot     # snapshot, latest, MySQL GTID set, or MariaDB GTID list
 REPLICATION_AUTO_INITIAL_SNAPSHOT=true # Build the initial snapshot automatically
 ```
 
@@ -235,7 +237,7 @@ docker run -d --name mygramdb-standalone \
   -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
   -e MYGRAM_API_ADMIN_TOKEN \
-  ghcr.io/libraz/mygram-db:1.10.2 \
+  ghcr.io/libraz/mygram-db:1.11.0 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -253,7 +255,7 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
 # Or specify the released version manually
-docker build --build-arg MYGRAMDB_VERSION=1.10.2 -t mygramdb:1.10.2 .
+docker build --build-arg MYGRAMDB_VERSION=1.11.0 -t mygramdb:1.11.0 .
 
 # Tag as latest
 docker tag mygramdb:$VERSION mygramdb:latest
@@ -266,8 +268,8 @@ docker tag mygramdb:$VERSION mygramdb:latest
 The repository ships `docker-compose.yml`; it has no separate production Compose file. To use the published image instead of building locally, give it the tag expected by that file:
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.10.2
-docker tag ghcr.io/libraz/mygram-db:1.10.2 mygramdb:1.10.2
+docker pull ghcr.io/libraz/mygram-db:1.11.0
+docker tag ghcr.io/libraz/mygram-db:1.11.0 mygramdb:1.11.0
 ```
 
 ### Environment Setup
@@ -306,9 +308,9 @@ LOG_FORMAT=json
 
 3. Start with production configuration. The first command uses the published image tagged above; the second builds the image from this checkout instead:
 ```bash
-MYGRAMDB_VERSION=1.10.2 docker compose --env-file .env.prod up -d --no-build
+MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --no-build
 # Or build locally:
-MYGRAMDB_VERSION=1.10.2 docker compose --env-file .env.prod up -d --build
+MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --build
 ```
 
 ### Resource Limits
@@ -385,10 +387,10 @@ docker compose exec mygramdb curl -fsS http://127.0.0.1:8080/health/live
 
 ### Metrics
 
-MygramDB exposes metrics on the HTTP API port (8080 by default). Access via:
+MygramDB exposes metrics on the HTTP API port (8080 by default). The metrics endpoint stays public, but when `API_ADMIN_TOKEN` is set it omits `mygramdb_replication_` metrics unless the request includes the bearer token:
 
 ```bash
-curl http://localhost:8080/metrics
+curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
 ```
 
 ## Backup and Restore
@@ -431,10 +433,10 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 
 
 ```bash
 # Check version
-docker run --rm mygramdb:1.10.2 --version
+docker run --rm mygramdb:1.11.0 --version
 
 # Show help
-docker run --rm mygramdb:1.10.2 --help
+docker run --rm mygramdb:1.11.0 --help
 
 # Test the running container's configuration
 docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml

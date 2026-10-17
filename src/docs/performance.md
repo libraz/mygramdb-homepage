@@ -45,8 +45,8 @@ Several details keep large queries and busy caches from turning into a broad sca
 ```yaml
 tables:
   - name: "articles"
-    ngram_size: 2          # ASCII/alphanumeric: bigram (recommended)
-    kanji_ngram_size: 1    # CJK characters: unigram (recommended)
+    ngram_size: 2          # ASCII/alphanumeric, kana, and other non-ideographs: bigram
+    kanji_ngram_size: 1    # CJK ideographs: unigram (recommended)
 ```
 
 **Recommendations:**
@@ -61,7 +61,7 @@ memory:
   verify_text: "all"     # Eliminate n-gram false positives
 ```
 
-With `verify_text=all`, MygramDB verifies every candidate against the original text. The benchmark snapshot records matching counts with MySQL FULLTEXT; see the rendered results above for the measured latency.
+With `verify_text=all`, MygramDB verifies every candidate against stored normalized text. The benchmark snapshot records matching counts with MySQL FULLTEXT; see the rendered results above for the measured latency.
 
 ### 3. Memory Configuration
 
