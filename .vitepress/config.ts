@@ -8,7 +8,7 @@ const githubUrl = 'https://github.com/libraz/mygram-db'
 // Newest released version in the core repo's CHANGELOG. scripts/check-facts.mjs
 // compares this against that changelog on every build, so a release cannot
 // leave the site pointing at the previous one.
-const latestVersion = '1.10.2'
+const latestVersion = '1.11.0'
 
 /** Per-locale structured data and social-card copy. Japanese answers mirror /ja/faq. */
 type Locale = 'en' | 'ja'
@@ -330,6 +330,7 @@ export default defineConfig({
             {
               text: 'アップグレード',
               items: [
+                { text: 'v1.11 へのアップグレード', link: '/ja/docs/upgrade-v1.11' },
                 { text: 'v1.10 へのアップグレード', link: '/ja/docs/upgrade-v1.10' },
                 { text: 'v1.9 へのアップグレード', link: '/ja/docs/upgrade-v1.9' },
                 { text: 'v1.8 へのアップグレード', link: '/ja/docs/upgrade-v1.8' },
@@ -404,6 +405,7 @@ export default defineConfig({
         {
           text: 'Upgrading',
           items: [
+            { text: 'Upgrade to v1.11', link: '/docs/upgrade-v1.11' },
             { text: 'Upgrade to v1.10', link: '/docs/upgrade-v1.10' },
             { text: 'Upgrade to v1.9', link: '/docs/upgrade-v1.9' },
             { text: 'Upgrade to v1.8', link: '/docs/upgrade-v1.8' },
