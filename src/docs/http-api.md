@@ -48,6 +48,8 @@ TCP/HTTP servers bind to loopback by default. If you must expose them publicly, 
 
 ## API Endpoints
 
+For HTTP, `network.allow_cidrs` is checked after request headers are parsed and before the body is read. A denied peer receives `403` without its body being read, but occupies a connection slot until that check. The allowlist is not an HTTP socket-accept filter.
+
 Handler-generated responses except `/metrics` return JSON with `Content-Type: application/json`; `/metrics` returns Prometheus text. CORS preflight `OPTIONS` requests return `204 No Content` without a body. Table routes use a single
 identity segment `/tables/{identity}`, where `{identity}` is the database-qualified name `` `database.table` ``
 (for example, table `articles` in database `app_db` is addressed as `/tables/app_db.articles`). In a
@@ -62,6 +64,8 @@ configuration spans two or more databases; a bare name is then rejected as ambig
 The legacy `/{table}/search`, `/{table}/count`, and `/{table}/{primary_key}` routes were removed in v1.7.0. Use `/tables/{identity}/...` for all table operations.
 
 Paths are percent-decoded before routing. The document GET route is dispatched manually, so decoded paths longer than 256 bytes still reach the handler (subject to the URI limit); a `%2F` in a primary key is available as `/`.
+
+POST request settings belong in the JSON body; query-string parameters are ignored. JSON bodies with invalid syntax or more than 32 nested arrays/objects return `400 Bad Request` with `error_code: 3000`. `HEAD` requests use the corresponding `GET` handler.
 
 ### POST /tables/{identity}/search
 
@@ -271,7 +275,7 @@ Content-Type: application/json
   "filters": {
     "status": 1
   },
-  "limit": 10
+  "limit": 2
 }
 ```
 
@@ -281,12 +285,15 @@ Content-Type: application/json
 {
   "column": "category",
   "count": 2,
+  "total_count": 17,
   "facets": [
     {"value": "tech", "count": 15},
     {"value": "ops", "count": 7}
   ]
 }
 ```
+
+`count` is the number of facet entries returned on this page. `total_count` is the number of distinct facet values before `limit` and `offset`; use it to calculate pagination.
 
 ### HTTP Surface
 
@@ -330,6 +337,8 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 }
 ```
 
+The response contains the primary key and configured filter fields. It does not include the original document text or a highlighted snippet; request `highlight` on `POST /tables/{identity}/search` when you need snippets.
+
 **Error Response (404 Not Found):**
 
 ```json
@@ -358,7 +367,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -477,10 +486,10 @@ GET /metrics HTTP/1.1
 
 **Response (200 OK):**
 
-```prometheus
+```text
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.11.0"} 1
+mygramdb_server_info{version="1.11.1"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -715,6 +724,7 @@ curl -X POST http://localhost:8080/tables/threads/search \
   -H "Content-Type: application/json" \
   -d '{
     "q": "machine learning AND python",
+    "mode": "boolean",
     "filters": {"status": 1},
     "limit": 10
   }'
@@ -756,6 +766,7 @@ const response = await fetch('http://localhost:8080/tables/threads/search', {
   },
   body: JSON.stringify({
     q: 'machine learning AND python',
+    mode: 'boolean',
     filters: { status: 1 },
     limit: 10
   })
@@ -776,6 +787,7 @@ import requests
 # Search
 response = requests.post('http://localhost:8080/tables/threads/search', json={
     'q': 'machine learning AND python',
+    'mode': 'boolean',
     'filters': {'status': 1},
     'limit': 10
 })
@@ -805,6 +817,8 @@ Handler-generated error responses follow this format:
 ```
 
 `error_code` is the machine-readable MygramDB error code. Branch on it when client behavior depends on the cause rather than matching the human-readable `error` string. An oversized request body is rejected with `413 Payload Too Large` by the HTTP server before routing, so clients must rely on the status code rather than a JSON body or `error_code` for that response.
+
+Invalid JSON, JSON nesting deeper than 32 levels, and malformed Boolean expressions return `400` with `error_code: 3000`. Other invalid fields can use a more specific code, such as `3006` for a filter condition.
 
 **HTTP Status Codes:**
 

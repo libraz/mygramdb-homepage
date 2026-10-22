@@ -1,6 +1,6 @@
 ---
-title: MygramDB Quick Start - Install, Configure, and Search in 5 Minutes
-description: Get MygramDB running in five minutes. Prerequisites, package install, a minimal config.yaml, starting the service, and running your first SYNC and SEARCH.
+title: MygramDB Quick Start - Install, Configure, and Search
+description: Install a MygramDB package, configure MySQL replication and a searchable table, start the service, and run the first SYNC and SEARCH commands.
 head:
   - - meta
     - name: keywords
@@ -9,50 +9,50 @@ head:
 
 # Getting Started
 
-Get MygramDB up and running in 5 minutes.
+This guide installs the package, loads existing MySQL rows, and runs a search. For Docker, use the [Docker Deployment Guide](/docs/docker-deployment), which includes the required container settings.
 
 ## Prerequisites
 
 - MySQL 8.4/9.x with GTID enabled, or MariaDB 10.11+/11.x/12.x
-- RHEL/AlmaLinux/Rocky Linux 9, Ubuntu 22.04/24.04, or Docker
+- RHEL/AlmaLinux/Rocky Linux 9 or 10, or Ubuntu 22.04/24.04
+- A MySQL replication account with `SELECT`, `REPLICATION SLAVE`, and `REPLICATION CLIENT` privileges
 
-MygramDB deploys next to your existing database as a sidecar: your application keeps writing to MySQL/MariaDB unchanged, MygramDB follows the binlog to build its own search index, and only search queries go to MygramDB.
+MygramDB follows the source binlog and maintains an in-memory search index. Configure the source with row-based binlogging, full row images and row metadata, CRC32 binlog checksums, and the other requirements in [MySQL Replication](/docs/replication).
 
 ::: info What is a GTID?
-A **GTID** is a unique identifier attached to each change in MySQL. MygramDB uses it to know exactly how far it has read, so it picks up from the right place after a restart.
+A **GTID** identifies a transaction in the MySQL or MariaDB replication stream. MygramDB records the applied GTID so it can resume from the correct position after a restart.
 :::
 
-::: warning MySQL needs preparation too
-MygramDB reads the MySQL/MariaDB binlog, so the upstream server needs GTID enabled, ROW-format binlog, `binlog_row_image=FULL`, `binlog_row_metadata=FULL`, a replication user, and `SELECT` on the target tables. See [MySQL Replication](/docs/replication) for the full setup.
-:::
+## Install a Package
 
-<DocDiagram name="deployment-topology" alt="The application keeps writing to MySQL or MariaDB as before, MygramDB follows the GTID binlog stream to maintain an in-memory search index, and the application sends only search queries to MygramDB over TCP 11016 or HTTP 8080." />
+Download the package for your operating system and architecture from [GitHub Releases](https://github.com/libraz/mygram-db/releases/latest).
 
-## Quick Install
-
-### RPM (RHEL/AlmaLinux/Rocky Linux 9)
-
-Download from [GitHub Releases](https://github.com/libraz/mygram-db/releases/latest) and install:
+For RHEL, AlmaLinux, or Rocky Linux 9/10:
 
 ```bash
 sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ```
 
-### Docker
+Use the `.el10` package on EL10. For Ubuntu 22.04/24.04, install the matching architecture package:
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.0
+sudo apt install ./mygramdb_*_amd64.deb
 ```
 
-## Minimal Configuration
+The package installs an example configuration but does not create the active configuration. Copy it and edit the MySQL credentials, database, and table settings:
 
-Create `/etc/mygramdb/config.yaml`:
+```bash
+sudo cp /etc/mygramdb/config.yaml.example /etc/mygramdb/config.yaml
+sudoedit /etc/mygramdb/config.yaml
+```
+
+Use a configuration like this, replacing the example connection and table values:
 
 ```yaml
 mysql:
-  host: "localhost"
+  host: "127.0.0.1"
   port: 3306
-  user: "mygramdb"
+  user: "repl_user"
   password: "your_password"
   database: "myapp"
 
@@ -65,80 +65,54 @@ tables:
 replication:
   server_id: 83917
 
-api:
-  tcp:
-    port: 11016
-  http:
-    enable: true
-    port: 8080
-  admin_token: "replace-with-a-high-entropy-secret"
-
-# Allow connections from localhost
 network:
   allow_cidrs:
     - "127.0.0.1/32"
 ```
 
-::: warning
-The `allow_cidrs` setting is required. Without it, all connections are denied. Add your client IPs to this list.
-:::
-
-::: info What is CIDR?
-**CIDR** is a notation for a range of IP addresses. `127.0.0.1/32` means localhost only; `10.0.0.0/8` means the whole private network starting with `10.`.
-:::
-
-::: tip Keep the admin token outside the file when practical
-For a production configuration, provide the secret as `MYGRAM_API_ADMIN_TOKEN` instead of committing it to the YAML file. It is required when TCP listens on a non-loopback address without a Unix socket, or when enabled HTTP listens on a non-loopback address.
-:::
+`replication.server_id` must be unique among MySQL replicas and MygramDB instances connected to the same source. `network.allow_cidrs` is required; an empty list denies all connections. Add only the client addresses that need access.
 
 ## Start the Service
 
+After editing the configuration, start MygramDB:
+
 ```bash
 sudo systemctl enable --now mygramdb
+sudo systemctl status mygramdb
 ```
 
-## Test Your Setup
+Package installations create a dedicated non-root service user. MygramDB refuses to run as root.
 
-Load the existing MySQL rows before searching:
+## Load and Search Data
+
+Connect to the local TCP API and start the initial load:
 
 ```bash
-# Connect via CLI
-mygram-cli -h localhost -p 11016
+mygram-cli -h 127.0.0.1 -p 11016
 ```
 
-Once connected, start `SYNC` and wait for it to complete:
-
 ```mygram
-127.0.0.1:11016> AUTH replace-with-a-high-entropy-secret
-OK AUTHENTICATED
-
 127.0.0.1:11016> SYNC articles
 OK SYNC STARTED table=articles
 
 127.0.0.1:11016> SYNC STATUS
-...
+OK SYNC_STATUS
+table=articles status=IN_PROGRESS progress=<done>/<total> rows (<percent>%) rate=<rows_per_second> rows/s
+END
 ```
 
-Then run a search query:
+Run `SYNC STATUS` until the table reports `status=COMPLETED`, then search it:
 
 ```mygram
 127.0.0.1:11016> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
-::: tip If you get zero results
-Check synchronization with `SYNC STATUS`, confirm MySQL actually has rows containing the search term, and verify `text_source.column` in the config. In a multi-database configuration, qualify the table as `SEARCH app_db.articles hello world`.
-:::
+If a search returns no results, confirm that synchronization completed, the source table contains the term, and `text_source.column` names the intended column. With multiple configured databases, qualify the table as `SEARCH app_db.articles hello world`.
 
 ## Next Steps
 
-- [Installation Guide](/docs/installation) - Installation options
-- [Configuration](/docs/configuration) - Configuration reference
+- [Installation Guide](/docs/installation) - Package, Docker, and source installation
+- [Configuration](/docs/configuration) - All configuration options
+- [MySQL Replication](/docs/replication) - Source server requirements and account grants
 - [Query Guide](/docs/queries) - Search syntax and examples
-
-## Detailed Documentation
-
-- [Full Configuration Reference](/docs/configuration)
-- [MySQL Replication](/docs/replication)
-- [Operations Guide](/docs/operations)
-- [Upgrade to v1.11](/docs/upgrade-v1.11)

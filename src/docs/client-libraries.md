@@ -42,12 +42,12 @@ The shared library uses soname 2 (`VERSION 2.0.0`); public search-expression str
 - `search()` / `Search()` is best for simple terms and AND/NOT-style searches.
 - For `OR` and parentheses, convert the expression and pass it to `searchRaw()` / `SearchRaw()` / `search_raw()`.
 - The web-syntax converter recognizes whole-word `or` as `OR`, quotes literal words such as `order` and terms with apostrophes, and turns a minus inside a group into `NOT`. It emits phrases and OR/groups once; pass its output directly to the raw search method.
-- Search responses expose the total number of matches before `limit`/`offset` as well as the current page of results. FACET values are ordered by count, with a stable order for equal counts across pages.
+- Search responses expose the total number of matches before `limit`/`offset` as well as the current page of results. FACET results are paginated too: each value's `count` is the number of matching documents for that value, while `totalCount` / `total_count` / `TotalCount` is the number of distinct values before pagination. Equal-count values keep a stable order across pages.
 - BM25 scoring, highlighting, fuzzy search, and facets depend on the server-side table configuration.
 - Runtime variables and `SYNC` are TCP commands exposed by the client libraries.
 
 ::: warning Administrative commands require authentication
-`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication. On an already connected client, send `AUTH` with `MYGRAM_API_ADMIN_TOKEN` before using them. Authentication belongs to the underlying TCP connection, so repeat it after every reconnect. Automatic reconnect cannot preserve authenticated state; authenticate before the next administrative operation after a reconnect. `search`, `count`, `get`, `facet`, and `INFO` remain available without authentication. When `api.admin_token` is set, `INFO` omits its replication section until the connection completes `AUTH`.
+`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication only when the server has a non-empty `api.admin_token`. Configure `adminToken` (Node.js), `admin_token` (Python), or `AdminToken` (Go) to have the client send `AUTH` on each new connection, including automatic reconnects. A raw `AUTH` sent with `sendCommand()` or `send_command()` applies only to that connection; use the SDK's configuration option when reconnects must retain admin access. `search`, `count`, `get`, `facet`, and `INFO` remain available without authentication. When `api.admin_token` is set, `INFO` omits its replication section until the connection completes `AUTH`.
 :::
 
 ## Node.js / TypeScript
@@ -139,22 +139,23 @@ const facets = await client.facet('articles', 'category', {
 
 ```ts
 const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
-if (!adminToken) {
-  throw new Error('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
-}
+const adminClient = createMygramClient({
+  host: 'localhost',
+  port: 11016,
+  ...(adminToken ? { adminToken } : {})
+})
+await adminClient.connect()
 
-const authResponse = await client.sendCommand(`AUTH ${adminToken}`)
-if (authResponse !== 'OK AUTHENTICATED') {
-  throw new Error('MygramDB authentication failed')
-}
+await adminClient.setVariable('logging.level', 'info')
+console.log(await adminClient.showVariables('logging%'))
 
-await client.setVariable('logging.level', 'info')
-console.log(await client.showVariables('logging%'))
-
-await client.sync('app_db.articles')
-console.log(await client.syncStatus())
-await client.syncStop('app_db.articles')
+await adminClient.sync('app_db.articles')
+console.log(await adminClient.syncStatus())
+await adminClient.syncStop('app_db.articles')
+adminClient.disconnect()
 ```
+
+Set `MYGRAM_API_ADMIN_TOKEN` when the server has `api.admin_token` configured. The client authenticates during `connect()` and on subsequent reconnects.
 
 ## Python
 
@@ -217,7 +218,12 @@ import os
 from mygramdb_client import ClientConfig, FacetOptions, MygramClient, SearchOptions
 
 async def main():
-    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+    config = ClientConfig(
+        host='localhost',
+        port=11016,
+        admin_token=os.environ.get('MYGRAM_API_ADMIN_TOKEN', ''),
+    )
+    async with MygramClient(config) as client:
         res = await client.search_with_highlights(
             'articles',
             'golang',
@@ -230,14 +236,6 @@ async def main():
             FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
         )
 
-        admin_token = os.environ.get('MYGRAM_API_ADMIN_TOKEN')
-        if not admin_token:
-            raise RuntimeError('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
-
-        auth_response = await client.send_command(f'AUTH {admin_token}')
-        if auth_response != 'OK AUTHENTICATED':
-            raise RuntimeError('MygramDB authentication failed')
-
         await client.set_variable('logging.level', 'info')
         print(await client.show_variables('logging%'))
 
@@ -247,6 +245,8 @@ async def main():
 
 asyncio.run(main())
 ```
+
+Set `MYGRAM_API_ADMIN_TOKEN` when the server has `api.admin_token` configured. `ClientConfig` makes the client authenticate when it connects and after a transparent reconnect.
 
 ## Go
 
@@ -362,22 +362,14 @@ import (
 
 func main() {
 	adminToken := os.Getenv("MYGRAM_API_ADMIN_TOKEN")
-	if adminToken == "" {
-		log.Fatal("MYGRAM_API_ADMIN_TOKEN is required for administrative commands")
-	}
-
-	client := mygram.NewClient("localhost:11016")
+	client := mygram.NewClientWithConfig(mygram.ClientConfig{
+		Host:       "localhost",
+		Port:       11016,
+		AdminToken: adminToken,
+	})
 	defer client.Close()
 	if err := client.Connect(); err != nil {
 		log.Fatal(err)
-	}
-
-	authResponse, err := client.SendCommand("AUTH " + adminToken)
-	if err != nil {
-		log.Fatal("MygramDB authentication command failed")
-	}
-	if authResponse != "OK AUTHENTICATED" {
-		log.Fatal("MygramDB authentication failed")
 	}
 
 	if err := client.SetVariable("logging.level", "info"); err != nil {
@@ -402,6 +394,8 @@ func main() {
 	}
 }
 ```
+
+Set `MYGRAM_API_ADMIN_TOKEN` when the server has `api.admin_token` configured. `ClientConfig.AdminToken` is sent on every connection, including reconnects.
 
 ::: tip Go concurrency
 The Go client is designed for concurrent use. Use the `context.Context` variants such as `SearchContext`, `SearchRawContext`, and `SyncContext` when you need request-scoped cancellation or deadlines.

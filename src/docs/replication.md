@@ -9,7 +9,7 @@ head:
 
 # MySQL Replication Guide
 
-MygramDB supports real-time replication from MySQL using GTID-based binlog streaming with guaranteed data consistency.
+MygramDB reads GTID-based binlog events from MySQL and applies row changes to its search index.
 
 ::: info What is replication?
 **Replication** continuously propagates changes from MySQL to another process. To replace MySQL full-text search, MygramDB keeps reading the MySQL binlog and updating its search index.
@@ -148,12 +148,12 @@ FLUSH PRIVILEGES;
 
 ### Security Considerations
 
-- MySQL credentials are transmitted in plain text unless your MySQL server requires TLS. Place MygramDB close to MySQL on a trusted network, or terminate TLS/SSH tunnels in front of it when replicating across untrusted links.
+- `mysql.ssl_enable` defaults to `false`, which disables TLS even if the MySQL server supports it. Set it to `true` to require an encrypted connection. With `mysql.ssl_verify_server_cert: true`, MygramDB also verifies the CA chain and server hostname; this setting requires `mysql.ssl_ca`. When verification is off, TLS encrypts the connection but does not verify the server identity. Without TLS, the MySQL connection and replication traffic are unencrypted.
 - Snapshots created via `DUMP SAVE` include MySQL source metadata such as host, port, and database; user and password are not recorded. Store dump files on protected storage with restrictive permissions (e.g., `chmod 600`) because they contain indexed content and source endpoint details.
 
 ## Manual Snapshot Synchronization
 
-MygramDB supports **manual snapshot synchronization** to prevent unexpected load on the MySQL primary during startup.
+MygramDB supports **manual snapshot synchronization** to control read load on the MySQL source during startup.
 
 ### Configuration
 
@@ -188,7 +188,7 @@ Use `SYNC articles` instead in a single-database configuration.
 
 ### Automatic startup snapshot
 
-To restore automatic snapshot building on startup:
+To build the initial snapshot automatically on startup:
 
 ```yaml
 replication:
@@ -323,6 +323,10 @@ ALTER TABLE articles MODIFY COLUMN content TEXT;
 
 **Recovery:** Fix the schema or configuration, then run `SYNC` to rebuild the table. Do not assume that a restart alone resumes replication after an incompatible DDL change.
 
+#### CREATE INDEX and DROP INDEX
+
+MygramDB revalidates a monitored table after `CREATE INDEX` and `DROP INDEX`, as it does after `ALTER TABLE`. Dropping the qualifying single-column unique index for a configured `primary_key` makes the table schema incompatible and stops replication before the GTID advances. Restore a qualifying `PRIMARY KEY` or `UNIQUE NOT NULL` constraint, then run `SYNC` to rebuild the table.
+
 #### RENAME TABLE and `ALTER TABLE ... RENAME TO`
 
 MygramDB recognizes renames in both directions, including `ALTER TABLE ... RENAME TO`, `ALTER TABLE ... AS`, and a rename onto a configured table name:
@@ -426,9 +430,10 @@ flag (`LOG_EVENT_IGNORABLE_F`). Without that flag, replication stops with
 
 ### Automatic Reconnection
 
-- Handles connection loss gracefully
+- Retries connection loss and transient processing errors from the last applied GTID without advancing the position on failure
+- Treats MySQL errors `1213` (deadlock) and `1317` (query interrupted), and connection loss during metadata queries, as retryable
+- Stops after three consecutive processing failures at the same GTID; transient metadata-query errors do not set `SCHEMA_INCOMPATIBLE`
 - Uses the built-in retry schedule; `reconnect_backoff_min_ms` and `reconnect_backoff_max_ms` are reserved and are not applied
-- Continues from the reader's last processed GTID while the process remains running
 
 ### Multi-threaded Processing
 
@@ -532,9 +537,13 @@ Use `replication_seconds_since_last_applied` together with MySQL write activity 
 
 ### "Lost connection to MySQL server during query"
 
-MygramDB will automatically reconnect using the built-in retry schedule.
-The backoff fields below are accepted for forward compatibility but are not
-enforced today:
+Connection loss and retryable source-query errors trigger replay from the last
+applied GTID. This includes deadlocks (`1213`), interrupted queries (`1317`),
+and connection loss while reading schema metadata. A transient metadata-query
+failure does not mark the schema incompatible. If processing fails three times
+at the same GTID, replication stops; inspect the reported error and correct its
+cause before recovery. The backoff fields below are accepted for forward
+compatibility but are not enforced today:
 
 ```yaml
 replication:

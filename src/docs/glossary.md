@@ -49,7 +49,7 @@ A fixed-length fragment of text. For example, the bigrams of `search` are `se`, 
 
 ### CJK
 
-Short for Chinese, Japanese, and Korean. It refers to languages where spaces do not reliably mark word boundaries.
+CJK is short for Chinese, Japanese, and Korean. In MygramDB's indexing settings, CJK refers to ideographs such as the characters in `東京`, not every character used to write those languages. `kanji_ngram_size` controls how these ideographs are split.
 
 ### Posting list
 
@@ -59,9 +59,9 @@ The list of document IDs containing an N-gram. If `se` occurs in documents 1, 5,
 
 MygramDB's internal numeric document ID. It differs from the MySQL primary key; search runs on DocIDs and returns the original primary key.
 
-### Roaring Bitmap
+### Roaring bitmap
 
-A compressed integer-set data structure that makes AND and OR operations fast. MygramDB can use it for frequent N-gram posting lists.
+A compressed integer-set data structure used for some posting lists. It stores IDs in chunks and chooses a representation for each chunk, such as an array or bitmap. MygramDB uses it for dense lists; the actual memory use depends on the IDs and workload.
 
 ### Delta encoding
 
@@ -73,7 +73,15 @@ A common full-text ranking method. In MygramDB, use `SORT _score DESC` to order 
 
 ### verify_text
 
-An option that checks N-gram candidates against stored normalized text and removes false positives. Use `memory.verify_text: "all"` when exact result semantics matter.
+An option that checks normalized search terms against stored normalized text, respecting the query expression, and removes false-positive N-gram candidates. It does not make MygramDB equivalent to MySQL FULLTEXT. Use `memory.verify_text: "all"` to apply this check to all eligible candidates.
+
+### Synonym
+
+A configured alternate term that MygramDB adds to a query. Synonyms can broaden a search to include related wording.
+
+### SIMD
+
+Short for single instruction, multiple data. CPU vector instructions apply one operation to several values at once. CRoaring can use these instructions for bitmap operations when the build and CPU support them.
 
 ### Facet
 
@@ -87,7 +95,7 @@ MygramDB's text command protocol. Send commands such as `SEARCH articles hello` 
 
 ### HTTP API
 
-A JSON API for search, count, facets, and document lookup. Table routes use `/tables/{identity}/...`; `q` is literal by default, and boolean expressions require `"mode": "boolean"`.
+A JSON API for search, count, facets, and document lookup. Table routes use `/tables/{identity}/...`. The `q` value is treated as a literal search string by default; set `"mode": "boolean"` to use boolean query syntax.
 
 ### CIDR
 
@@ -95,7 +103,7 @@ Notation for an IP-address range. `10.0.0.0/8` describes a broad range beginning
 
 ### CORS
 
-A browser mechanism for calling an HTTP API on another origin. Server-to-server traffic usually does not need it.
+A browser mechanism for calling an HTTP API on another origin. Server-to-server traffic usually does not need it. If a browser must call MygramDB directly, enable CORS and allow only trusted origins; do not use a wildcard for a private API.
 
 ### Snapshot and dump
 

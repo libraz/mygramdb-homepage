@@ -32,8 +32,8 @@ make bench-down
 
 ::: tip `verify_text` modes
 
-- `off` (default): Lower memory use, but n-gram false positives are possible.
-- `all`: Stores document text for post-filter verification and returns the same counts as MySQL FULLTEXT in this run.
+- `off` (default): Skips text verification, so n-gram false positives can remain. Normalized text is retained in every mode.
+- `all`: Checks candidates against normalized text for substring matches. The tested queries returned the same counts as MySQL FULLTEXT in this run; this does not guarantee equivalent semantics for every query.
 :::
 
 See [Why MySQL FULLTEXT is Slow](/why) for architectural details, and [Comparison](/comparison) for product trade-offs.

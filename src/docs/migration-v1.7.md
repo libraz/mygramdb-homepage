@@ -91,6 +91,7 @@ curl -X POST http://localhost:8080/tables/app_db.articles/facet \
   -d '{
     "column": "category",
     "q": "database OR mysql",
+    "mode": "boolean",
     "filters": {"status": 1},
     "limit": 10
   }'

@@ -89,7 +89,7 @@ OK RESULTS <total_count> <id1> <id2> <id3> ...
 **For detailed query syntax, boolean operators, filters, sorting, and advanced features, see [Query Syntax Guide](/docs/query-syntax).**
 
 ::: info Reading the response
-`total_count` is the total number of matches; the primary keys that follow are the current page. If you need the document body or highlighted snippets, `GET` them after the search or use the HTTP API response shape instead.
+`total_count` is the number of matches before pagination; the primary keys that follow are the current page. `GET` returns the primary key and configured filter values, not the original document text or a snippet. To retrieve snippets, request `HIGHLIGHT` as part of `SEARCH` or use `highlight` with the HTTP search API.
 :::
 
 ---
@@ -144,7 +144,7 @@ OK DOC <primary_key> <filter1=value1> <filter2=value2> ...
 
 Example:
 ```mygram
-OK DOC 12345 status=1 category=tech created_at=2024-01-15T10:30:00
+OK DOC 12345 status=1 category=tech created_at=1705314600
 ```
 
 Not found:
@@ -172,7 +172,7 @@ Returns server information in Redis-style key-value format with multiple section
 OK INFO
 
 # Server
-version: 1.11.0
+version: 1.11.1
 uptime_seconds: 3600
 data_initialized: true
 readiness: ready
@@ -459,6 +459,8 @@ DUMP SAVE mygramdb.dmp
 
 The filename resolves under `dump.dir`; a path outside that directory is refused. `mygram-cli` reads the filepath as the last non-empty token, decoded with the server escape rules, so quote a path containing spaces. If a token starts with `-`, the CLI sends the line to the server, which rejects it as an unknown `DUMP SAVE` flag. Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown flag.
 
+`DUMP SAVE` returns `ERROR 6029` until every configured table has completed its initial load. In a MySQL-enabled build with a binlog reader, it also returns `ERROR 6029` until a GTID position is available; run `SYNC` first to establish that position.
+
 ### DUMP LOAD
 
 Load snapshot from binary file.
@@ -592,6 +594,8 @@ OK FACET <returned_value_count> <total_distinct_values>
 ```
 
 The value rows are tab-separated and sorted by count in descending order. The response ends with an empty line (`\r\n\r\n` on the wire). When connection debug mode is enabled, `# query_time_ms`, `# matched_documents`, and `# distinct_values` lines appear after the value rows and before the empty line.
+
+In the `OK FACET` header, `returned_value_count` is the number of rows in this response page and `total_distinct_values` is the number of distinct values before `LIMIT` and `OFFSET`.
 
 ---
 
@@ -888,7 +892,7 @@ Optimize index posting lists (convert Delta Encoding to Roaring Bitmap based on 
 OPTIMIZE [<db.table>]
 ```
 
-Omit the table on a single-table deployment; qualify it when more than one table is configured.
+Omit the table to optimize all configured tables. Name one table to optimize only that table; use `database.table` when the configuration spans multiple databases.
 
 ### How it works
 

@@ -7,6 +7,16 @@ description: "Prepare for v1.11: full binlog row metadata, source and table vali
 
 Before replacing a running node, enable full row metadata on the source, check the source and table requirements, rebuild native clients, and update monitoring credentials. If you are upgrading from before v1.10.2, also complete the [earlier upgrade checklist](/docs/upgrade-v1.10).
 
+## Current patch checklist
+
+Before rollout, review these operational changes:
+
+1. `0.0.0.0/0` and `::/0` each admit IPv4 and IPv6 peers. Narrow `network.allow_cidrs` if an IPv4-only allow list was intended; see [Network Security](/docs/configuration).
+2. Startup refuses a regular file at `api.unix_socket.path` and leaves it in place. Move the file or choose another path; see [API server settings](/docs/configuration).
+3. A custom JSON schema supplied with `--schema` also constrains runtime `SET`; review the active rules in [Operations](/docs/operations).
+4. `DUMP SAVE` returns `6029` until every configured table completes its initial load. Wait for readiness before saving; see [Snapshot and dump recovery](/docs/snapshot) for authenticated CLI automation.
+5. Confirm each configured `primary_key` has an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. Unsupported definitions are refused before the initial snapshot; see [Replication requirements](/docs/replication).
+
 ## Enable full binlog row metadata
 
 MygramDB reads column names, signedness, and `ENUM`/`SET` labels from each binlog `TABLE_MAP` event. This keeps row decoding consistent with the schema that existed when the event was written. The source must run `binlog_row_metadata=FULL`, in addition to the existing `ROW` format and `FULL` row images.
@@ -87,4 +97,4 @@ After restart, confirm readiness, run representative searches, and check authent
 
 `used_memory_index` includes per-term object and map overhead. `OPTIMIZE` and `DUMP SAVE` can therefore require more free memory than previously reported. `mygram-cli DUMP SAVE` takes the last non-empty token as the path; quote paths containing spaces and remove unsupported `-` flags.
 
-See the [v1.11.0 release notes](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.11.0.md) for the full change list.
+See the [v1.11.1 release notes](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.11.1.md) for the full change list.

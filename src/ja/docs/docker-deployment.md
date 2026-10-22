@@ -84,12 +84,15 @@ docker compose down -v
 
 ```bash
 MYSQL_HOST=mysql                    # MySQL ホスト
-MYSQL_PORT=3306                     # MySQL ポート
+MYSQL_PORT=3306                     # Compose ネットワーク内の MySQL ポート
+MYSQL_HOST_PORT=3306                # ホスト側に公開する MySQL ポート
 MYSQL_USER=repl_user                # MySQL ユーザー
 MYSQL_PASSWORD=your_password        # 必須の MySQL パスワード
 MYSQL_DATABASE=mydb                 # データベース名
 MYSQL_USE_GTID=true                 # GTID ベースのレプリケーションを使用
 ```
+
+`MYSQL_PORT` はComposeネットワーク内からMygramDBがMySQLへ接続するポートです。`MYSQL_HOST_PORT` はホスト側に公開するポートだけを変更し、Composeサービス間の接続先には影響しません。
 
 #### テーブル設定
 
@@ -237,7 +240,7 @@ docker run -d --name mygramdb-standalone \
   -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
   -e MYGRAM_API_ADMIN_TOKEN \
-  ghcr.io/libraz/mygram-db:1.11.0 \
+  ghcr.io/libraz/mygram-db:1.11.1 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -255,7 +258,7 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
 # または、リリース済みバージョンを手動で指定
-docker build --build-arg MYGRAMDB_VERSION=1.11.0 -t mygramdb:1.11.0 .
+docker build --build-arg MYGRAMDB_VERSION=1.11.1 -t mygramdb:1.11.1 .
 
 # latest タグを付与
 docker tag mygramdb:$VERSION mygramdb:latest
@@ -268,8 +271,8 @@ docker tag mygramdb:$VERSION mygramdb:latest
 リポジトリにあるのは `docker-compose.yml` で、本番専用の Compose ファイルはありません。ローカルビルドの代わりに公開イメージを使う場合は、このファイルが参照するタグを付けます。
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.0
-docker tag ghcr.io/libraz/mygram-db:1.11.0 mygramdb:1.11.0
+docker pull ghcr.io/libraz/mygram-db:1.11.1
+docker tag ghcr.io/libraz/mygram-db:1.11.1 mygramdb:1.11.1
 ```
 
 ### 環境設定
@@ -308,9 +311,9 @@ LOG_FORMAT=json
 
 3. 本番設定で起動します。1 行目は上でタグを付けた公開イメージを使い、2 行目はこのチェックアウトからビルドします。
 ```bash
-MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --no-build
+MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --no-build
 # またはローカルでビルド
-MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --build
+MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --build
 ```
 
 ### リソース制限
@@ -401,12 +404,21 @@ curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
 
 ### バックアップ
 
+設定済みの全テーブルで初回`SYNC`を完了させてください。MySQL対応ビルドでレプリケーションを有効にしている場合、`DUMP SAVE`にはGTID位置も必要です。条件を満たさない場合はエラー6029を返します。ダンプにはインデックス、ソース識別子、レプリケーション位置が含まれますが、MySQLデータのバックアップではありません。MySQLデータは別途バックアップし、必要なbinlogも保管してください。これらの操作は同一時点の原子的なバックアップにはなりません。復旧時は記録された識別子と位置に適合するソースを使うか、`SYNC`でインデックスを再構築してください。この例はデフォルトの`dump.dir`（`/var/lib/mygramdb/dumps`）を使います。設定で別の保存先を指定した場合は、コピー元のパスを変更してください。
+
 ```bash
 # MySQL データのバックアップ
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root "$MYSQL_DATABASE"' > backup.sql
 
-# MygramDB スナップショットのバックアップ
-docker compose cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
+# サーバーの準備完了を待つ
+docker compose exec -T mygramdb mygram-cli --wait-ready INFO
+
+# 名前を指定して保存し、検証する（CLIはDUMP SAVEの完了を待つ）
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP SAVE manual-backup.dmp\nDUMP VERIFY manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+
+# 作成したファイルを指定してホストへコピー
+mkdir -p ./backup-dumps
+docker compose cp mygramdb:/var/lib/mygramdb/dumps/manual-backup.dmp ./backup-dumps/manual-backup.dmp
 ```
 
 ### リストア
@@ -416,9 +428,9 @@ docker compose cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root "$MYSQL_DATABASE"' < backup.sql
 
 # MygramDBダンプをコピーして明示的に読み込む
-docker compose cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
-docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
-docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker compose cp ./backup-dumps/manual-backup.dmp mygramdb:/var/lib/mygramdb/dumps/manual-backup.dmp
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 ```
 
 ## トラブルシューティング
@@ -437,10 +449,10 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 
 
 ```bash
 # バージョンを確認
-docker run --rm mygramdb:1.11.0 --version
+docker run --rm mygramdb:1.11.1 --version
 
 # ヘルプを表示
-docker run --rm mygramdb:1.11.0 --help
+docker run --rm mygramdb:1.11.1 --help
 
 # 実行中のコンテナの設定を検証
 docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml
@@ -460,18 +472,13 @@ docker stats
 
 2. 実測 RSS を基に Compose の `mem_limit` を決め、保守処理の余裕を確保します。[リソース制限](#リソース制限)を参照してください。`MEMORY_HARD_LIMIT_MB` と `MEMORY_SOFT_TARGET_MB` は予約済み設定であり、プロセスの上限を強制しません。
 
-3. ビルド並列度を調整：
-```bash
-BUILD_PARALLELISM=4
-```
-
 ## スケーリング
 
 ### 複数の MygramDB インスタンス
 
 読み取り容量や可用性を高めるには、ホストごとに同じ MySQL ソースを読むフルレプリカを配置し、それぞれ異なる `REPLICATION_SERVER_ID` を設定します。ready なインスタンスだけにトラフィックを送ってください。各レプリカはインデックス全体を持つため、1ノードあたりのメモリは減りません。
 
-同じホストで同梱 Compose スタックを複数起動する場合は、MySQL、TCP、HTTP の公開ポートをスタックごとに変え、`REPLICATION_SERVER_ID` と認証情報も適切に設定してください。`-p` のプロジェクト名はコンテナ名とボリューム名を分けるだけで、公開ポートは変えません。アプリには `API_PORT` と `API_HTTP_PORT` を設定し、MySQL のホスト側ポートマッピングはコンテナ内ポート 3306 を保ったまま別途編集します。異なるテーブルを分担させる場合は、アプリ側でクエリの送信先を選びます。
+同じホストで同梱 Compose スタックを複数起動する場合は、MySQL、TCP、HTTP の公開ポートをスタックごとに変え、`REPLICATION_SERVER_ID` と認証情報も適切に設定してください。`-p` のプロジェクト名はコンテナ名とボリューム名を分けるだけで、公開ポートは変えません。アプリには `API_PORT` と `API_HTTP_PORT` を設定します。`MYSQL_HOST_PORT` でホスト側のMySQLポートを変え、`MYSQL_PORT` はコンテナ内ポート（通常3306）のままにしてください。異なるテーブルを分担させる場合は、アプリ側でクエリの送信先を選びます。
 
 ### ロードバランシング
 

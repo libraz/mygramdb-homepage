@@ -42,17 +42,17 @@ sudo systemctl enable --now mygramdb
 ## Docker
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.0
+docker pull ghcr.io/libraz/mygram-db:1.11.1
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
-  ghcr.io/libraz/mygram-db:1.11.0
+  ghcr.io/libraz/mygram-db:1.11.1
 ```
 
 利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.11.0`
+- `ghcr.io/libraz/mygram-db:1.11.1`
 - `ghcr.io/libraz/mygram-db:latest`
 
 `linux/amd64`と`linux/arm64`の両方をサポート。
@@ -73,7 +73,14 @@ sudo dpkg -i mygramdb_*_amd64.deb
 sudo dpkg -i mygramdb_*_arm64.deb
 ```
 
-サービスを開始：
+パッケージは `/etc/mygramdb/config.yaml.example` をインストールし、サービスユーザー、データディレクトリ、ダンプディレクトリ、ログディレクトリを作成します。サービスを開始する前に、設定をコピーして編集してください。
+
+```bash
+sudo cp /etc/mygramdb/config.yaml.example /etc/mygramdb/config.yaml
+sudoedit /etc/mygramdb/config.yaml
+```
+
+その後、サービスを開始します。
 
 ```bash
 sudo systemctl enable --now mygramdb
@@ -127,8 +134,12 @@ sudo useradd -r -s /bin/false mygramdb
 
 ```bash
 sudo mkdir -p /etc/mygramdb /var/lib/mygramdb/dumps
-sudo chown -R mygramdb:mygramdb /var/lib/mygramdb
+sudo mkdir -p /var/log/mygramdb
+sudo install -m 0640 -o root -g mygramdb examples/config.yaml /etc/mygramdb/config.yaml
+sudo chown -R mygramdb:mygramdb /var/lib/mygramdb /var/log/mygramdb
 ```
+
+サービスを起動する前に `/etc/mygramdb/config.yaml` の接続先、検索対象テーブル、ネットワーク許可リストを編集します。systemdユニットは既定でjournalにログを出力します。`logging.file` を設定する場合は `/var/log/mygramdb` を使えます。
 
 ### systemdサービスのインストール
 

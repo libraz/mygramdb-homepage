@@ -9,7 +9,7 @@ head:
 
 # Development Environment Setup
 
-This guide helps you set up the development environment for MygramDB with real-time linting and auto-formatting (like ESLint/Prettier for JavaScript).
+Set up the tools to build, format, analyze, and test MygramDB's C++ code.
 
 ::: info Who this page is for
 This page is for developers building MygramDB itself or changing its C++ code. If you only want to use MygramDB, start with [Installation](/docs/installation) and [Configuration](/docs/configuration).
@@ -33,9 +33,9 @@ brew install icu4c
 
 # Create symlinks to use LLVM 18 by default
 # IMPORTANT: This ensures consistent code formatting with CI
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-format /opt/homebrew/bin/clang-format
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-tidy /opt/homebrew/bin/clang-tidy
-ln -sf /opt/homebrew/opt/llvm@18/bin/clangd /opt/homebrew/bin/clangd
+ln -sf "$(brew --prefix llvm@18)/bin/clang-format" "$(brew --prefix)/bin/clang-format"
+ln -sf "$(brew --prefix llvm@18)/bin/clang-tidy" "$(brew --prefix)/bin/clang-tidy"
+ln -sf "$(brew --prefix llvm@18)/bin/clangd" "$(brew --prefix)/bin/clangd"
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -125,16 +125,22 @@ After building the project, enable linting in VS Code:
 Edit `.vscode/settings.json` and change:
 
 ```json
-"C_Cpp.codeAnalysis.clangTidy.enabled": true,
-"C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+{
+  "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+  "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+  "C_Cpp.codeAnalysis.clangTidy.path": "/absolute/path/to/llvm18/bin/clang-tidy",
+  "C_Cpp.clang_format_path": "/absolute/path/to/llvm18/bin/clang-format"
+}
 ```
+
+Replace the placeholder paths with the output of `brew --prefix llvm@18` plus `/bin/clang-tidy` or `/bin/clang-format` on macOS. On Linux use `/usr/bin/clang-tidy-18` and `/usr/bin/clang-format-18`. The repository's `/opt/homebrew/opt/llvm/bin` paths may select a different LLVM installation.
 
 Reload VS Code window (Cmd/Ctrl + Shift + P → "Developer: Reload Window")
 
 ### Option B: Using clangd (Faster, ESLint-like experience)
 
 1. Make sure clangd extension is installed
-2. Edit `.vscode/settings.json` and uncomment the clangd section (OPTION 1)
+2. Enable the clangd section in `.vscode/settings.json` and set `clangd.path` to the output of `brew --prefix llvm@18` plus `/bin/clangd`, or `/usr/bin/clangd-18` on Linux.
 3. Comment out the C/C++ Extension section (OPTION 2)
 4. Reload VS Code window
 
@@ -225,7 +231,7 @@ The default target excludes tests labelled `SLOW` and `LOAD`.
 # Default unit and integration suite
 make test
 
-# Include SLOW tests
+# Include SLOW and LOAD tests
 make test-all
 
 # Opt-in tests that start Docker-backed MySQL
@@ -282,7 +288,7 @@ cmake --build build-libfuzzer --target binary_input_fuzz -j
 ```bash
 # macOS
 brew install llvm@18
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-tidy /opt/homebrew/bin/clang-tidy
+ln -sf "$(brew --prefix llvm@18)/bin/clang-tidy" "$(brew --prefix)/bin/clang-tidy"
 
 # Linux
 wget https://apt.llvm.org/llvm.sh
@@ -306,7 +312,7 @@ sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang
 ```bash
 # macOS
 brew install llvm@18
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-format /opt/homebrew/bin/clang-format
+ln -sf "$(brew --prefix llvm@18)/bin/clang-format" "$(brew --prefix)/bin/clang-format"
 
 # Linux
 wget https://apt.llvm.org/llvm.sh
@@ -354,57 +360,10 @@ When implementing features or making changes, prioritize in this order:
 
 ## Linux CI Testing (macOS Developers)
 
-If you're developing on macOS, certain issues (missing headers, compiler differences) only appear in Linux environments and fail in CI.
-
-**Solution:** Test your code in the same Linux environment used by GitHub Actions CI **before pushing**.
+Use the Docker development environment to check Linux-specific headers and compiler behavior. It uses Ubuntu 22.04; GitHub Actions uses `ubuntu-latest` and different build options. Run Docker checks in a separate working copy so they do not reuse the native `build/` cache.
 
 ```bash
-# Run full CI checks (recommended before git push)
 make docker-ci-check
 ```
 
-This runs:
-1. Code formatting check
-2. Build (with same flags as CI)
-3. Clang-tidy linting
-4. All tests
-
-**Individual checks:**
-
-```bash
-make docker-build-linux       # Build only
-make docker-test-linux        # Test only
-make docker-lint-linux        # Lint only
-make docker-format-check-linux # Format check only
-```
-
-**Interactive shell:**
-
-```bash
-make docker-dev-shell         # Enter Linux container for debugging
-```
-
-See [Linux Testing Guide](/docs/linux-testing) for details.
-
-## My Development Workflow (Optional Reference)
-
-This is my personal workflow for maintaining code quality. **You don't need to follow this exactly** - the main requirement is that your PR passes CI checks.
-
-### What I typically do before committing:
-
-1. **Write code** following Google C++ Style Guide
-2. **Run `make format`** to auto-format code
-3. **Run `make lint`** to catch issues early (slow, but worth it)
-4. **Run `make test`** to ensure all tests pass
-5. **Run `make docker-ci-check`** to verify Linux compatibility (macOS only)
-
-### CI Requirements
-
-The following are automatically checked by CI:
-- Code formatting (clang-format)
-- Static analysis (clang-tidy)
-- All tests pass
-- No compiler warnings
-- Linux build compatibility
-
-**You can rely on CI to check these if you prefer.** Just make sure your PR passes all CI checks before merging.
+This runs formatting, build, clang-tidy, and the default test tier, excluding `SLOW` and `LOAD`. Use `make test-all` for all CTest tiers and the E2E suites for database integration. See the [CI workflow](https://github.com/libraz/mygram-db/blob/main/.github/workflows/ci.yml) for the actual CI configuration and the [Linux Testing Guide](/docs/linux-testing) for working-copy isolation and individual commands.

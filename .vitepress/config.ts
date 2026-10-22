@@ -8,7 +8,7 @@ const githubUrl = 'https://github.com/libraz/mygram-db'
 // Newest released version in the core repo's CHANGELOG. scripts/check-facts.mjs
 // compares this against that changelog on every build, so a release cannot
 // leave the site pointing at the previous one.
-const latestVersion = '1.11.0'
+const latestVersion = '1.11.1'
 
 /** Per-locale structured data and social-card copy. Japanese answers mirror /ja/faq. */
 type Locale = 'en' | 'ja'
@@ -57,11 +57,11 @@ const FAQ: Record<Locale, { q: string; a: string }[]> = {
     },
     {
       q: 'Does MygramDB support Japanese/Chinese/Korean text?',
-      a: 'Yes, MygramDB has excellent CJK support using ICU-based Unicode normalization and N-gram tokenization. It handles Japanese, Chinese, and Korean text perfectly without additional plugins or configuration.'
+      a: 'MygramDB uses ICU-based Unicode normalization and character N-grams to search Japanese, Chinese, and Korean without a dictionary. N-gram sizes can be configured separately for CJK ideographs and other characters; enable verify_text: all when exact substring verification is required.'
     },
     {
       q: 'What is the difference between MygramDB and Elasticsearch?',
-      a: 'MygramDB is a single-binary deployment with direct MySQL binlog sync, millisecond-scale latency, and low operational complexity. Elasticsearch offers distributed search and advanced features but requires cluster management, ETL pipelines, and JVM tuning. Choose MygramDB for simpler MySQL-based applications; Elasticsearch for large-scale distributed search.'
+      a: 'MygramDB provides a single server binary with direct MySQL binlog synchronization. Each node holds its index in memory and operates independently; MygramDB does not distribute an index across nodes. Check the comparison page for scope and deployment requirements.'
     }
   ],
   ja: [
@@ -79,11 +79,11 @@ const FAQ: Record<Locale, { q: string; a: string }[]> = {
     },
     {
       q: 'MygramDBは日本語に対応していますか？',
-      a: 'はい。ICUベースのUnicode正規化とN-gramトークナイズを使用しています。日本語・中国語・韓国語は追加プラグインや設定なしでそのまま動作します。'
+      a: 'ICU による Unicode 正規化と文字 N-gram を使い、辞書なしで日本語・中国語・韓国語を検索します。CJK 統合漢字とそれ以外の文字では N-gram の長さを個別に設定できます。部分文字列の一致を検証する場合は verify_text: all を有効にしてください。'
     },
     {
       q: 'MygramDBとElasticsearchの違いは何ですか？',
-      a: 'MygramDBはシングルバイナリで、MySQLのbinlogと直接同期し、ミリ秒台のレイテンシと低い運用コストで動きます。Elasticsearchは分散検索や高度な分析機能を備えますが、クラスタ管理・ETLパイプライン・JVMチューニングが必要です。データがRAMに収まりMySQLとのシンプルな連携が欲しいならMygramDB、複数ノードにまたがる大規模分散検索ならElasticsearchです。'
+      a: 'MygramDB は単一のサーバーバイナリで提供され、MySQL の binlog と直接同期します。各ノードはインデックスをメモリに保持して独立に動作し、ノード間でインデックスを分散する機能はありません。機能の範囲と構成要件は比較ページを参照してください。'
     }
   ]
 }
@@ -136,7 +136,7 @@ const LLMS_LOCALES: LlmsLocale[] = [
     summary:
       `In-memory full-text search engine that mirrors MySQL through binlog replication, built for CJK text where MySQL FULLTEXT falls short. Millisecond-scale queries, up to ${benchmark.summary.bestSpeedup}x faster than FULLTEXT.`,
     intro:
-      'MygramDB indexes with character n-grams rather than word tokenization, so it needs no\ndictionary and no morphological analyzer. It follows a MySQL primary as a replica,\napplying row events as they arrive, and answers queries over its own wire protocol\nor HTTP. The links below point to the canonical HTML documentation.',
+      'MygramDB indexes with character N-grams rather than word tokenization, so it needs no\ndictionary and no morphological analyzer. It follows a MySQL primary as a replica,\napplying row events as they arrive, and answers queries over its own wire protocol\nor HTTP. The links below point to the canonical HTML documentation.',
     overviewHeading: 'Key pages',
     homeText: 'MygramDB home',
     alternate: {
@@ -155,9 +155,9 @@ const LLMS_LOCALES: LlmsLocale[] = [
     prefix: '/ja',
     title: 'MygramDB',
     summary:
-      `MySQL の binlog をリアルタイムに取り込むインメモリ全文検索エンジン。日本語のような CJK テキストを想定し、MySQL FULLTEXT に対して最大 ${benchmark.summary.bestSpeedup} 倍、ミリ秒台で応答する。`,
+      `MySQL の binlog をリアルタイムに取り込むインメモリ全文検索エンジンです。公開ベンチマークでは MySQL FULLTEXT に対して最大 ${benchmark.summary.bestSpeedup} 倍の速度を記録しています。`,
     intro:
-      'MygramDB は単語分割ではなく文字 N-gram で索引を作るため、辞書も形態素解析器も必要ない。\nMySQL のレプリカとして行イベントを逐次適用し、独自のワイヤプロトコルまたは HTTP で\nクエリに応答する。以下は日本語ドキュメントへのリンク一覧。',
+      'MygramDB は単語分割ではなく文字 N-gram でインデックスを作るため、辞書も形態素解析器も必要ありません。\nMySQL のレプリカとして行イベントを逐次適用し、独自のワイヤプロトコルまたは HTTP で\nクエリに応答します。以下は日本語ドキュメントへのリンク一覧です。',
     overviewHeading: '主要ページ',
     homeText: 'MygramDB トップ',
     alternate: {
@@ -177,7 +177,7 @@ export default defineConfig({
   srcDir: 'src',
   appearance: true,
   title: 'MygramDB',
-  description: 'MySQL FULLTEXT too slow? MygramDB makes it tens to hundreds of times faster. In-memory full-text search engine with MySQL replication.',
+  description: 'In-memory full-text search engine with MySQL binlog replication. See the published benchmark for measured latency, throughput, and test conditions.',
 
   // Markdown / Shiki syntax highlighting
   markdown: {

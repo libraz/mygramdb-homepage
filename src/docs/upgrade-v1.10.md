@@ -6,7 +6,7 @@ description: "Upgrade checklist for MygramDB v1.10.1 and v1.10.2: authentication
 # Upgrade to v1.10.2
 
 ::: info Upgrading to the current release
-Also follow the [v1.11 upgrade checklist](/docs/upgrade-v1.11), including the required source metadata setting and native client rebuild.
+Also follow the [v1.11 upgrade checklist](/docs/upgrade-v1.11), including its current patch checks, required source metadata setting, and native client rebuild.
 :::
 
 The v1.10.1 and v1.10.2 patch releases correct replication safety, configuration validation, dump recovery, API authentication, and protocol-wide rate limiting. Review these actions before replacing a running node.

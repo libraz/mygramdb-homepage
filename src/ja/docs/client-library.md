@@ -171,7 +171,7 @@ if (!result) {
 ```
 
 ::: warning 1接続あたりの並行性
-`MygramClient` は単一TCP接続上の同時コマンドを内部で直列化するため、安全に共有できます。ただし1インスタンスでは1件ずつ実行されます。スループットが必要な場合は複数インスタンスを使ってください。リクエスト実行中に `Disconnect()` を呼ばないでください。
+`MygramClient` は単一TCP接続上の同時コマンドを直列化するため、正しさの面では安全に共有できます。ただし1インスタンスでは1件ずつ実行します。スループットが必要な場合は複数インスタンスを使ってください。
 :::
 
 ::: info 接続の考え方
@@ -193,7 +193,7 @@ if (result) {
 
 ### FACETのページネーション
 
-`Facet` は値の1ページを `facets` に返します。`total_count` は `offset` と `limit` を適用する前の異なるfacet値の総数なので、ページネーションの表示に使えます。
+`Facet` は値の1ページを `facets` に返します。各 facet の `count` はその値を持つドキュメント数、`total_count` は `offset` と `limit` の適用前にある異なる値の総数です。`facets.size()` で返されたページの件数を取り、`total_count` でページネーションを計算できます。
 
 ```cpp
 auto response = client.Facet("app_db.articles", "category", "technology", 10,
@@ -231,7 +231,7 @@ if (result) {
 
 ### 管理操作の認証
 
-管理操作の認証は接続単位です。`ClientConfig` に `admin_token` フィールドはありません。接続後、同じ `MygramClient` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してから `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` を呼び出してください。rawコマンドの送信成功は、レスポンスを受信したことだけを意味します。再接続後は毎回認証し直します。検索、count、get、facet 操作にはこの認証は不要です。
+管理操作の認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。C++ の `ClientConfig` に管理トークンのフィールドはありません。その場合は同じ `MygramClient` で `AUTH` を送り、正確に `OK AUTHENTICATED` が返ったことを確認してから `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` を呼び出してください。rawコマンドの送信成功は、レスポンスを受信したことだけを意味します。手動で送った `AUTH` は現在の接続にだけ適用されるため、再接続後にもう一度認証してください。検索、count、get、facet 操作には認証は不要です。
 
 ```cpp
 #include <cstdlib>
@@ -427,7 +427,7 @@ cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 
 ### 管理操作の認証
 
-管理操作の認証は接続済みの `MygramClient_C` ごとに必要です。管理操作の前に `mygramclient_send_command` で `AUTH` を送信し、正確に `OK AUTHENTICATED` が返ったことを確認してください。`0` の戻り値はrawレスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は戻り値が0以外の場合にだけ使用してください。再接続後も繰り返してください。これは `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` に対応するC APIに適用され、検索、count、get、facet 操作には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
+管理操作の認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。`MygramClientConfig_C` と `MygramClientConfigV2_C` に管理トークンのフィールドはありません。その場合は管理操作の前に、接続済みの同じ `MygramClient_C` で `mygramclient_send_command` を使って `AUTH` を送り、正確に `OK AUTHENTICATED` が返ったことを確認してください。`0` の戻り値はrawレスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は戻り値が0以外の場合にだけ使用してください。手動で送った `AUTH` は現在の接続にだけ適用されるため、再接続後にもう一度認証してください。これは `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` に対応するC APIに適用され、検索、count、get、facet 操作には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
 
 C APIのリテラル検索語、AND/NOT条件、フィルター値、ハイライトタグにも同じ引用規則が適用されます。接続リセット後の送信失敗は0以外のステータスを返すため、`mygramclient_get_last_error` を確認して再接続してから再試行してください。
 
@@ -464,6 +464,8 @@ if (!authenticated) {
 ### 高度な検索（C API）
 
 新しいコードでは `MygramSearchOptions_C` と `mygramclient_search_with_options` を使ってください。構造体はゼロ初期化し、`struct_size` を設定します。型付きフィルタは `=`、`!=`、`>`、`>=`、`<`、`<=`、`fuzzy_distance` は `1` または `2` を使えます。Boolean式をリテラル検索ではなくそのまま送るには、`query_mode` を `MYGRAM_QUERY_BOOLEAN` にします。
+
+`MygramSearchOptions_C` の `sort_desc` は、0以上なら降順、負数なら昇順です。そのため、型付き構造体をゼロ初期化すると既定の降順になります。旧 `mygramclient_search_advanced()` 関数の `sort_desc` 引数は別の規則で、0が昇順、0以外が降順です。
 
 新しいCプログラムでは `MygramClientConfigV2_C` を使います。`timeout_ms` は通常操作の期限です。`connect_timeout_ms` は接続の期限で、0なら `timeout_ms` を使います。`max_response_bytes` はレスポンスフレームの上限で、0なら64 MiBが既定です。`dump_*_timeout_ms` と `optimize_timeout_ms` は操作別の期限で、0または古い構造体にない場合はクライアントの既定値を使います。`unix_socket_path` を設定するとUnixソケットを使い、TCPのhost/portより優先されます。
 
@@ -655,7 +657,7 @@ NODE_API_MODULE(mygramdb, Init)
 
 ## スレッド安全性
 
-`MygramClient` は単一のTCP接続で同時コマンドを直列化します。そのため正しさのためには共有できますが、1インスタンスが実行できるのは1件ずつです。スループットが必要な場合は複数インスタンスを使ってください。リクエスト実行中に `Disconnect()` を呼ばないでください。
+`MygramClient` の接続操作とコマンドは同じmutexで直列化されます。`Disconnect()` は実行中のコマンドが終わるまで待ち、コマンドをキャンセルしません。メンバー関数の実行中にオブジェクトを破棄またはムーブしてはいけません。C API も接続操作とコマンドを直列化しますが、`mygramclient_destroy()` を同じハンドルへの別の呼び出しと並行させてはいけません。
 
 ## エラー処理
 

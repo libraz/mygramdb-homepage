@@ -11,7 +11,7 @@ head:
 
 ## 概要
 
-`SYNC` コマンドは、MySQL から MygramDB へのスナップショット同期を手動で開始するためのコマンドです。起動時の自動同期を無効にしておくと、MySQLプライマリへ読み取り負荷をかけるタイミングを運用側で決められます。
+`SYNC` コマンドは、MySQL から MygramDB へのスナップショット同期を手動で開始するためのコマンドです。初期テーブル読み取りによる MySQL ソースへの負荷をかけるタイミングを運用側で決められます。
 
 本番向けの例では `api.admin_token` を使用します。空なら `AUTH` は不要ですが、非ループバックのデプロイではトークンを設定してください。
 
@@ -189,7 +189,7 @@ status=IDLE message="No sync operation performed"
 
 `SYNC`、`DUMP SAVE`、`DUMP LOAD`、`OPTIMIZE`、自動スナップショットは 1 つの操作枠を共有します。これらのいずれかが実行中は新しい `SYNC` が拒否されるため、完了後に再実行してください。
 
-### SYNC 中に許可される操作
+### SYNC 中のコマンド動作
 
 | コマンド | 動作 | 備考 |
 |---------|----------|-------|
@@ -211,7 +211,7 @@ TCP/CLIとHTTPのテーブル読み取り（search、count、facet、ドキュ�
 ./mygramdb --config config.yaml
 ```
 
-サーバーはスナップショットをビルドせずに起動します（ログ: `Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)`）。準備できたら、認証済みの CLI 接続を1つ使って同期を開始し、進捗を確認します。
+サーバーはスナップショットをビルドせずに起動します（ログ: `Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)`）。TCP リスナーが接続を受け付けたら同期を開始してください。設定済みの全テーブルで初期ロードが終わるまで readiness は `not_ready` のままです。認証済みの CLI 接続を1つ使って同期を開始し、進捗を確認します。
 
 ```text
 $ mygram-cli
@@ -269,40 +269,14 @@ table=users status=COMPLETED rows=5000 time=2.5s gtid=uuid:123 replication=START
 
 ## グレースフルシャットダウン
 
-SYNC 中に MygramDB がシャットダウンシグナル（SIGTERM/SIGINT）を受信した場合：
+`SYNC` 中に `SIGTERM` または `SIGINT` を受信すると、MygramDB はキャンセルを要求し、長時間操作が共有状態を使い終えるまで待ちます。停止処理は、実行中の長時間操作がドレインするまで最大30秒待ちます。その時点でも操作が共有状態を使っている場合、サーバーはタイムアウトを報告し、ワーカーの実行中に依存オブジェクトを破棄しないよう保持します。この30秒はドレイン待ちだけの期限です。ドレイン後に行うワーカーの join や後処理には、さらに時間がかかることがあります。長時間操作と後処理を完了できるよう、プロセスマネージャーの停止猶予時間を設定してください。終了まで30秒を超える場合があります。
 
-1. **実行中の SYNC 操作はキャンセルされる**
-   - `SnapshotBuilder::Cancel()` が呼び出される
-   - ステータスが `CANCELLED` に変わる
-   - 初期 MySQL ロードは接続、読み取り、スナップショット構築中に要求を確認する
-
-2. **サーバーはクリーンアップを待つ**
-   - 最大待機時間: 30秒
-   - バックグラウンドスレッドが正常に終了
-   - 初期スナップショット中に SYNC が MySQL の読み取り待ちになっている場合、
-     シャットダウンの応答時間は設定された MySQL の `read_timeout_ms`（専用の
-     binlog/スナップショット接続では秒に換算）によって制限されます。
-     長時間の読み取り中に SIGTERM/SIGINT への速い応答が必要な場合は、この値を
-     下げてください。
-   - 初期 MySQL 接続の再試行中に SIGTERM を受信した場合は、正常に終了します
-
-3. **サーバーがシャットダウン**
-   - MySQL 接続を閉じる
-   - リソースを解放
-
-**ログ例:**
-```
-INFO: Stopping TCP server...
-INFO: Cancelling SYNC for table: articles
-INFO: SYNC cancelled for table articles due to shutdown
-WARN: Timeout waiting for SYNC operations to complete
-INFO: TCP server stopped
-```
+キャンセル処理中は `SYNC STATUS` が `CANCELLING` を示します。終了前にキャンセルが完了すると `CANCELLED` になり、先に処理が終わるか失敗した場合は別の終了状態になります。
 
 ## 推奨事項
 
 1. **本番環境では `auto_initial_snapshot: false` を使用**
-   - 起動時に MySQL プライマリへ予期しない読み取り負荷がかかるのを防ぐ
+   - 起動時に MySQL ソースから予期しない全件読み取りが発生するのを避ける
    - 同期のタイミングをオペレーターが制御できる
 
 2. **SYNC の進捗を監視**
@@ -315,7 +289,7 @@ INFO: TCP server stopped
 
 4. **オフピーク時間帯に SYNC をスケジュール**
    - cron などのスケジューラを使用
-   - MySQL プライマリへの影響を低減
+   - MySQL ソースへの読み取り負荷を低減
 
 5. **SYNC 前にメモリを監視**
    - 利用可能なシステムメモリを確認

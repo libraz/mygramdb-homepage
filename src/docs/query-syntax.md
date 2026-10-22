@@ -321,7 +321,7 @@ MygramDB supports filtering on indexed filter columns:
 
 - **Integer**: `status=1`, `priority=5`
 - **String**: `category=tech`, `author=john`
-- **Date/Time**: query-time `date`, `datetime`, and `timestamp` values are integer Unix epoch seconds (for example, `created_at=1704067200`); `time` values are signed duration seconds, including negative values and values beyond 24 hours
+- **Date/Time**: query-time `date`, `datetime`, and `timestamp` values are integer Unix epoch seconds; for example, `created_at >= 1704067200` selects values from 2024-01-01 00:00:00 UTC onward. A `time` value is a signed duration in seconds, so `-90000` means minus 25 hours.
 
 **Note:** Columns configured under either `filters` or `required_filters` in `config.yaml` can be used in FILTER clauses.
 
@@ -403,7 +403,7 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 
 **Sorting Algorithm:**
 - **With a small LIMIT**: Uses `partial_sort` when `LIMIT + OFFSET` is less than half of the result set, for O(N × log(K)) work where K = LIMIT + OFFSET.
-- **Otherwise**: Uses a full sort, O(N × log(N)).
+- **Otherwise**: Uses a full sort, O(N × log(N)). If `LIMIT` is omitted, the server uses `api.default_limit`; the effective limit and offset still determine which algorithm runs.
 - **Memory**: Sorting can allocate temporary sort-key storage for eligible result sets; do not assume it is in-place.
 
 **For large result sets (e.g., 1M documents with 800K matches):**
@@ -770,14 +770,16 @@ SEARCH articles tech AND ai AND published
 
 Filters on indexed columns are faster than text search on those terms.
 
-### 5. Always Use LIMIT for Large Result Sets
+### 5. Keep Sorted Pages Small
+
+The server uses a partial sort when `LIMIT + OFFSET` is less than half of the matching result count. If `LIMIT` is omitted, `api.default_limit` supplies the effective value. A large offset can therefore require a full sort even when the requested page is small.
 
 ```mygram
--- Good: can use partial sort when the limit is small relative to the result set
+-- A small page can use partial sort when it is less than half of the matches
 SEARCH articles tech SORT created_at DESC LIMIT 10
 
--- Slower: Full sort of all results
-SEARCH articles tech SORT created_at DESC
+-- A large offset can make the effective page size too large for partial sort
+SEARCH articles tech SORT created_at DESC LIMIT 10 OFFSET 10000
 ```
 
 ### 6. Minimize Deep Pagination
@@ -823,7 +825,7 @@ COUNT posts database AND (mysql OR postgresql) NOT sqlite
 
 Queries are parsed into an Abstract Syntax Tree (AST) with proper operator precedence:
 
-```bnf
+```text
 query     → or_expr
 or_expr   → and_expr (OR and_expr)*
 and_expr  → not_expr (AND not_expr)*

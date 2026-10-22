@@ -21,7 +21,7 @@ MygramDB has two kinds of configuration. A small allowlist can be changed with `
 
 Use `SHOW VARIABLES` to inspect the effective values, and `SET` for the runtime allowlist.
 
-`SET` validates assigned values against the same schema rules used when loading the configuration. A multi-assignment command is atomic: if one value fails with `1004`, none of the assignments are applied, and the error identifies the rejected variable. The `replication.server_id` non-zero check and the enabled-cache ceiling of 50% of detected physical memory also apply to runtime `SET` validation.
+`SET` validates assigned values against the same schema rules used when loading the configuration. If startup used `--schema`, runtime `SET` also applies that custom schema. A multi-assignment command is atomic: if one value fails with `1004`, none of the assignments are applied, and the error identifies the rejected variable. The `replication.server_id` non-zero check and the enabled-cache ceiling of 50% of detected physical memory also apply to runtime `SET` validation.
 
 ```sql
 SHOW VARIABLES LIKE 'cache%'
@@ -103,6 +103,8 @@ kill -USR1 "$(pgrep -x mygramdb)"
 ```
 
 Check the process manager and the new log file after rotation. Do not use signals as a substitute for a supervised restart when changing startup-only settings.
+
+`SIGINT` and `SIGTERM` request graceful shutdown. MygramDB does not handle `SIGHUP`; its default action terminates the process. Use `SIGUSR1` for log rotation.
 
 ## See also
 

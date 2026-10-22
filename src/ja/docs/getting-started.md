@@ -1,6 +1,6 @@
 ---
-title: MygramDB クイックスタート - 5分で導入して検索する
-description: MygramDBを5分で動かす手順。前提条件、パッケージのインストール、最小構成のconfig.yaml、サービス起動、最初のSYNCとSEARCHまでを説明します。
+title: MygramDB クイックスタート - インストールから初回検索まで
+description: MygramDBのパッケージをインストールし、MySQLレプリケーションと検索対象テーブルを設定して、サービス起動後に初回SYNCとSEARCHを実行します。
 head:
   - - meta
     - name: keywords
@@ -9,50 +9,50 @@ head:
 
 # クイックスタート
 
-最小構成でMygramDBを起動し、MySQL上の既存データを読み込んで検索できるところまで確認します。
+パッケージをインストールし、MySQLの既存行を読み込んで検索します。Dockerを使う場合は、コンテナに必要な設定を含む[Dockerデプロイガイド](/ja/docs/docker-deployment)を参照してください。
 
 ## 前提条件
 
 - GTIDが有効な MySQL 8.4/9.x、または MariaDB 10.11+/11.x/12.x
-- RHEL/AlmaLinux/Rocky Linux 9、Ubuntu 22.04/24.04、またはDocker
+- RHEL/AlmaLinux/Rocky Linux 9/10、または Ubuntu 22.04/24.04
+- `SELECT`、`REPLICATION SLAVE`、`REPLICATION CLIENT` 権限を持つMySQLレプリケーションアカウント
 
-MygramDBは既存のデータベースの隣に配置するサイドカーです。アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBはbinlogを追従して独自の検索インデックスを構築し、検索クエリのみがMygramDBへ送られます。
+MygramDBはソースのbinlogを追従し、インメモリ検索インデックスを維持します。ソースではROW形式のbinlog、完全な行イメージと行メタデータ、CRC32チェックサム、および[MySQLレプリケーション](/ja/docs/replication)に記載した要件を設定してください。
 
-<DocDiagram name="deployment-topology" alt="アプリケーションは従来どおりMySQL/MariaDBへ書き込み、MygramDBがGTID binlogストリームを追従してインメモリ検索インデックスを維持し、検索クエリのみをTCP 11016またはHTTP 8080でMygramDBに送る構成図" />
-
-::: info 用語補足
-**GTID** はMySQLの変更履歴に付く一意な番号です。MygramDBはGTIDを使って、再起動後も「どこまでMySQLの変更を読んだか」を正確に引き継ぎます。
+::: info GTIDとは
+**GTID** はMySQLまたはMariaDBのレプリケーションストリーム上でトランザクションを識別します。MygramDBは適用済みのGTIDを記録し、再起動後に正しい位置から処理を再開します。
 :::
 
-::: warning MySQL側の準備も必要です
-MygramDBはMySQL / MariaDBのbinlogを読むため、MySQL側でGTID、ROW形式binlog、`binlog_row_image=FULL`、`binlog_row_metadata=FULL`、レプリケーションユーザー、対象テーブルへの `SELECT` 権限を用意してください。詳しい設定は[MySQLレプリケーション](/ja/docs/replication)を参照してください。
-:::
+## パッケージをインストール
 
-## インストール
+[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest)から、OSとアーキテクチャに合ったパッケージをダウンロードします。
 
-### RPM（RHEL/AlmaLinux/Rocky Linux 9）
-
-[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest)からダウンロードしてインストール：
+RHEL、AlmaLinux、Rocky Linux 9/10ではRPMをインストールします。
 
 ```bash
 sudo rpm -i mygramdb-*.el9.x86_64.rpm
 ```
 
-### Docker
+EL10では `.el10` パッケージを使います。Ubuntu 22.04/24.04では、アーキテクチャに合ったパッケージをインストールします。
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.0
+sudo apt install ./mygramdb_*_amd64.deb
 ```
 
-## 最小構成
+パッケージは設定例をインストールしますが、実際に使う設定ファイルは作成しません。設定例をコピーして、MySQLの認証情報、データベース、テーブルを編集してください。
 
-`/etc/mygramdb/config.yaml`を作成：
+```bash
+sudo cp /etc/mygramdb/config.yaml.example /etc/mygramdb/config.yaml
+sudoedit /etc/mygramdb/config.yaml
+```
+
+次の例を参考に接続先とテーブルを設定します。
 
 ```yaml
 mysql:
-  host: "localhost"
+  host: "127.0.0.1"
   port: 3306
-  user: "mygramdb"
+  user: "repl_user"
   password: "your_password"
   database: "myapp"
 
@@ -65,79 +65,54 @@ tables:
 replication:
   server_id: 83917
 
-api:
-  tcp:
-    port: 11016
-  http:
-    enable: true
-    port: 8080
-  admin_token: "replace-with-a-high-entropy-secret"
-
-# localhostからの接続を許可
 network:
   allow_cidrs:
     - "127.0.0.1/32"
 ```
 
-::: warning allow_cidrs は必須
-`allow_cidrs`の設定は必須です。設定がない場合、すべての接続が拒否されます。接続元のIPアドレスをリストに追加してください。
-:::
-
-::: info 用語補足
-**CIDR** はIPアドレスの範囲指定です。`127.0.0.1/32` はローカルホストのみ、`10.0.0.0/8` は `10.` で始まるプライベートネットワーク全体を意味します。
-:::
-
-::: tip 管理トークンはファイル外で渡す
-本番設定では、YAML ファイルに書き込む代わりに `MYGRAM_API_ADMIN_TOKEN` でシークレットを渡してください。TCP を非ループバックアドレスで待ち受け、Unix ソケットを使わない場合、または有効な HTTP を非ループバックアドレスで待ち受ける場合は必須です。
-:::
+`replication.server_id` は、同じソースに接続するMySQLレプリカやMygramDBインスタンスの間で重複させないでください。`network.allow_cidrs` は必須です。空の場合はすべての接続が拒否されます。接続を許可するクライアントのアドレスだけを追加してください。
 
 ## サービスを開始
 
+設定を編集したら、MygramDBを起動します。
+
 ```bash
 sudo systemctl enable --now mygramdb
+sudo systemctl status mygramdb
 ```
 
-## 動作確認
+パッケージは専用の非rootサービスユーザーを作成します。MygramDBはroot権限での実行を拒否します。
+
+## データを読み込んで検索
+
+ローカルのTCP APIに接続し、初回ロードを開始します。
 
 ```bash
-# CLIで接続
-mygram-cli -h localhost -p 11016
+mygram-cli -h 127.0.0.1 -p 11016
 ```
-
-接続後、まず初回同期を実行します。`SYNC` はMySQLの既存行を読み込み、検索インデックスを作成します。
 
 ```mygram
-127.0.0.1:11016> AUTH replace-with-a-high-entropy-secret
-OK AUTHENTICATED
-
 127.0.0.1:11016> SYNC articles
-OK SYNC STARTED articles
+OK SYNC STARTED table=articles
 
 127.0.0.1:11016> SYNC STATUS
-OK SYNC STATUS
-...
+OK SYNC_STATUS
+table=articles status=IN_PROGRESS progress=<done>/<total> rows (<percent>%) rate=<rows_per_second> rows/s
+END
 ```
 
-同期が完了したら検索クエリを実行します。
+`SYNC STATUS` を繰り返し実行し、テーブルが `status=COMPLETED` になったら検索します。
 
 ```mygram
 127.0.0.1:11016> SEARCH articles hello world
 OK RESULTS 3 101 205 387
 ```
 
-::: tip 結果が0件になる場合
-`SYNC STATUS` で同期状態を確認し、MySQL側に検索語を含む行があるか、設定の `text_source.column` が正しいかを確認してください。複数DB構成では `SEARCH app_db.articles hello world` のように `<database>.<table>` 形式で指定します。
-:::
+検索結果がない場合は、同期が完了したこと、ソーステーブルに検索語を含む行があること、`text_source.column` が正しいことを確認してください。複数DB構成では `SEARCH app_db.articles hello world` のようにテーブルを修飾します。
 
 ## 次のステップ
 
-- [インストール](/ja/docs/installation) - インストール方法
-- [設定](/ja/docs/configuration) - 設定リファレンス
-- [クエリガイド](/ja/docs/queries) - 検索構文とサンプル
-
-## 詳細ドキュメント
-
-- [設定リファレンス（詳細）](/ja/docs/configuration)
-- [MySQLレプリケーション](/ja/docs/replication)
-- [運用ガイド](/ja/docs/operations)
-- [v1.11 へのアップグレード](/ja/docs/upgrade-v1.11)
+- [インストール](/ja/docs/installation) - パッケージ、Docker、ソースからの導入
+- [設定](/ja/docs/configuration) - 設定項目のリファレンス
+- [MySQLレプリケーション](/ja/docs/replication) - ソース要件と権限
+- [クエリガイド](/ja/docs/queries) - 検索構文と例

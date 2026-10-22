@@ -76,7 +76,7 @@ mysql:
 
 `datetime_timezone` controls how MySQL `DATETIME` and `DATE` values, and temporal `required_filters` literals, are interpreted. `TIME` values are durations in seconds and do not use this offset. `TIMESTAMP` values are always handled as UTC.
 
-Set `ssl_enable` and the CA/certificate/key paths when MySQL requires TLS. Leave the certificate paths empty only when the server does not require them; keep `ssl_verify_server_cert: true` for verified TLS.
+`connect_timeout_ms`, `read_timeout_ms`, and `write_timeout_ms` are milliseconds; `session_timeout_sec` is seconds. TLS is disabled by default. This example enables TLS: replace its CA and client-certificate paths with files on the server. When TLS and server-certificate verification are enabled, `mysql.ssl_ca` is required and must point to the CA certificate that signed the server certificate. `mysql.ssl_cert` and `mysql.ssl_key` are optional unless the source also requires client-certificate authentication; remove those two example lines when client certificates are not required. For a source without TLS, set `ssl_enable: false` and remove the certificate paths. Keep `ssl_verify_server_cert: true` for verified TLS.
 
 Environment variables can override `mysql.host`, `mysql.port`, `mysql.user`, `mysql.password`, and `mysql.database` through `MYGRAM_MYSQL_HOST`, `MYGRAM_MYSQL_PORT`, `MYGRAM_MYSQL_USER`, `MYGRAM_MYSQL_PASSWORD`, and `MYGRAM_MYSQL_DATABASE`. These overrides also work when the `mysql` block is absent. `MYGRAM_MYSQL_PORT` must be an integer from `1` through `65535`; an invalid value stops startup.
 
@@ -94,9 +94,10 @@ MySQL `DATETIME` carries no timezone. MygramDB uses `datetime_timezone` to decid
 binlog_format = ROW
 binlog_row_image = FULL
 binlog_row_metadata = FULL
+binlog_checksum = CRC32
 ```
 
-These settings belong on the MySQL or MariaDB source. MygramDB validates them at startup and on reconnect; its YAML `mysql` block does not configure the source server.
+These settings belong on the MySQL or MariaDB source. MygramDB validates them at startup and on reconnect; its YAML `mysql` block does not configure the source server. The source must also write uncompressed binlog events: set `binlog_transaction_compression=OFF` on MySQL or `log_bin_compress=OFF` on MariaDB. On MySQL, `binlog_row_value_options` must not include `PARTIAL_JSON`.
 
 For MySQL, enable GTID:
 
@@ -105,7 +106,7 @@ gtid_mode = ON
 enforce_gtid_consistency = ON
 ```
 
-For MariaDB, GTID uses MariaDB's native `domain-server-sequence` format. Ensure `server_id` is set and row-based binlogging is enabled.
+For MariaDB, GTID uses MariaDB's native `domain-server-sequence` format. Ensure `server_id` is set, row-based binlogging is enabled, and `binlog_storage_engine` is unset. If the source is itself a replica, enable `log_replica_updates` on MySQL or `log_slave_updates` on MariaDB so replicated changes are written to its binlog.
 
 ### Required Privileges
 
@@ -161,8 +162,24 @@ A **table identity** is the name MygramDB uses to refer to one searchable table.
 
 ::: warning Configured column validation
 
-Table names, database names, primary keys, filter names, and text-source names must be valid SQL identifiers. Configured primary-key, text-source, and filter columns cannot use `FLOAT`, `JSON`, `GEOMETRY` or its subtypes, `VECTOR`, `ZEROFILL`, `BINARY`, `VARBINARY`, any `BLOB` type, or a type this build cannot decode from a row image. Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. MygramDB checks these rules before replication starts so the initial loader and binlog reader can represent the same values.
+Names must be non-empty SQL identifiers without NUL bytes. They are not limited to ASCII: spaces, `$`, Unicode, and embedded backticks are supported and safely quoted. Table identity is the `(database, table)` pair, and duplicate pairs are rejected. Configured primary-key, text-source, and filter columns cannot use `FLOAT`, `JSON`, `GEOMETRY` or its subtypes, `VECTOR`, `ZEROFILL`, `BINARY`, `VARBINARY`, any `BLOB` type, or a type this build cannot decode from a row image. Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. MygramDB checks these rules before replication starts so the initial loader and binlog reader can represent the same values.
 :::
+
+## Identifier and Ingestion Limits
+
+Protocol references use a bare table name only when one database is configured. In a multi-database setup, use `<database>.<table>`. Raw TCP accepts a whitespace-containing reference quoted as one protocol token. The native C/C++ SDK's typed methods reject whitespace in names before constructing a command; raw command methods retain the TCP grammar. For HTTP routes, percent-encode the table identity in the URL.
+
+The ingestion limits below apply per value or document. Size limits are in bytes unless the row says otherwise:
+
+| Item | Limit |
+|------|-------|
+| Stored primary-key value | 1 MiB |
+| Filters per document | 1,000 |
+| Filter name | 1 KiB |
+| String filter value | 64 KiB |
+| Original text and normalized text | 16 MiB each |
+
+The initial `SYNC` rejects a candidate snapshot that exceeds these limits. During binlog ingestion, an oversized value is an error and MygramDB does not advance the applied GTID past that event.
 
 ## Filters
 
@@ -306,6 +323,8 @@ memory:
 
 `hard_limit_mb` and `soft_target_mb` are reserved and do not enforce a process memory limit. They still have configuration bounds: `hard_limit_mb` accepts `256` through `2147483647`, and `soft_target_mb` accepts `128` through `2147483647`. `arena_chunk_mb` and `minute_epoch` are also reserved. Size the host so the full index and stored normalized text fit in RAM.
 
+`memory.normalize.nfkc` enables Unicode NFKC normalization, `width` accepts `keep`, `narrow`, or `wide` for character-width handling, and `lower` controls lowercasing. Their defaults are `true`, `narrow`, and `false`. These settings affect indexed text and queries alike. A dump must use the same normalization settings as the running configuration.
+
 ::: warning About the memory limit
 `hard_limit_mb` does not currently stop the process at the OS level. In production, estimate from the row count, stored text, `verify_text` mode, and cache size, then provision enough RAM.
 :::
@@ -360,7 +379,9 @@ api:
   admin_token: "replace-with-a-high-entropy-secret"
 ```
 
-TCP and HTTP bind to loopback by default. `idle_timeout_sec: 0` disables TCP idle reaping. The pending-frame limits cap completed requests waiting for a worker; reads pause at 75% of either limit and resume after the queue drains. `api.http.max_connections` caps admitted HTTP connections, including sockets waiting for workers. `api.http.trusted_proxies` is a list of numeric reverse-proxy IP addresses whose `X-Forwarded-For` value may determine the client identity for ACLs and rate limiting; leave it empty unless requests arrive through those proxies. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
+TCP and HTTP bind to loopback by default. `worker_threads: 0` selects the automatic worker count. `idle_timeout_sec: 0` disables TCP idle reaping. The pending-frame limits cap completed requests waiting for a worker; `max_pending_frame_bytes` defaults to 4 MiB and is a separate per-connection byte budget, while `max_query_length` counts Unicode characters. Reads pause at 75% of either pending-frame limit and resume after the queue drains. `api.default_limit` defaults to 100 results. `max_query_length` defaults to 128 characters; `0` removes that limit. `api.http.max_connections` caps admitted HTTP connections, including sockets waiting for workers. When CORS is enabled for HTTP, `cors_allow_origin` must contain the origin value to return; it is not a list. `api.http.trusted_proxies` is a list of numeric reverse-proxy IP addresses whose `X-Forwarded-For` value may determine the client identity for ACLs and rate limiting; leave it empty unless requests arrive through those proxies. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
+
+To use a Unix socket, set `api.unix_socket.path` and connect with `mygram-cli -s /path/to/mygramdb.sock`. On startup, MygramDB removes an existing socket only when a connection probe confirms it is stale. It refuses to replace a regular file, an active socket, or a path whose status is uncertain, with error 6015.
 
 ::: info What TCP and HTTP each handle
 The TCP API serves search plus administrative commands such as `SYNC`, `DUMP`, and `SET`. The HTTP API covers search, count, facet, document lookup, health, metrics, and `POST /optimize`.
@@ -398,6 +419,8 @@ api:
 ```
 
 TCP and HTTP share one rate limiter and one per-client token bucket, so a client cannot double its quota by spreading requests across protocols. Deployments that relied on the former per-protocol burst should raise `capacity` and `refill_rate` to preserve that aggregate rate.
+
+`capacity` is the maximum burst in requests; `refill_rate` adds tokens per client per second. Both default to `100` and `10` respectively. `enable`, `capacity`, and `refill_rate` can be changed at runtime with `SET`; `max_clients` is startup-only and limits tracked client buckets, not admitted clients.
 
 ## Relevance Scoring (BM25)
 
@@ -462,7 +485,7 @@ dump:
   restore_max_section_mb: 2048
 ```
 
-`interval_sec: 0` disables automatic dumps. `retain` controls automatic dump rotation. Manual `DUMP SAVE` uses `default_filename` unless a path is provided; `DUMP SAVE .` is refused. `restore_memory_budget_mb` bounds aggregate staged data during a V2 restore; `restore_max_section_mb` bounds one encoded V2 section. `dump.load_on_startup: true` tries the default dump before a MySQL snapshot, validates the source identity and GTID, and falls back to MySQL when the dump cannot be loaded. It requires `replication.start_from: "snapshot"`. `DUMP SAVE` rejects documents that exceed restore limits instead of producing a dump that cannot be loaded.
+`interval_sec` is measured in seconds. Its default is `0`, which disables automatic dumps; the example enables them every 7200 seconds (two hours). `retain` controls automatic dump rotation. Manual `DUMP SAVE` uses `default_filename` unless a path is provided; `DUMP SAVE .` is refused. `restore_memory_budget_mb` bounds aggregate staged data during a V2 restore; `restore_max_section_mb` bounds one encoded V2 section. `dump.load_on_startup: true` tries the default dump before a MySQL snapshot, validates the source identity and GTID, and falls back to MySQL when the dump cannot be loaded. It requires `replication.start_from: "snapshot"`. `DUMP SAVE` rejects documents that exceed restore limits instead of producing a dump that cannot be loaded. Every configured table must have completed its initial load before `DUMP SAVE`; otherwise it returns error 6029. In a MySQL-enabled build with a binlog reader, a GTID position is also required; a missing position returns 6029.
 
 ::: warning Put the dump directory on persistent storage
 Under Docker or Kubernetes, point `dump.dir` at a persistent volume. Writing dumps to the container's ephemeral filesystem loses them when the container is recreated.
@@ -480,6 +503,8 @@ network:
 If `allow_cidrs` is empty or omitted, connections are denied. Add only the application server and operator networks that need access. MygramDB has no native TLS, so terminate TLS at a reverse proxy or load balancer when needed. Administrative commands use `api.admin_token`; ordinary search endpoints remain protected by the bind address and CIDR allowlist.
 
 IPv4-mapped IPv6 CIDRs with prefixes shorter than `/96` are rejected because they do not map to a valid IPv4 range. Prefixes from `/96` through `/128` are folded into the corresponding IPv4 range.
+
+Either `0.0.0.0/0` or `::/0` allows connections from every IPv4 and IPv6 address. Either is rejected when paired with a non-loopback TCP or enabled HTTP listener.
 
 ::: danger Never expose it directly to a public network
 Do not publish MygramDB directly to the internet. A configuration with `0.0.0.0/0` or `::/0` in `allow_cidrs` and a non-loopback TCP or enabled HTTP bind is rejected at startup. Use a restrictive CIDR list, or keep the listener on loopback behind a reverse proxy.
@@ -508,4 +533,4 @@ SET cache.enabled = false
 SET api.default_limit = 200
 ```
 
-Only variables marked mutable by `SHOW VARIABLES` can be changed at runtime. MySQL connection identity, tables, `memory.verify_text`, dump directory, network ACLs, and listener binds require restart.
+Only variables marked mutable by `SHOW VARIABLES` can be changed at runtime. If MygramDB was started with `--schema`, that schema's constraints also apply to `SET`; a value that violates them returns error 1004. Unknown variables return 1008, and startup-only variables return 1009. MySQL connection identity, tables, `memory.verify_text`, dump directory, network ACLs, and listener binds require restart.

@@ -38,12 +38,12 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 - 通常の `search()` / `Search()` は、単純な検索語やAND/NOT中心の検索に向いています。
 - `OR` や括弧を含むブール式は、検索式パーサーで変換して `searchRaw()` / `SearchRaw()` / `search_raw()` に渡します。
 - Web構文の変換関数は、単独の `or` を `OR` として認識し、`order` のようなリテラル語やアポストロフィを含む語を引用し、グループ内のマイナスを `NOT` に変換します。フレーズとOR/グループは1回だけ変換されるため、結果をそのままRaw検索メソッドへ渡してください。
-- 検索レスポンスには、`limit`/`offset` 適用前のマッチ総数と現在のページの結果が含まれます。FACET の値は件数順に並び、件数が同じ値もページ間で安定した順序を保ちます。
+- 検索レスポンスには、`limit`/`offset` 適用前のマッチ総数と現在のページの結果が含まれます。FACET もページ分けされます。各値の `count` はその値を持つドキュメント数、`totalCount` / `total_count` / `TotalCount` はページネーション前の異なる値の総数です。件数が同じ値もページ間で安定した順序を保ちます。
 - BM25関連度ソート、ハイライト、ファジー検索、FACETはサーバー側の設定にも依存します。
 - `SET`、`SHOW VARIABLES`、`SYNC` などの管理系操作はTCP経由で実行されます。
 
 ::: warning 管理系コマンドには認証が必要です
-`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` には認証が必要です。すでに接続済みのクライアントでは、実行前に `MYGRAM_API_ADMIN_TOKEN` を使って `AUTH` を送信してください。認証は基底の TCP 接続ごとに設定されるため、再接続のたびに繰り返す必要があります。自動再接続でも認証状態は保持されないので、再接続後の次の管理系操作の前に認証してください。`search`、`count`、`get`、`facet`、`INFO` は認証なしで利用できます。ただし `api.admin_token` を設定した場合、`INFO` は接続が `AUTH` を完了するまでレプリケーションのセクションを省略します。
+`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` に認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。`adminToken`（Node.js）、`admin_token`（Python）、`AdminToken`（Go）を設定すると、クライアントは接続時と再接続時に `AUTH` を送ります。`sendCommand()` や `send_command()` で手動送信した `AUTH` はその接続にだけ適用されます。再接続後も管理操作を続ける場合は、SDKの設定項目を使ってください。`search`、`count`、`get`、`facet`、`INFO` は認証なしで利用できます。ただし `api.admin_token` を設定した場合、`INFO` は接続が `AUTH` を完了するまでレプリケーションのセクションを省略します。
 :::
 
 ::: info 用語補足
@@ -143,22 +143,23 @@ const facets = await client.facet('articles', 'category', {
 
 ```ts
 const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
-if (!adminToken) {
-  throw new Error('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
-}
+const adminClient = createMygramClient({
+  host: 'localhost',
+  port: 11016,
+  ...(adminToken ? { adminToken } : {})
+})
+await adminClient.connect()
 
-const authResponse = await client.sendCommand(`AUTH ${adminToken}`)
-if (authResponse !== 'OK AUTHENTICATED') {
-  throw new Error('MygramDB authentication failed')
-}
+await adminClient.setVariable('logging.level', 'info')
+console.log(await adminClient.showVariables('logging%'))
 
-await client.setVariable('logging.level', 'info')
-console.log(await client.showVariables('logging%'))
-
-await client.sync('app_db.articles')
-console.log(await client.syncStatus())
-await client.syncStop('app_db.articles')
+await adminClient.sync('app_db.articles')
+console.log(await adminClient.syncStatus())
+await adminClient.syncStop('app_db.articles')
+adminClient.disconnect()
 ```
+
+サーバーに `api.admin_token` を設定した場合は `MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。クライアントは接続時と再接続時に認証します。
 
 ## Python
 
@@ -203,7 +204,12 @@ from mygramdb_client import (
 )
 
 async def main():
-    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+    config = ClientConfig(
+        host='localhost',
+        port=11016,
+        admin_token=os.environ.get('MYGRAM_API_ADMIN_TOKEN', ''),
+    )
+    async with MygramClient(config) as client:
         table = qualify_table_identity('articles', 'app_db')  # app_db.articles
         print(parse_table_identity(table))                    # ('app_db', 'articles')
 
@@ -240,14 +246,6 @@ async def main():
             FacetOptions(query='machine learning', filters={'status': '1'}, limit=10),
         )
 
-        admin_token = os.environ.get('MYGRAM_API_ADMIN_TOKEN')
-        if not admin_token:
-            raise RuntimeError('MYGRAM_API_ADMIN_TOKEN is required for administrative commands')
-
-        auth_response = await client.send_command(f'AUTH {admin_token}')
-        if auth_response != 'OK AUTHENTICATED':
-            raise RuntimeError('MygramDB authentication failed')
-
         await client.set_variable('logging.level', 'info')
         print(await client.show_variables('logging%'))
 
@@ -257,6 +255,8 @@ async def main():
 
 asyncio.run(main())
 ```
+
+サーバーに `api.admin_token` を設定した場合は `MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。`ClientConfig` に指定すると、クライアントは接続時と自動再接続時に認証します。
 
 ## Go
 
@@ -372,22 +372,14 @@ import (
 
 func main() {
 	adminToken := os.Getenv("MYGRAM_API_ADMIN_TOKEN")
-	if adminToken == "" {
-		log.Fatal("MYGRAM_API_ADMIN_TOKEN is required for administrative commands")
-	}
-
-	client := mygram.NewClient("localhost:11016")
+	client := mygram.NewClientWithConfig(mygram.ClientConfig{
+		Host:       "localhost",
+		Port:       11016,
+		AdminToken: adminToken,
+	})
 	defer client.Close()
 	if err := client.Connect(); err != nil {
 		log.Fatal(err)
-	}
-
-	authResponse, err := client.SendCommand("AUTH " + adminToken)
-	if err != nil {
-		log.Fatal("MygramDB authentication command failed")
-	}
-	if authResponse != "OK AUTHENTICATED" {
-		log.Fatal("MygramDB authentication failed")
 	}
 
 	if err := client.SetVariable("logging.level", "info"); err != nil {
@@ -412,6 +404,8 @@ func main() {
 	}
 }
 ```
+
+サーバーに `api.admin_token` を設定した場合は `MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。`ClientConfig.AdminToken` は再接続時にも各接続で認証します。
 
 ::: tip Goクライアントの並行利用
 Goクライアントは並行利用を想定した実装です。リクエスト単位のキャンセルやタイムアウトが必要な場合は、`SearchContext`、`SearchRawContext`、`SyncContext` などの `context.Context` 付きメソッドを使ってください。

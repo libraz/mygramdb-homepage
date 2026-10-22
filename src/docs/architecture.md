@@ -31,7 +31,7 @@ The **index** is the structure that finds candidate documents fast. The **DocSto
 
 - **BinlogReader** -- Connects to MySQL as a replica. Receives row-level events (INSERT, UPDATE, DELETE) via GTID-based binlog streaming.
 - **Index** -- In-memory n-gram index. Maps n-gram strings to posting lists (sorted document ID sets).
-- **DocumentStore** -- Maps internal DocIDs to MySQL primary keys and stores filter column values and normalized text. Filter-column names are interned once per store; each document keeps a small vector sorted by column ID rather than owning the same column names repeatedly.
+- **DocumentStore** -- Maps internal DocIDs to MySQL primary keys and stores filter-column values and normalized text. It stores each filter-column name once; each document keeps its values in a small vector keyed by column ID, avoiding a copy of every name in every document.
 - **SearchHandler** -- Parses queries, executes the search pipeline, manages the query cache, and reads candidate text in bounded chunks for text-heavy stages.
 - **Snapshot** -- Periodic dump of index state and GTID position to disk for fast restart.
 
@@ -55,7 +55,7 @@ After the initial snapshot, MygramDB switches to binlog streaming:
 
 <DocDiagram name="live-replication-sequence" alt="MySQL pushes row events into a bounded event queue; a worker dequeues each event, updates the index and document store, and invalidates the affected cache entries." />
 
-The BinlogReader thread reads events into a bounded queue. A worker thread dequeues events and applies them to the index and document store. This decoupling allows the binlog reader to keep up with MySQL even during bursts.
+The BinlogReader thread reads events into a bounded queue. A worker thread dequeues events and applies them to the index and document store. The queue absorbs short bursts while the two stages run independently; sustained writes faster than MygramDB can apply them can still build replication lag.
 
 On connection loss, MygramDB retries the configured endpoint and resumes from the last applied or processed GTID position. Events after that position may be replayed and applied idempotently.
 
@@ -65,7 +65,7 @@ Search queries arrive via TCP (port 11016, default) or HTTP (port 8080, disabled
 
 ## Thread Model
 
-MygramDB uses an **event-driven Reactor I/O model** for TCP connections. The reactor uses epoll (Linux) or kqueue (macOS) to multiplex thousands of connections onto a single event-loop thread, dispatching work to a bounded worker pool.
+MygramDB uses an **event-driven Reactor I/O model** for TCP connections. The reactor uses epoll (Linux) or kqueue (macOS) to multiplex connections on an event-loop thread and dispatches work to a bounded worker pool. The number of connections a deployment can handle depends on its workload and operating-system limits.
 
 ::: info What is a Reactor I/O model?
 A **Reactor I/O model** watches many connections from a small number of threads and hands work to a worker only when there is something to process. Because it does not create a thread per connection, idle connections cost almost nothing.
@@ -105,6 +105,8 @@ A **write-ahead log** records every change sequentially as it happens. MygramDB 
 2. With `dump.load_on_startup: true`, MygramDB tries `dump.dir/default_filename` at startup. A successful restore resumes binlog replication from the saved GTID; this mode requires `replication.start_from: snapshot`.
 3. Events between that GTID and the current MySQL position are replayed automatically. If the dump fails validation, startup falls back to a MySQL initial snapshot.
 
+If the dump restores but startup cannot catch up to the current MySQL position, MygramDB keeps serving the restored index with replication stopped. Readiness reports `not_ready` until replication recovers. See [Snapshot and Dump Recovery](/docs/snapshot) for recovery steps.
+
 Snapshot writes use **atomic file operations** (write to temp file, then rename) to prevent corruption if the process is interrupted during a dump.
 
 When startup does not attempt a dump restore, enable `replication.auto_initial_snapshot` to build the initial index automatically, or run `SYNC <table>` (or `SYNC <database>.<table>` in multi-database configurations). A failed startup dump restore falls back to a MySQL initial snapshot even if `auto_initial_snapshot` is false.
@@ -125,9 +127,9 @@ MygramDB snapshots exist to restore the search index quickly. Backups and point-
 | DocumentStore + Text Store | ~1.78 GB |
 | **Total RSS** | **~3.41 GB** |
 
-Current server startup retains normalized text even with `verify_text: off`, because highlighting is a query-level feature. `verify_text` controls post-filtering, not text storage. The [FAQ](/faq#how-much-memory-does-mygramdb-need) explains how to use this benchmark for capacity planning. Filter values keep interned column IDs in small sorted vectors, avoiding one owned column-name string and hash map per document and configured filter column.
+Current server startup retains normalized text even with `verify_text: off`, because highlighting is a query-level feature. `verify_text` controls post-filtering, not text storage. The [FAQ](/faq#how-much-memory-does-mygramdb-need) explains how to use this benchmark for capacity planning. Each configured filter column gets an ID once per table; a document stores its values in a small vector keyed by those IDs instead of repeating column names in a per-document map.
 
-Stored text and document data dominate the benchmark above. Posting-list memory depends on the compression strategy -- delta encoding for sparse n-grams, Roaring bitmaps for dense ones. Monitoring does not lock every table for every scrape: per-table values are aggregated into a bounded snapshot served by `INFO`, `/metrics`, and Prometheus. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
+Stored text and document data dominate the benchmark above. `OPTIMIZE` chooses delta encoding or Roaring bitmaps based on posting-list density; inserts also convert delta lists that grow beyond 4,096 entries. Memory use depends on the data. Monitoring does not lock every table for every scrape: per-table values are aggregated into a bounded snapshot served by `INFO`, `/metrics`, and Prometheus. See [How It Works](/docs/how-it-works#posting-list-compression) for details on the adaptive compression.
 
 ---
 

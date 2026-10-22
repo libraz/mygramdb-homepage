@@ -41,21 +41,11 @@ See [Comparison](/comparison) for a detailed breakdown. In short: choose MygramD
 
 ### How does MygramDB compare to Meilisearch or Typesense?
 
-Meilisearch and Typesense are general-purpose search engines with typo tolerance, faceting, and built-in UIs. MygramDB solves a different problem: it acts as an in-memory search replica that syncs directly from MySQL via binlog. If your data already lives in MySQL and you need fast full-text search without an ETL pipeline, MygramDB is simpler to deploy and operate. If you need a standalone search platform with its own data ingestion, Meilisearch or Typesense may be a better fit.
+Meilisearch and Typesense are separate search products with their own feature sets and data-ingestion options. MygramDB reads MySQL or MariaDB binlogs to maintain its index. Choose based on your search requirements, data flow, and the current deployment and license terms of each product.
 
 ### How does MygramDB compare to RediSearch?
 
-Both are in-memory full-text search engines, but the architecture is fundamentally different.
-
-| | MygramDB | RediSearch |
-|---|---|---|
-| **Data sync** | Automatic via MySQL/MariaDB binlog | Push-based (FT.ADD) — you build the ETL |
-| **Dependency** | MySQL or MariaDB | Redis (Redis Stack) |
-| **Deployment** | Single binary | Redis module |
-| **Features** | N-gram search with BM25 scoring, highlighting, fuzzy search, faceted aggregation, synonyms | Fuzzy search, highlighting, aggregations, geo |
-| **License** | MIT | RSALv2 / SSPL (commercial restrictions) |
-
-The key difference is data flow. RediSearch requires you to push documents into Redis, meaning you need an ETL pipeline between MySQL and Redis. MygramDB eliminates that — it reads the MySQL/MariaDB binlog directly and keeps itself in sync. If your data is in MySQL or MariaDB and you want search without building a sync pipeline, MygramDB is simpler. If you already run Redis and need geo-search or its richer aggregation model, RediSearch may be worth the integration cost.
+MygramDB reads MySQL or MariaDB binlogs to maintain its search index. For a comparison with another product, check its current documentation for supported data-ingestion paths, features, deployment requirements, and license terms.
 
 ## Features and Limitations
 
@@ -85,7 +75,7 @@ Yes. Use `SORT _score DESC` to rank results by BM25 relevance. IDF and TF are co
 
 ### Can MygramDB scale horizontally?
 
-Not built-in. Full replicas behind a load balancer can increase read capacity and availability, but each instance still holds the whole index. For a dataset that exceeds one node's RAM, partition the source data across separately indexed tables or instances and route or combine queries in the application.
+MygramDB does not shard an index across nodes. Multiple full replicas can serve search traffic behind a load balancer, but each holds the whole index and needs its own replication configuration, including a distinct `REPLICATION_SERVER_ID`. Route traffic only to ready instances. If the data does not fit in one node's RAM, partition the source data across separately indexed tables or instances and route or combine queries in the application.
 
 Capacity depends on document size and filters. The published benchmark used about 3.1 GB per million documents with `verify_text: all`; measure your own data and leave room for indexing and maintenance before choosing a node size.
 
@@ -115,12 +105,12 @@ MygramDB uses bigrams (size 2) by default for ASCII/alphanumeric text and CJK id
 
 ### How are Roaring bitmaps used?
 
-Posting lists use a hybrid storage strategy based on density:
+Posting lists use delta encoding or Roaring bitmaps. `OPTIMIZE` chooses a representation based on density, and inserts can trigger a conversion based on list size:
 
-- **Sparse postings** (below 18% of total documents): Delta-encoded arrays. DocIDs are stored as fixed-width deltas from the previous value.
-- **Dense postings** (18% or above): Roaring bitmaps via CRoaring. Roaring automatically selects the best container type (array, bitmap, or run-length) per 65,536-ID chunk.
+- **Sparse postings** (typically below 18% density after `OPTIMIZE`): Delta-encoded arrays. DocIDs are stored as fixed-width deltas from the previous value.
+- **Dense postings** (typically at least 18% after `OPTIMIZE`, or over 4,096 entries after inserts): Roaring bitmaps via CRoaring. Roaring automatically selects a container type (array, bitmap, or run-length) per 65,536-ID chunk.
 
-The threshold is configurable (`roaring_threshold`). A hysteresis factor (0.5x) prevents oscillation between formats.
+The density threshold is configurable (`roaring_threshold`, 18% by default), with a 0.5x hysteresis factor for `OPTIMIZE`. Inserts convert a delta list to Roaring when it grows beyond 4,096 entries, regardless of density. A Roaring list converts back only when it has at most 4,096 entries and its density is below half the threshold (9% by default).
 
 ### What does "SIMD-accelerated" mean in practice?
 
@@ -128,7 +118,7 @@ MygramDB links against [CRoaring](https://github.com/RoaringBitmap/CRoaring), wh
 
 ### How are posting lists encoded?
 
-The index chooses Delta-encoded lists for sparse terms and Roaring bitmaps for dense terms. Their memory usage depends on the document-ID distribution:
+`OPTIMIZE` chooses delta-encoded lists for sparse terms and Roaring bitmaps for dense terms. Inserts also convert lists that exceed 4,096 entries to Roaring. Memory usage depends on the document-ID distribution:
 
 1. **Delta encoding**: Monotonically increasing DocIDs become deltas. For example, `[1000, 1002, 1005]` becomes `[1000, 2, 3]`; the current representation stores each delta as a `uint32_t`.
 2. **Roaring bitmap compression**: Dense postings use Roaring's container optimization — run-length encoding for consecutive ranges, bitmap containers for scattered dense regions.
@@ -157,7 +147,7 @@ MygramDB detects connection loss and retries the configured endpoint. On reconne
 
 ### How does MygramDB handle ALTER TABLE?
 
-MygramDB catches DDL events via binlog. `TRUNCATE TABLE` clears the affected index. Dropping or renaming a configured table, renaming another table onto its name, or making an incompatible change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. On a configured `DROP TABLE`, the existing index is retained while replication is stopped; it is no longer current. Fix the schema or configuration, then run `SYNC` to rebuild the table.
+MygramDB validates relevant DDL events from the binlog, including `CREATE INDEX` and `DROP INDEX`. `TRUNCATE TABLE` clears the affected index. Dropping or renaming a configured table, renaming another table onto its name, or making an incompatible change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. If the configured primary-key column no longer has a single-column `PRIMARY KEY` or `UNIQUE` index, validation fails and replication stops. On a configured `DROP TABLE`, the existing index is retained while replication is stopped; it is no longer current. Fix the schema or configuration, then run `SYNC` to rebuild the table.
 
 ### How are deletes handled in the index?
 
@@ -173,6 +163,8 @@ No WAL. MygramDB uses snapshot-based persistence:
 2. If `dump.load_on_startup: true`, startup tries `dump.dir/default_filename`, not the newest timestamped dump. On success, replication resumes from the dump's GTID. Set `replication.start_from: snapshot` for this mode.
 
 If that startup dump is missing or invalid, MygramDB falls back to a MySQL initial snapshot. MySQL remains the source of truth; keep its own backup and binlogs separately. See [Snapshot and Dump Recovery](/docs/snapshot) for restore checks.
+
+If the dump restores but MygramDB cannot catch up to the current MySQL position, it keeps serving the restored index with replication stopped and reports `not_ready`. Check the replication error and source GTID/binlog availability, then follow [Snapshot and Dump Recovery](/docs/snapshot) to recover or rebuild the index.
 
 Dump configuration:
 - `dump.interval_sec`: Auto-save interval (0 = disabled, recommended: 7200 for production)
@@ -212,13 +204,13 @@ Administrative TCP commands require `AUTH <token>` on each connection when `api.
 
 ### Can MygramDB run on Kubernetes?
 
-The building blocks are there. Health check endpoints are built in:
+MygramDB exposes health checks and metrics that can be used by a Kubernetes deployment. You still need to configure storage for dumps, memory limits, probes, and network access to MySQL for your cluster:
 
 - `GET /health/live` — Liveness probe (200 if process is running)
-- `GET /health/ready` — Readiness probe (503 during dump load, table sync, or replication unavailability; 200 when ready)
+- `GET /health/ready` — Readiness probe (503 during dump load, table sync, replication unavailability, or a failed startup catch-up after dump restore; 200 when ready)
 - `GET /health/detail` — Detailed status with uptime, index stats, and memory; replication details require a bearer token when `api.admin_token` is set
 
-Prometheus metrics are available at `GET /metrics`. The Docker image runs as a non-root user (UID 1000). The author runs MygramDB on Docker, not Kubernetes, so K8s-specific operational advice is limited.
+Prometheus metrics are available at `GET /metrics`. The Docker image runs as a non-root user (UID 1000).
 
 ### What metrics are available?
 
@@ -239,7 +231,7 @@ MygramDB is a separate search service beside an existing MySQL database. Configu
 
 ### What hardware were the benchmarks run on?
 
-Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4.11 in Docker. MygramDB ran with `verify_text: all` (post-filter enabled for accurate match counts) and query cache disabled. The Apple M5 Max host (18 cores, 128 GiB) allocated 32 GiB to Docker Desktop (31.29 GiB visible to the containers). Each query was measured over 200 iterations after 5 warmup runs. On other hardware and memory limits, absolute latency will differ.
+Benchmarks were run on 1.1M Wikipedia articles (1M English + 100K Japanese) with MySQL 8.4.11 in Docker. MygramDB ran with `verify_text: all` (normalized-substring verification enabled) and query cache disabled. The Apple M5 Max host (18 cores, 128 GiB) allocated 32 GiB to Docker Desktop (31.29 GiB visible to the containers). Each query was measured over 200 iterations after 5 warmup runs. The tested queries returned the same counts as MySQL FULLTEXT; this does not establish equivalent semantics for all queries. On other hardware and memory limits, absolute latency will differ.
 
 ### Were MySQL settings tuned for the benchmark?
 
@@ -257,7 +249,7 @@ Elasticsearch performance varies dramatically based on cluster size, JVM heap, s
 
 ### Why C++ and not Rust?
 
-Aware of the trade-off. The author believes Rust replacing C++ is a matter of time for production systems, and would likely choose Rust for a team project. MygramDB is a solo open-source project where the author wanted direct control over memory layout — posting list operations, bitmap intersections, and delta encoding benefit from knowing exactly where bytes land. The project uses RAII, `unique_ptr` for ownership, and `Expected<T, Error>` instead of exceptions to mitigate common C++ pitfalls. Not a recommendation for others to start new C++ projects.
+MygramDB uses C++ for direct control over the in-memory layout of posting lists, bitmap operations, and delta-encoded IDs, and to integrate with the MySQL C API and CRoaring. The code uses RAII and `unique_ptr` for resource ownership, and `Expected<T, Error>` for error handling. This describes MygramDB's implementation choices; the right language for another project depends on its constraints and libraries.
 
 ### How mature is the project?
 
@@ -265,7 +257,7 @@ Development started in November 2025. MygramDB is used in production on a high-t
 
 ### How do I migrate from MySQL FULLTEXT to MygramDB?
 
-Keep MySQL as your primary database, deploy MygramDB alongside, and route search queries to it. No data migration needed — MygramDB syncs automatically via binlog. See [Quick Start](/) or [Comparison — Migration Path](/comparison#migration-path).
+Keep MySQL as your primary database, deploy MygramDB alongside, and route search queries to its API. Build the initial index with `SYNC` or `replication.auto_initial_snapshot`; later changes are applied from the binlog. See [Quick Start](/) or [Comparison — Migration Path](/comparison#migration-path).
 
 ---
 

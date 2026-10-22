@@ -46,17 +46,17 @@ For production use under Docker, mount a config file containing the MySQL connec
 :::
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.0
+docker pull ghcr.io/libraz/mygram-db:1.11.1
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
-  ghcr.io/libraz/mygram-db:1.11.0
+  ghcr.io/libraz/mygram-db:1.11.1
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.11.0`
+- `ghcr.io/libraz/mygram-db:1.11.1`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
@@ -73,7 +73,14 @@ sudo dpkg -i mygramdb_*_amd64.deb
 sudo dpkg -i mygramdb_*_arm64.deb
 ```
 
-Start the service:
+The package installs `/etc/mygramdb/config.yaml.example` and creates the service user, data directory, dump directory, and log directory. Copy and edit the configuration before starting the service:
+
+```bash
+sudo cp /etc/mygramdb/config.yaml.example /etc/mygramdb/config.yaml
+sudoedit /etc/mygramdb/config.yaml
+```
+
+Then start the service:
 
 ```bash
 sudo systemctl enable --now mygramdb
@@ -127,8 +134,12 @@ sudo useradd -r -s /bin/false mygramdb
 
 ```bash
 sudo mkdir -p /etc/mygramdb /var/lib/mygramdb/dumps
-sudo chown -R mygramdb:mygramdb /var/lib/mygramdb
+sudo mkdir -p /var/log/mygramdb
+sudo install -m 0640 -o root -g mygramdb examples/config.yaml /etc/mygramdb/config.yaml
+sudo chown -R mygramdb:mygramdb /var/lib/mygramdb /var/log/mygramdb
 ```
+
+Edit `/etc/mygramdb/config.yaml` with the source connection, searchable tables, and network allowlist before starting the service. The systemd unit writes logs to the journal by default; `/var/log/mygramdb` is available if `logging.file` is configured.
 
 ### Install systemd Service
 

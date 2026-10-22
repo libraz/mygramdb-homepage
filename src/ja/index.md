@@ -40,7 +40,7 @@ features:
   - icon:
       src: /icons/zap.svg
     title: BM25スコア・ハイライト
-    details: BM25スコアで関連度順にソートし、ハイライト付きスニペットを返却。シノニム辞書でクエリ展開も可能。
+    details: BM25スコアで関連度順にソートし、ハイライト付きスニペットを返却。同義語辞書でクエリ展開も可能。
   - icon:
       src: /icons/globe.svg
     title: ファジー検索・ファセット集計
@@ -93,7 +93,7 @@ docker run -d --name mygramdb \
   -e TABLE_NGRAM_SIZE=2 \
   -e REPLICATION_SERVER_ID=12345 \
   -e NETWORK_ALLOW_CIDRS=127.0.0.1/32,::1/128,172.16.0.0/12 \
-  ghcr.io/libraz/mygram-db:1.11.0
+  ghcr.io/libraz/mygram-db:1.11.1
 ```
 
 ::: warning
@@ -105,8 +105,10 @@ MygramDBは起動しただけでは既存データを自動では読み込みま
 :::
 
 ```bash
-# 1つの対話セッションを開始し、プロンプトで以下のコマンドを入力します。
 docker exec -it mygramdb mygram-cli
+```
+
+```mygram
 AUTH <API_ADMIN_TOKEN>
 SYNC articles
 SYNC STATUS

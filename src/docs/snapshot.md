@@ -28,6 +28,8 @@ DUMP SAVE /var/lib/mygramdb/dumps/before-maintenance.dmp
 
 `DUMP SAVE` starts a background operation and immediately returns `OK DUMP_STARTED <filepath>`. This acknowledges the start, not a completed backup. Run `DUMP STATUS` until it reports `COMPLETED`, check `result_filepath`, then run `DUMP VERIFY` before relying on the file. If it reports `FAILED`, inspect `error` and do not use that file for recovery.
 
+`DUMP SAVE` returns `ERROR 6029` until every configured table has completed its initial load. Without an admin token, run `mygram-cli --wait-ready DUMP SAVE <path>` to retry while the server is loading or not ready. When `api.admin_token` is set, use `mygram-cli --wait-ready INFO` to wait for readiness, then send `AUTH` and `DUMP SAVE <path>` on one authenticated connection. The default retry budget is 100; `--retry N` sets a different finite budget, and the command exits non-zero if the server is still not ready when that budget is exhausted.
+
 Saving pauses and drains a running replication reader to record a consistent GTID, then resumes that reader. A reader that was already manually stopped remains stopped. When replication is enabled, a current GTID is required. Before writing the file, `DUMP SAVE` applies the restore limits to the live data and refuses an oversized primary key, filter value, text field, or data that would exceed `dump.restore_memory_budget_mb`. A dump whose status is `COMPLETED` therefore does not fail later because the restore path is stricter. `DUMP SAVE .` is rejected because `.` resolves to the dump directory itself rather than a file below it. Search stays available, but replication lag may grow during a large save. `SYNC`, `DUMP LOAD`, `OPTIMIZE`, and scheduled snapshots cannot run at the same time.
 
 Dump paths containing control bytes are refused, and `DUMP SAVE` and `DUMP LOAD` replies do not echo control characters from a path. The writer uses a temporary file and commits it by rename; on POSIX, it fsyncs the file before the atomic rename. V2 limits each encoded section to 4 GiB, and `DUMP SAVE` refuses data that exceeds that format limit.
@@ -81,6 +83,8 @@ With replication enabled, `dump.load_on_startup: true` requires `replication.sta
 If the default file is missing, corrupt, incompatible, from another source, or cannot be checked, MygramDB logs the failed startup restore and falls back to the normal MySQL initial snapshot. Treat that fallback as a signal to investigate the dump; it can place a full-table read load on MySQL.
 
 If the binlog reader fails to start after a successful startup restore, MygramDB keeps serving the restored data with replication stopped and readiness false. Without a restored dump, the same reader-start failure is fatal.
+
+If replication starts but fails to catch up to the source after a successful startup restore, MygramDB stops the reader and keeps the restored data available with readiness `not_ready` instead of aborting startup. Check the replication error before directing traffic to the instance.
 
 ## Retention and storage
 

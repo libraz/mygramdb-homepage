@@ -84,12 +84,15 @@ In production, managing an explicit `config.yaml` makes changes easier to review
 
 ```bash
 MYSQL_HOST=mysql                    # MySQL host
-MYSQL_PORT=3306                     # MySQL port
+MYSQL_PORT=3306                     # MySQL port inside the Compose network
+MYSQL_HOST_PORT=3306                # Host-published MySQL port
 MYSQL_USER=repl_user                # MySQL user
 MYSQL_PASSWORD=your_password        # Required MySQL password
 MYSQL_DATABASE=mydb                 # Database name
 MYSQL_USE_GTID=true                 # Use GTID-based replication
 ```
+
+`MYSQL_PORT` is the port MygramDB uses to connect to MySQL from inside the Compose network. `MYSQL_HOST_PORT` controls only the host-side published port; it does not change the port used between Compose services.
 
 #### Table Configuration
 
@@ -237,7 +240,7 @@ docker run -d --name mygramdb-standalone \
   -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
   -e MYGRAM_API_ADMIN_TOKEN \
-  ghcr.io/libraz/mygram-db:1.11.0 \
+  ghcr.io/libraz/mygram-db:1.11.1 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -255,7 +258,7 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
 # Or specify the released version manually
-docker build --build-arg MYGRAMDB_VERSION=1.11.0 -t mygramdb:1.11.0 .
+docker build --build-arg MYGRAMDB_VERSION=1.11.1 -t mygramdb:1.11.1 .
 
 # Tag as latest
 docker tag mygramdb:$VERSION mygramdb:latest
@@ -268,8 +271,8 @@ docker tag mygramdb:$VERSION mygramdb:latest
 The repository ships `docker-compose.yml`; it has no separate production Compose file. To use the published image instead of building locally, give it the tag expected by that file:
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.0
-docker tag ghcr.io/libraz/mygram-db:1.11.0 mygramdb:1.11.0
+docker pull ghcr.io/libraz/mygram-db:1.11.1
+docker tag ghcr.io/libraz/mygram-db:1.11.1 mygramdb:1.11.1
 ```
 
 ### Environment Setup
@@ -308,9 +311,9 @@ LOG_FORMAT=json
 
 3. Start with production configuration. The first command uses the published image tagged above; the second builds the image from this checkout instead:
 ```bash
-MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --no-build
+MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --no-build
 # Or build locally:
-MYGRAMDB_VERSION=1.11.0 docker compose --env-file .env.prod up -d --build
+MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --build
 ```
 
 ### Resource Limits
@@ -397,12 +400,21 @@ curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
 
 ### Backup
 
+Wait until the initial `SYNC` has completed for every configured table. In a MySQL-enabled build with replication enabled, `DUMP SAVE` also requires a GTID position; otherwise it returns error 6029. The dump stores the index, source identity, and replication position. It is not a backup of MySQL data. Back up MySQL data and retain the required binlogs separately; these operations do not create an atomic recovery point. On recovery, use a source state compatible with the recorded identity and position, or run `SYNC` to rebuild the index. This example assumes the default `dump.dir`, `/var/lib/mygramdb/dumps`; adjust the copy path if your configuration uses another directory.
+
 ```bash
 # Backup MySQL data
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root "$MYSQL_DATABASE"' > backup.sql
 
-# Backup MygramDB snapshot
-docker compose cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
+# Wait until the server is ready
+docker compose exec -T mygramdb mygram-cli --wait-ready INFO
+
+# Save and verify a named snapshot (the CLI waits for DUMP SAVE to finish)
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP SAVE manual-backup.dmp\nDUMP VERIFY manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+
+# Copy the exact file created above to the host
+mkdir -p ./backup-dumps
+docker compose cp mygramdb:/var/lib/mygramdb/dumps/manual-backup.dmp ./backup-dumps/manual-backup.dmp
 ```
 
 ### Restore
@@ -412,9 +424,9 @@ docker compose cp mygramdb:/var/lib/mygramdb/dumps ./backup-dumps/
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root "$MYSQL_DATABASE"' < backup.sql
 
 # Restore and explicitly load a MygramDB dump
-docker compose cp ./backup-dumps/mygramdb.dmp mygramdb:/var/lib/mygramdb/dumps/mygramdb.dmp
-docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
-docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/mygramdb.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker compose cp ./backup-dumps/manual-backup.dmp mygramdb:/var/lib/mygramdb/dumps/manual-backup.dmp
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP VERIFY /var/lib/mygramdb/dumps/manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
+docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP LOAD /var/lib/mygramdb/dumps/manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 ```
 
 ## Troubleshooting
@@ -433,10 +445,10 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 
 
 ```bash
 # Check version
-docker run --rm mygramdb:1.11.0 --version
+docker run --rm mygramdb:1.11.1 --version
 
 # Show help
-docker run --rm mygramdb:1.11.0 --help
+docker run --rm mygramdb:1.11.1 --help
 
 # Test the running container's configuration
 docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml
@@ -456,18 +468,13 @@ docker stats
 
 2. Size the Compose `mem_limit` from measured RSS and leave room for maintenance; see [Resource Limits](#resource-limits). `MEMORY_HARD_LIMIT_MB` and `MEMORY_SOFT_TARGET_MB` are reserved settings and do not cap the process.
 
-3. Adjust build parallelism:
-```bash
-BUILD_PARALLELISM=4
-```
-
 ## Scaling
 
 ### Multiple MygramDB Instances
 
 For read capacity or availability, deploy full replicas on separate hosts, each with a unique `REPLICATION_SERVER_ID` and the same MySQL source. Send traffic only to ready instances. Each replica holds the full index, so this does not reduce per-node memory.
 
-If several supplied Compose stacks run on one host, give each stack distinct host mappings for MySQL, TCP, and HTTP, plus a distinct `REPLICATION_SERVER_ID` and appropriate credentials. The `-p` project name only separates container and volume names; it does not change published ports. Set `API_PORT` and `API_HTTP_PORT` for the application, and edit the MySQL host port mapping separately while leaving the container's MySQL port at 3306. For different indexed tables, route queries to the appropriate instance in the application.
+If several supplied Compose stacks run on one host, give each stack distinct host mappings for MySQL, TCP, and HTTP, plus a distinct `REPLICATION_SERVER_ID` and appropriate credentials. The `-p` project name only separates container and volume names; it does not change published ports. Set `API_PORT` and `API_HTTP_PORT` for the application. Set `MYSQL_HOST_PORT` to change the host-side MySQL mapping while leaving `MYSQL_PORT` at the MySQL container port, normally 3306. For different indexed tables, route queries to the appropriate instance in the application.
 
 ### Load Balancing
 

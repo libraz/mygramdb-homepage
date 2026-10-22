@@ -69,7 +69,7 @@ The current template also exposes BM25, cache, rate-limit, and TLS settings. A b
 - `CONFIG VERIFY relative.yaml` resolves relative to the active configuration file, not the service working directory. Use absolute paths in automation when that distinction matters.
 - `SHOW VARIABLES LIKE` accepts exactly one pattern. Existing calls such as `SHOW VARIABLES LIKE 'cache%'` continue to work.
 - HTTP search and facet requests use literal `q` text by default. Send deliberate expressions with `"mode": "boolean"`.
-- Boolean terms now keep punctuation such as `c++`, `e-mail`, and version strings together. Test any parser-dependent query normalization in your application.
+- Boolean search terms now keep punctuation such as `c++`, `e-mail`, and version strings together. Test any parser-dependent query normalization in your application.
 
 ## New Configuration Surface
 

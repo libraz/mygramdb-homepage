@@ -22,7 +22,7 @@ MygramDB targets one specific case: the system of record is already in MySQL or 
 | **Latency** | [Measured](/benchmarks) | Not measured here | [Measured](/benchmarks) |
 | **Deployment** | Separate search service | Single node or cluster | Built into MySQL |
 | **Data sync** | MySQL / MariaDB binlog | Application or connector indexing | Native data |
-| **Scaling** | Full replicas; application-managed partitions | Distributed indexes | Database-level replication or partitioning |
+| **Scaling** | Full replicas; application-managed partitions | Distributed indexes | Database-level replication (MySQL FULLTEXT does not support partitioned tables; [MySQL docs](https://dev.mysql.com/doc/refman/8.4/en/fulltext-restrictions.html)) |
 | **Memory** | [Measured](/benchmarks) | Depends on index and workload | Buffer pool and workload |
 | **Multibyte / Unicode** | N-gram (ICU NFKC) | Configurable analyzers | Configurable parser |
 | **Aggregation** | FACET | Aggregations | SQL queries |
@@ -31,7 +31,7 @@ MygramDB targets one specific case: the system of record is already in MySQL or 
 
 ### MygramDB
 
-**Best for:** MySQL-based applications needing fast search without infrastructure complexity.
+**Best for:** MySQL-based applications whose indexed data fits in one node's RAM and can route search requests to a separate API.
 
 **Pros:**
 - Cache-off benchmark results published with the test configuration

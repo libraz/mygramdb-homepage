@@ -93,7 +93,7 @@ docker run -d --name mygramdb \
   -e TABLE_NGRAM_SIZE=2 \
   -e REPLICATION_SERVER_ID=12345 \
   -e NETWORK_ALLOW_CIDRS=127.0.0.1/32,::1/128,172.16.0.0/12 \
-  ghcr.io/libraz/mygram-db:1.11.0
+  ghcr.io/libraz/mygram-db:1.11.1
 ```
 
 ::: warning
@@ -105,8 +105,10 @@ MygramDB does not load existing rows just by starting the process. Run `SYNC art
 :::
 
 ```bash
-# Start one interactive session, then enter these commands at its prompt.
 docker exec -it mygramdb mygram-cli
+```
+
+```mygram
 AUTH <API_ADMIN_TOKEN>
 SYNC articles
 SYNC STATUS

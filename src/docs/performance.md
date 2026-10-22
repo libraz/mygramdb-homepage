@@ -23,18 +23,18 @@ The benchmark tables, charts, environment, and measured memory use are rendered 
 
 ## Performance Analysis
 
-The published MySQL run had a 99.9989% InnoDB buffer-pool hit ratio, so its measured latency cannot be explained as a physical disk read on every query. MygramDB keeps its search index in memory and uses Delta-encoded or Roaring posting lists according to density. The measured difference depends on the query, data, sorting, memory, and concurrency; see the benchmark conditions above before applying these results to another deployment.
+The published MySQL run had a 99.9989% InnoDB buffer-pool hit ratio, so its measured latency cannot be explained by a physical disk read on every query. MygramDB keeps its search index in memory and stores document IDs in posting lists. The measured difference depends on the query, data, sorting, memory, and concurrency; use the benchmark conditions above when comparing another deployment.
 
 ## Performance Characteristics
 
 ### Current Execution Paths
 
-Several details keep large queries and busy caches from turning into a broad scan or a long lock hold:
+Several implementation choices limit work and lock duration for large queries and busy caches:
 
 - Candidate filtering walks a posting list and the sorted candidate list once, so its work is proportional to the candidates and postings it visits.
 - Candidate text is materialized in bounded chunks. The DocumentStore lock is released before BM25 scoring, term-frequency counting, and text post-filters.
-- A deduplicated term-information lookup is reused across boolean evaluation, NOT filtering, synonym expansion, and verification. Expressions without NOT skip the full document-ID scan.
-- Filter column names are interned once per store, and per-document values use compact vectors keyed by the interned IDs.
+- The posting-list and frequency lookup for a term is reused across boolean evaluation, NOT filtering, synonym expansion, and text verification. Expressions without NOT skip the full document-ID scan.
+- Filter-column names are stored once per table. Each document keeps its filter values in a compact vector keyed by column ID.
 - Cache invalidation has separate reverse indexes for n-gram, filter, and text-sensitive dependencies. LRU maintenance resumes from a bounded slice on each tick instead of sweeping the full cache under one exclusive lock.
 - Per-table statistics are aggregated into a bounded snapshot for `INFO`, `/metrics`, and Prometheus, rather than locking every table while formatting each scrape.
 
@@ -45,23 +45,23 @@ Several details keep large queries and busy caches from turning into a broad sca
 ```yaml
 tables:
   - name: "articles"
-    ngram_size: 2          # ASCII/alphanumeric, kana, and other non-ideographs: bigram
-    kanji_ngram_size: 1    # CJK ideographs: unigram (recommended)
+    ngram_size: 2          # Default size for non-ideographs
+    kanji_ngram_size: 1    # Size for CJK ideographs; tune for your data
 ```
 
 **Recommendations:**
-- **Bigram (2)** for ASCII/English: Good balance of precision and index size
-- **Unigram (1)** for CJK: Each character is meaningful
-- **Trigram (3)**: More precise but larger index and slower queries
+- **Bigram (2)** is the default for ASCII text and CJK ideographs.
+- **Unigram (1)** can be useful for CJK ideographs, depending on query patterns and data.
+- **Trigram (3)** changes the indexed vocabulary and candidate selectivity. Its effect on build time, memory, and query latency depends on the workload; measure before changing the defaults.
 
-### 2. Enable verify_text
+### 2. Verify N-gram candidates with verify_text
 
 ```yaml
 memory:
   verify_text: "all"     # Eliminate n-gram false positives
 ```
 
-With `verify_text=all`, MygramDB verifies every candidate against stored normalized text. The benchmark snapshot records matching counts with MySQL FULLTEXT; see the rendered results above for the measured latency.
+With `verify_text: all`, MygramDB checks each eligible candidate for a normalized substring match. This removes N-gram false positives for that matching rule; it does not make every query equivalent to MySQL FULLTEXT. The tested benchmark queries returned the same counts as MySQL FULLTEXT. Normalized text remains stored in every mode, so `off` does not reduce text-storage memory.
 
 ### 3. Memory Configuration
 
@@ -69,7 +69,7 @@ With `verify_text=all`, MygramDB verifies every candidate against stored normali
 memory:
   hard_limit_mb: 16384      # Reserved / not yet enforced
   soft_target_mb: 8192      # Reserved / not yet enforced
-  roaring_threshold: 0.18   # Delta→Roaring conversion threshold
+  roaring_threshold: 0.18   # Density threshold used by OPTIMIZE
 ```
 
 **Recommendations:**
@@ -79,7 +79,7 @@ memory:
 ::: warning Enforce memory limits at the OS level
 `hard_limit_mb` is not a hard process memory cap today. When running under Docker, systemd, or Kubernetes, set the container or service memory limit as well, and monitor it.
 :::
-- Leave `roaring_threshold` at default (0.18) unless memory is tight
+- Start with the default `roaring_threshold` (0.18). Test changes with `OPTIMIZE` and your own data; the memory effect depends on posting-list density.
 
 ### 4. Use Filters for Selective Queries
 
@@ -104,13 +104,13 @@ SEARCH articles tech FILTER status=1 FILTER category_id=5 LIMIT 100
 
 ### 6. Use OPTIMIZE Command
 
-Run periodically to optimize posting list storage:
+Run `OPTIMIZE` to rebuild posting-list representations using their current density:
 
 ```mygram
 OPTIMIZE
 ```
 
-This can convert dense Delta-encoded posting lists to Roaring bitmaps. The memory change depends on the data. Allow roughly 2.1 times the index size as free memory before running `OPTIMIZE`; the command rejects a run when its admission estimate exceeds available memory.
+This can convert dense delta-encoded posting lists to Roaring bitmaps. The memory change depends on the data. Allow roughly 2.1 times the index size as free memory before running `OPTIMIZE`; the command rejects a run when its admission estimate exceeds available memory.
 
 ## Production Deployment Recommendations
 
@@ -118,10 +118,12 @@ This can convert dense Delta-encoded posting lists to Roaring bitmaps. The memor
 
 **Sizing reference:** The [published v1.10.0 benchmark](/benchmarks) used ~{{ VERIFY_ALL_PER_MILLION_GB }}GB of resident memory per million documents with `verify_text: all`. Current builds also retain normalized text with `verify_text: off` for highlighting, so that setting is not an index-only memory mode. Measure RSS with your dataset and add headroom.
 
-**Example sizing (`verify_text: all`):**
-- 1M documents: 4GB RAM minimum, 8GB recommended
-- 10M documents: 32GB RAM minimum, 48GB recommended
-- 100M documents: Consider sharding across multiple instances
+**Planning examples (`verify_text: all`):**
+- 1M documents: plan for at least 4GB RAM; 8GB leaves more room for growth
+- 10M documents: plan for at least 32GB RAM; 48GB leaves more room for growth
+- 100M documents: evaluate application-managed partitions across instances
+
+These are rough estimates based on the benchmark dataset, not guarantees. Document length, filters, and index structure change memory use. Measure representative data and allow headroom.
 
 ### 2. High Availability Setup
 
@@ -194,7 +196,7 @@ These filenames resolve under `dump.dir`; paths outside it are refused. The cron
 2. **Adjust roaring_threshold:**
    ```yaml
    memory:
-     roaring_threshold: 0.15  # Lower = more aggressive compression
+     roaring_threshold: 0.15  # Example value; measure its effect on your data
    ```
 
 3. **Consider application-managed sharding:** Partition source data, run separate MygramDB instances for the partitions, and route or combine queries in the application. MygramDB does not shard automatically.
@@ -206,14 +208,14 @@ These filenames resolve under `dump.dir`; paths outside it are refused. The cron
 **MygramDB advantages:**
 
 - Cache-off measurements are maintained in the benchmark snapshot above
-- Exact result consistency with `verify_text` (zero false positives)
+- Optional normalized-substring verification with `verify_text`; tested benchmark queries returned the same counts as MySQL FULLTEXT, without a general semantic-equivalence guarantee
 - Search-index access does not depend on the MySQL buffer pool; MygramDB's own query-cache hits can still change latency
-- The published concurrent measurements cover 1, 2, 4, 8 and 16 connections
+- The published concurrent measurements cover 1, 2, 4, 8 and 16 connections; other workloads may behave differently
 
-**MySQL advantages:**
+**MySQL FULLTEXT advantages:**
 
 - No separate infrastructure
-- Works with existing MySQL data
+- Works with existing MySQL data and SQL queries
 
 ### vs Elasticsearch
 
@@ -268,6 +270,6 @@ mysql -e "SELECT id FROM table WHERE MATCH(column) AGAINST('common_term') ORDER 
 
 The measured difference depends on the query, data, hardware, and cache configuration. The cache-off snapshot above is the canonical source for its latency, memory, and concurrent-throughput values.
 
-With `verify_text: all`, MygramDB removes n-gram false positives and returned matching counts with MySQL FULLTEXT in this run. CJK queries with few matches can narrow the gap because MySQL may finish quickly.
+With `verify_text: all`, MygramDB checks candidates using normalized substring matching. The tested benchmark queries returned the same counts as MySQL FULLTEXT; this is not a promise of identical semantics for arbitrary queries. CJK queries with few matches can narrow the latency gap because MySQL may finish quickly.
 
 For read-heavy workloads with millions of documents, evaluate the included benchmark on your own data with `make bench-up && make bench-run`.

@@ -9,7 +9,7 @@ head:
 
 # MySQL レプリケーションガイド
 
-MygramDB は、GTIDベースのbinlogストリーミングでMySQLから変更を受け取り、検索インデックスを継続的に更新します。
+MygramDB は、GTIDベースのbinlogイベントを MySQL から読み取り、行の変更を検索インデックスへ反映します。
 
 ::: info 用語補足
 **レプリケーション**は、MySQL側の変更を別プロセスへ継続的に伝える仕組みです。MygramDBはMySQLの全文検索を置き換えるために、MySQLのbinlogを読み続けて検索インデックスを更新します。
@@ -147,12 +147,12 @@ FLUSH PRIVILEGES;
 
 ### セキュリティ上の注意
 
-- MySQL が TLS を必須にしていない場合、MygramDB から送信される資格情報は平文のままになります。信頼できるネットワーク内に配置するか、TLS/SSH トンネルなどで暗号化された経路を確保してください。
+- `mysql.ssl_enable` の既定値は `false` で、MySQL サーバーが TLS に対応していても TLS を無効にします。暗号化接続を必須にするには `true` を設定してください。`mysql.ssl_verify_server_cert: true` にすると CA チェーンとサーバーホスト名も検証します。この設定には `mysql.ssl_ca` が必要です。検証を無効にした場合、TLS で通信は暗号化されますが、サーバーの身元は検証しません。TLS を使わない場合、MySQL 接続とレプリケーション通信は暗号化されません。
 - `DUMP SAVE` で生成されるスナップショットには MySQL の host、port、database などのソースメタデータが含まれます。ユーザーとパスワードは記録されません。索引化した内容と接続先情報が含まれるため、暗号化ストレージや `chmod 600` のような厳しい権限で保管してください。
 
 ## 手動スナップショット同期
 
-MygramDB は**手動スナップショット同期**をサポートし、起動時に MySQL プライマリへ予期しない負荷がかかるのを防ぎます。`replication.auto_initial_snapshot` のデフォルトは `false` です。
+MygramDB は**手動スナップショット同期**をサポートし、起動時の MySQL ソースへの読み取り負荷を運用側で制御できます。`replication.auto_initial_snapshot` のデフォルトは `false` です。
 
 ```yaml
 replication:
@@ -177,7 +177,21 @@ OK SYNC STARTED table=app_db.articles
 
 単一DB構成では代わりに `SYNC articles` を使います。
 
-各テーブルには `<database>.<table>` という有効識別子があります。すべてのテーブルが 1 つの DB にある場合は、`articles` のような修飾なしの名前も使えます。設定が 2 つ以上の DB にまたがる場合、`SYNC`、`SEARCH`、各種クライアント API では修飾名を使ってください。
+詳細は [SYNC コマンドガイド](/ja/docs/sync-command)を参照してください。
+
+### 起動時の自動スナップショット
+
+起動時に初期スナップショットを自動作成するには、次のように設定します。
+
+```yaml
+replication:
+  auto_initial_snapshot: true
+  start_from: "snapshot"
+```
+
+単一テーブルでも複数テーブルでも、起動時に自動作成する場合は `start_from: "snapshot"` を使います。手動の `SYNC` では、ソースへの読み取り負荷がかかる時間を選び、進捗を確認したり処理をキャンセルしたりできます。
+
+各テーブルには `<database>.<table>` というテーブル識別子があります。すべてのテーブルが 1 つの DB にある場合は、`articles` のような修飾なしの名前も使えます。設定が 2 つ以上の DB にまたがる場合、`SYNC`、`SEARCH`、各種クライアント API では修飾名を使ってください。
 
 レプリケーションが有効で複数テーブルが設定されている場合、すべてのテーブルを1つの `START TRANSACTION WITH CONSISTENT SNAPSHOT` で読み込みます。MySQLではそのトランザクション前に共有の保守的なGTID下限を取得するため、短い区間の変更が冪等に再適用されることがあります。MariaDBではスナップショット自体のbinlog位置を記録し、`BINLOG_GTID_POS` でGTIDに変換します。
 
@@ -294,6 +308,10 @@ ALTER TABLE articles MODIFY COLUMN content TEXT;
 
 **復旧:** スキーマまたは設定を修正してから、`SYNC` でテーブルを再構築してください。互換性のない DDL の後は、再起動だけでレプリケーションが再開すると考えないでください。
 
+#### CREATE INDEX と DROP INDEX
+
+`CREATE INDEX` と `DROP INDEX` の後も `ALTER TABLE` と同様に監視対象テーブルのスキーマを検証します。設定済みの `primary_key` に必要な単独カラムの UNIQUE インデックスを削除すると、スキーマが非互換となり、GTID を進める前にレプリケーションが停止します。条件を満たす `PRIMARY KEY` または `UNIQUE NOT NULL` 制約を戻してから、`SYNC` でテーブルを再構築してください。
+
 #### RENAME TABLE と `ALTER TABLE ... RENAME TO`
 
 MygramDB は、`ALTER TABLE ... RENAME TO`、`ALTER TABLE ... AS`、設定済みテーブル名への `ALTER TABLE` による名前変更を含め、両方向の名前変更を認識します。
@@ -361,9 +379,10 @@ MygramDB はテーブルが設定対象かを判断する前に、各カラム�
 
 ### 自動再接続
 
-- 接続断を適切に処理
+- 接続断と一時的な処理エラーが起きると、最後に適用した GTID から再試行します。失敗時は位置を進めません
+- MySQL のデッドロック（`1213`）、クエリ中断（`1317`）、メタデータ取得中の接続断は再試行可能なエラーとして扱います
+- 同じ GTID で処理に3回連続して失敗すると停止します。一時的なメタデータ取得エラーは `SCHEMA_INCOMPATIBLE` にしません
 - 組み込みの再試行スケジュールを使います。`reconnect_backoff_min_ms` と `reconnect_backoff_max_ms` は予約済みで適用されません
-- プロセスが動作している間は、リーダーが最後に処理した GTID から継続
 
 ### マルチスレッド処理
 
@@ -467,8 +486,7 @@ binlog_format = ROW
 
 ### "Lost connection to MySQL server during query"
 
-MygramDBは組み込みの再試行スケジュールで自動的に再接続します。以下の
-バックオフ項目は将来互換のため受け付けられますが、現在は強制されません：
+接続断や再試行可能なソースクエリエラーが起きると、最後に適用した GTID からイベントを再処理します。デッドロック（`1213`）、クエリ中断（`1317`）、スキーマメタデータ取得中の接続断も対象です。一時的なメタデータ取得エラーはスキーマ非互換として扱いません。同じ GTID で処理に3回連続して失敗するとレプリケーションが停止するため、報告されたエラーを確認してから復旧してください。次のバックオフ項目は将来互換のため受け付けますが、現在は適用されません。
 
 ```yaml
 replication:

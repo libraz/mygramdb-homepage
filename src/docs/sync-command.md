@@ -15,7 +15,7 @@ head:
 **Snapshot synchronization** reads the target MySQL/MariaDB table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication normally resumes from the drained pre-SYNC GTID; the `2017` recovery path uses the snapshot marker to pass the undecodable interval. MySQL captures a conservative GTID lower bound before the snapshot opens; MariaDB converts the snapshot's own binlog file and position to a GTID.
 :::
 
-The `SYNC` command allows manual control over snapshot synchronization from MySQL to MygramDB. This prevents unexpected load on the MySQL master server during startup.
+The `SYNC` command allows manual control over snapshot synchronization from MySQL to MygramDB. This lets operators choose when the initial table read adds load to the MySQL source.
 
 The production examples use `api.admin_token`. If it is empty, `AUTH` is not required; configure a token for non-loopback deployments.
 
@@ -193,7 +193,7 @@ The diagram below traces a SYNC through its full lifecycle: the initial memory-h
 
 `SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and automatic snapshots share one operation slot. A new `SYNC` request is rejected while any of those operations is in progress; retry after it completes.
 
-### Operations Allowed During SYNC
+### Command Behavior During SYNC
 
 | Command | Behavior | Notes |
 |---------|----------|-------|
@@ -215,7 +215,7 @@ TCP/CLI and HTTP table reads (`search`, `count`, `facet`, and document `GET`) ar
 ./mygramdb --config config.yaml
 ```
 
-The server starts without building a snapshot (log: `Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)`). When ready, use one authenticated CLI connection to start and monitor the sync:
+The server starts without building a snapshot (log: `Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)`). Start the sync once the TCP listener accepts connections; readiness stays `not_ready` until every configured table has completed its initial load. Use one authenticated CLI connection to start and monitor the sync:
 
 ```text
 $ mygram-cli
@@ -273,40 +273,16 @@ Use `SYNC app_db.articles` for a multi-database table identity.
 
 ## Graceful Shutdown
 
-When MygramDB receives a shutdown signal (SIGTERM/SIGINT) during SYNC:
+When MygramDB receives `SIGTERM` or `SIGINT` during `SYNC`, it requests cancellation and waits for the long-running operation to stop using shared server state.
 
-1. **Active SYNC operations are cancelled**
-   - `SnapshotBuilder::Cancel()` is called
-   - Status changes to `CANCELLED`
-   - The initial MySQL load observes the request while connecting, reading, and building the snapshot
+The server waits up to 30 seconds for active long-running operations to drain. If an operation is still using shared state at that deadline, shutdown reports a timeout and retains its dependencies rather than tearing them down underneath the worker. The 30-second deadline covers only this drain wait; if draining succeeds, later worker joins and cleanup can add time. Set the process manager's stop grace period to allow for the active operation and cleanup, which can take longer than 30 seconds.
 
-2. **Server waits for cleanup**
-   - Maximum wait time: 30 seconds
-   - Background threads terminate gracefully
-   - If SYNC is blocked inside a MySQL read during the initial snapshot, the
-     shutdown response is bounded by the configured MySQL `read_timeout_ms`
-     (converted to seconds for the dedicated binlog/snapshot connection).
-     Lower this value if operators require faster SIGTERM/SIGINT response
-     during long-running reads.
-   - SIGTERM received during the initial MySQL connection retry loop exits cleanly
-
-3. **Server shuts down**
-   - MySQL connections closed
-   - Resources released
-
-**Example Log:**
-```
-INFO: Stopping TCP server...
-INFO: Cancelling SYNC for table: articles
-INFO: SYNC cancelled for table articles due to shutdown
-WARN: Timeout waiting for SYNC operations to complete
-INFO: TCP server stopped
-```
+`SYNC STATUS` reports `CANCELLING` while cancellation is pending. It reaches `CANCELLED` if the worker completes cancellation before shutdown, or another terminal state if the operation finishes or fails first.
 
 ## Best Practices
 
 1. **Use `auto_initial_snapshot: false` in production**
-   - Prevents unexpected MySQL master load on startup
+   - Avoids an unexpected full-table read from the MySQL source during startup
    - Allows operators to control when sync occurs
 
 2. **Monitor SYNC progress**
@@ -319,7 +295,7 @@ INFO: TCP server stopped
 
 4. **Schedule SYNC during off-peak hours**
    - Use cron or other schedulers
-   - Reduce impact on MySQL master
+   - Reduce read load on the MySQL source
 
 5. **Monitor memory before SYNC**
    - Check available system memory

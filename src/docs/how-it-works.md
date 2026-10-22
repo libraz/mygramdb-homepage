@@ -43,19 +43,19 @@ Document IDs are `uint32_t`, supporting up to 4 billion documents per table.
 
 ## Posting List Compression
 
-Not all n-grams appear with the same frequency. MygramDB uses two storage strategies and automatically switches between them based on density:
+Not all n-grams appear with the same frequency. MygramDB chooses between two storage strategies based on list density during `OPTIMIZE` and list size during inserts:
 
 | Strategy | When Used | Representation |
 |----------|-----------|----------------|
-| **Delta encoding** | Sparse terms (density < 18%) | Sorted IDs stored as fixed-width deltas |
-| **Roaring bitmap** | Dense terms (density >= 18%) | Compressed bitmap via CRoaring library |
+| **Delta encoding** | Sparse lists (typically density < 18% after `OPTIMIZE`) | Sorted IDs stored as fixed-width deltas |
+| **Roaring bitmap** | Dense lists (typically density >= 18% after `OPTIMIZE`), or lists over 4,096 entries | Compressed bitmap via CRoaring library |
 
 **Density** is defined as: `(number of documents containing the n-gram) / (total documents in table)`.
 
-The 18% threshold includes **0.5x hysteresis** to avoid thrashing. A posting list that switched to Roaring at 18% density will only switch back to delta encoding when density drops below 9%.
+The default 18% threshold and 0.5x hysteresis apply when `OPTIMIZE` chooses a representation. Inserts also convert a delta list to Roaring when it grows beyond 4,096 entries, regardless of density. A Roaring list converts back only when it has at most 4,096 entries and its density is below half the configured threshold (9% by default).
 
 ::: info What is hysteresis?
-**Hysteresis** means the threshold for switching back differs from the threshold for switching over, so a value hovering near the boundary does not flip state repeatedly. Here, converting at 18% but reverting only below 9% keeps the encoding stable as documents are added and removed.
+**Hysteresis** means the threshold for switching back differs from the threshold for switching over, so a value hovering near the boundary does not flip state repeatedly. Here, `OPTIMIZE` uses 18% to switch to Roaring and 9% to switch back by default; the 4,096-entry limit also applies before it can switch back.
 :::
 
 Delta encoding is compact for rare terms: it stores `[100, 105, 200]` as `[100, 5, 95]`. Roaring bitmaps are more efficient for common terms and enable SIMD-accelerated set operations (intersection, union) during search.
@@ -91,7 +91,7 @@ Text-heavy stages also have a fixed memory boundary. Candidate text is copied fr
 N-gram indexing is inherently approximate. A query for `"quantum"` generates bi-grams `["qu", "ua", "an", "nt", "tu", "um"]`. Any document containing all six bi-grams is a candidate -- but some candidates are false positives:
 
 ::: info What is a false positive?
-A **false positive** is a document that survived the n-gram intersection but does not actually contain the search term. N-gram search deliberately collects a slightly wider candidate set for speed, then narrows it with `verify_text` when exactness matters.
+A **false positive** is a document that survived the n-gram intersection but does not actually contain the search term. N-gram search collects candidates for speed; `verify_text` then checks normalized search terms against stored text according to the query expression.
 :::
 
 <DocDiagram name="verify-text" alt="verify_text checks candidate documents from n-gram intersection against stored normalized text and removes false positives before results are returned." />
@@ -99,9 +99,9 @@ A **false positive** is a document that survived the n-gram intersection but doe
 | Document text | Contains all bi-grams? | Actually contains "quantum"? |
 |---------------|----------------------|----------------------------|
 | "quantum mechanics" | Yes | Yes |
-| "quantify antum" | Yes (`qu`, `ua`, `an`, `nt`, `tu` from "quantify"; `an`, `nt`, `tu`, `um` from "antum") | No |
+| "quantify antum" | Yes (`qu`, `ua` from "quantify"; `an`, `nt`, `tu`, `um` from "antum") | No |
 
-Without verification, the query `"quantum"` returns approximately 58,000 candidates on 1.1M Wikipedia articles. With `verify_text: all`, it returns exactly 1,961 -- matching MySQL FULLTEXT results precisely.
+Without verification, the query `"quantum"` returns approximately 58,000 candidates on 1.1M Wikipedia articles. With `verify_text: all`, the normalized query is checked as a substring of each candidate's normalized text, leaving 1,961 matches. MySQL FULLTEXT returned the same count for this tested query; `verify_text` does not promise MySQL FULLTEXT semantics for all queries.
 
 **How it works:** MygramDB retains normalized text in memory for features such as highlighting. When `verify_text` applies to a query, each candidate's stored text is checked for an actual substring match after the posting list intersection. False positives are discarded.
 
@@ -109,10 +109,10 @@ The [published benchmark](/benchmarks) measured about 1.78 GB for the document a
 
 - `off` (default) -- No post-filter verification; stored text remains available for highlighting.
 - `ascii` -- Verifies only ASCII-only queries against stored text.
-- `all` -- All candidates are verified. Exact results.
+- `all` -- Checks normalized search terms against stored text for all eligible candidates.
 
 ::: tip Choosing a verify_text mode
-Use `verify_text: all` when exact matching matters. Highlighting reads stored text in every mode. Choose `off` when n-gram candidates are sufficient and post-filtering is unnecessary.
+Use `verify_text: all` when normalized substring verification is required. It does not make query semantics identical to MySQL FULLTEXT. Highlighting reads stored text in every mode. Choose `off` when n-gram candidates are sufficient and the extra text check is unnecessary.
 :::
 
 ## Cache and Invalidation
@@ -136,7 +136,7 @@ Before caching a query result, MygramDB rechecks its pending invalidation regist
 - 🔴 `quantum` — overlapping n-grams, invalidated
 - 🟢 `algorithm`, `database` — unaffected, cache retained
 
-In practice, this means a single row update only invalidates queries that could be affected by the change. On a table with millions of cached queries, an update might invalidate a handful rather than flushing the entire cache.
+The number of invalidated entries depends on the changed text, filters, and cached queries. A common term or a text-sensitive query can affect many entries; the invalidation manager targets matching dependencies instead of flushing the whole cache.
 
 The invalidation manager keeps reverse indexes for n-grams, filtered entries, and text-sensitive entries. Each trigger visits only the entries it can affect rather than scanning the entire cache. Cache maintenance follows the same rule: each tick examines a bounded, resumable slice of the LRU list, so expiry and recency work do not take one long exclusive sweep across every entry.
 

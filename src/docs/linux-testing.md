@@ -1,6 +1,6 @@
 ---
 title: MygramDB Linux CI Testing with Docker
-description: Test MygramDB in the same Linux environment used by GitHub Actions CI. Docker-based build, lint, format, and test targets; catch platform-specific issues before pushing.
+description: Check MygramDB Linux compatibility with Docker-based build, lint, format, and default-tier tests, using a separate checkout from native builds.
 head:
   - - meta
     - name: keywords
@@ -15,7 +15,7 @@ head:
 This is for developers on macOS who want to catch Linux or GitHub Actions build failures before pushing. It is not the installation procedure for using MygramDB.
 :::
 
-This guide explains how to test your code in the same Linux environment used by GitHub Actions CI, catching platform-specific issues (like missing headers or compiler differences) **before** pushing to CI.
+Use the Docker development image to find Linux-specific header and compiler problems before running CI.
 
 ## Problem
 
@@ -29,9 +29,11 @@ These issues often only get detected in CI, leading to failed builds after pushi
 
 ## Solution
 
-We provide Docker-based Linux testing that mirrors the GitHub Actions CI environment (Ubuntu 22.04 with the same dependencies).
+The development image uses Ubuntu 22.04 with the build dependencies. GitHub Actions uses `ubuntu-latest` and enables `MYGRAMDB_PORTABLE_BUILD`; the Docker target does not enable that option. These checks complement CI rather than reproduce its complete environment.
 
 ## Quick Start
+
+Run these commands in a Linux-only working copy, separate from the native build. See [Recommended Workflow](#recommended-workflow) for the checkout procedure.
 
 ### 1. Run Full CI Checks (Recommended before git push)
 
@@ -39,13 +41,13 @@ We provide Docker-based Linux testing that mirrors the GitHub Actions CI environ
 make docker-ci-check
 ```
 
-This runs the complete CI pipeline:
+This runs the local Linux checks:
 1. Code formatting check
-2. Build (with same flags as CI)
+2. Debug build with coverage, ICU, and MySQL enabled
 3. Clang-tidy linting
-4. All tests
+4. Default-tier tests, excluding `SLOW` and `LOAD`
 
-**Use this before every push** to catch CI failures early.
+For all CTest tiers, run `make test-all` inside the Linux shell. Database-backed E2E suites are separate; see [Development](/docs/development#end-to-end-suites).
 
 ### 2. Run Individual Steps
 
@@ -83,16 +85,16 @@ make lint
 
 ### Docker Image: `support/dev/Dockerfile`
 
-The `support/dev/Dockerfile` creates a Linux development environment that **exactly matches** the GitHub Actions CI environment:
+The `support/dev/Dockerfile` provides this local Linux environment:
 
 - **Base**: Ubuntu 22.04
-- **Compiler**: GCC (same as CI)
+- **Compiler**: GCC
 - **Tools**: clang-format-18, clang-tidy-18, ccache
 - **Dependencies**: libmysqlclient-dev, libicu-dev, etc.
 
 ### Makefile Targets
 
-All Linux testing targets follow the pattern `docker-*-linux`:
+The Makefile provides these Linux development targets:
 
 | Target | Description |
 |--------|-------------|
@@ -103,55 +105,44 @@ All Linux testing targets follow the pattern `docker-*-linux`:
 | `docker-lint-linux` | Run clang-tidy in Linux |
 | `docker-format-check-linux` | Check formatting in Linux |
 | `docker-clean-linux` | Clean build in Linux |
-| `docker-ci-check` | Run all CI checks (recommended) |
+| `docker-ci-check` | Run local formatting, build, lint, and default-tier tests |
 
 ## Recommended Workflow
 
-### Option 1: Pre-push Check (Recommended)
+Use a separate checkout for Docker. The targets mount the repository and configure `build/`; a macOS CMake cache cannot be reused in Linux. Do not run native and container builds, or two Docker build targets, concurrently in the same checkout.
+
+A local clone includes committed changes only. Commit the changes you intend to check before creating it, or copy those changes into the separate checkout:
 
 ```bash
-# After making changes
-make format              # Format code (macOS)
-make build              # Quick build check (macOS)
-make docker-ci-check    # Full Linux CI check before push
-git commit -m "..."
-git push
+git clone --no-hardlinks . ../mygram-db-linux
+cd ../mygram-db-linux
+make docker-ci-check
 ```
 
 ### Option 2: Continuous Testing
 
-If you're working on Linux-specific issues or want to test frequently:
+Run the dependent steps sequentially in the Linux checkout:
 
 ```bash
-# Terminal 1: Keep building in Linux
 make docker-build-linux
-
-# Terminal 2: Keep testing in Linux
 make docker-test-linux
-
-# Or use interactive shell for faster iteration
-make docker-dev-shell
-# Inside container: make build && make test
 ```
+
+`docker-test-linux` already depends on the build target. The interactive shell can also run `make build`, `make test`, and `make lint` from the repository root.
 
 ### Option 3: Debug Specific CI Failures
 
-If CI failed with a specific error:
-
 ```bash
-# Reproduce the exact CI environment
 make docker-dev-shell
 
-# Inside container, run the failing step
-cd build
-cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON -DUSE_ICU=ON -DUSE_MYSQL=ON ..
-make -j$(nproc)
+# Inside the container, from the repository root
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON -DUSE_ICU=ON -DUSE_MYSQL=ON
+cmake --build build -j$(nproc)
 make lint
-
-# Fix the issue, exit, and verify
 exit
-make docker-ci-check
 ```
+
+Match the failing CI job's options when reproducing it; the defaults above are the development container's settings.
 
 ## Performance Tips
 
@@ -159,8 +150,7 @@ make docker-ci-check
 
 The Docker image is cached after the first build. Subsequent runs are much faster:
 
-- **First run**: ~5-10 minutes (downloads and installs LLVM, dependencies)
-- **Subsequent runs**: ~10-30 seconds (only builds your code)
+The first run installs dependencies and compiles the project. Later runs reuse the image and build cache; duration depends on the host and the files changed.
 
 ### 2. Incremental Builds
 
@@ -188,7 +178,7 @@ make docker-test-linux  # Uses $(nproc) cores
 **ccache** caches compilation results and reuses them. Files whose headers and compile options have not changed are not recompiled, which makes repeat builds much faster.
 :::
 
-The container uses ccache to speed up compilation. This is shared across builds.
+The container uses ccache, but the default targets do not mount a persistent ccache volume. The cache is reusable within one container and is lost when that container is removed with `--rm`. Compiled files under the working copy's `build/` directory remain available for incremental builds.
 
 ## Troubleshooting
 
@@ -240,7 +230,7 @@ ccache --set-config=max_size=1G
 
 ## CI Environment Details
 
-The `support/dev/Dockerfile` environment matches `.github/workflows/ci.yml`:
+The following describes `support/dev/Dockerfile`, not the current GitHub-hosted runner. Check [the workflow](https://github.com/libraz/mygram-db/blob/main/.github/workflows/ci.yml) for CI's OS and build options:
 
 | Component | Version |
 |-----------|---------|
@@ -280,17 +270,16 @@ chmod +x .git/hooks/pre-push
 
 ```bash
 # Build with different options
-docker run --rm -v $(pwd):/workspace -w /workspace mygramdb-dev:latest \
-    bash -c "mkdir -p build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ASAN=ON .. && \
-    make -j$(nproc)"
+docker run --rm -v "$PWD:/workspace" -w /workspace mygramdb-dev:latest \
+    bash -c 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON && \
+    cmake --build build-asan -j$(nproc)'
 ```
 
 ### Run Specific Tests
 
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace mygramdb-dev:latest \
-    bash -c "cd build && ctest -R 'MyTest.*' --verbose"
+docker run --rm -v "$PWD:/workspace" -w /workspace mygramdb-dev:latest \
+    bash -c 'ctest --test-dir build -R "MyTest.*" --verbose'
 ```
 
 ### Generate Coverage Report
@@ -308,7 +297,7 @@ make coverage
 | Aspect | macOS (`make build`) | Linux (`make docker-build-linux`) |
 |--------|----------------------|-----------------------------------|
 | Speed | Fast (native) | Slower (containerized) |
-| Environment | Your macOS | CI environment (Ubuntu 22.04) |
+| Environment | Your macOS | Development image (Ubuntu 22.04) |
 | Use case | Quick iteration | Pre-push verification |
 | Compiler | Clang (macOS) | GCC (Linux) |
 | Headers | More permissive | Stricter (catches missing includes) |

@@ -15,7 +15,7 @@ This page describes MygramDB's own replication lifecycle. It does not manage MyS
 
 | Operation | Replication behavior | Reader impact |
 | --- | --- | --- |
-| `DUMP SAVE` | Pauses a running reader for a consistent saved GTID, then resumes it when the operation ends. A reader already stopped stays stopped. | Search remains available; lag can grow while saving. |
+| `DUMP SAVE` | Refuses with `6029` until every configured table completes its initial load. Otherwise, it pauses a running reader for a consistent saved GTID, then resumes it when the operation ends. A reader already stopped stays stopped. | Search remains available; lag can grow while saving. |
 | `DUMP LOAD` | Pauses a running reader before replacing state; on success it uses the dump GTID before attempting to restore that reader. A reader already stopped stays stopped. | Restored data is installed atomically; readiness also requires replication to be available. |
 | `SYNC` | Drains the shared reader, builds one table off to the side, then restarts. | A single reader serves every configured table, so normal restarts use the drained position. |
 | `OPTIMIZE` | Holds the shared maintenance slot. | Run it separately from dumps and SYNC. |
@@ -23,6 +23,8 @@ This page describes MygramDB's own replication lifecycle. It does not manage MyS
 The long-running operations share one slot. A new request while another is active fails as busy; wait for the active operation to reach a terminal status.
 
 Startup restore follows the same handoff. With replication enabled, `dump.load_on_startup: true` requires `replication.start_from: snapshot`; `latest` and `gtid=...` are rejected because they would ignore the dump's GTID. A missing or incompatible startup dump falls back to the normal MySQL initial snapshot. If the reader cannot start after a successful restore, MygramDB keeps serving the restored data with replication stopped and readiness false.
+
+If replication starts but cannot catch up after restoring a startup dump, MygramDB stops the reader and starts in `not_ready` with the restored data available. It does not abort startup; inspect the replication error before directing traffic to the instance.
 
 ## Source endpoint changes
 

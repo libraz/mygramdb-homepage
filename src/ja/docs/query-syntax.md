@@ -89,7 +89,7 @@ OK COUNT 42
 
 ### AND検索
 
-**すべて**の指定された用語を含むドキュメントを検索します。
+**すべて**の指定された検索語を含むドキュメントを検索します。
 
 ```mygram
 SEARCH <table> term1 AND term2 AND term3
@@ -106,7 +106,7 @@ SEARCH threads golang AND tutorial
 
 ### OR検索
 
-指定された用語の**いずれか**を含むドキュメントを検索します。
+指定された検索語の**いずれか**を含むドキュメントを検索します。
 
 ```mygram
 SEARCH <table> term1 OR term2 OR term3
@@ -119,7 +119,7 @@ SEARCH threads golang OR python OR rust
 
 ### NOT検索
 
-特定の用語を含むドキュメントを除外します。
+特定の検索語を含むドキュメントを除外します。
 
 ```mygram
 SEARCH <table> term1 NOT term2
@@ -314,7 +314,7 @@ MygramDBでは、設定ファイルの `filters` または `required_filters` �
 
 - **整数**: `status=1`, `priority=5`
 - **文字列**: `category=tech`, `author=john`
-- **日付/時刻**: クエリの `date`、`datetime`、`timestamp` には整数の Unix エポック秒（例: `created_at=1704067200`）、`time` には符号付きの時間差を秒で指定し、負値や24時間を超える値も使えます
+- **日付/時刻**: クエリ時の `date`、`datetime`、`timestamp` の値はUnixエポック秒の整数です。たとえば `created_at >= 1704067200` は、2024-01-01 00:00:00 UTC 以降の値を選びます。`time` は符号付きの秒数で、`-90000` はマイナス25時間を表します。
 
 ::: warning FILTERには設定が必要
 `config.yaml` で `filters` と `required_filters` のどちらにも登録していないカラムは `FILTER` で使えません。同じカラムを両方に登録できます。`required_filters` は行のインデックス登録を決め、`FILTER` はリクエストごとに登録済みの行を絞り込みます。
@@ -392,7 +392,7 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 
 **ソートアルゴリズム:**
 - **小さいLIMITあり**: `LIMIT + OFFSET` が結果件数の半分未満なら `partial_sort` を使います。計算量は O(N × log(K)) です（K = LIMIT + OFFSET）。
-- **それ以外**: 完全ソートを使います。計算量は O(N × log(N)) です。
+- **それ以外**: 完全ソートを使います。計算量は O(N × log(N)) です。`LIMIT` を省略した場合は `api.default_limit` を使います。実際に使うアルゴリズムは有効なLIMITとOFFSETで決まります。
 - **メモリ**: 対象件数によっては一時的なソートキー領域を確保するため、インプレース処理とは限りません。
 
 **大規模な結果セット（例：100万件中80万件がヒット）の場合:**
@@ -715,13 +715,13 @@ ERROR 3007 Sort column 'nonexistent' not found. Column does not exist as filter 
 
 <DocDiagram name="query-pipeline" alt="クエリはASTに解析され、N-gram参照で候補が得られ、AND積集合・NOT除外・FILTER適用の順に候補集合が絞り込まれます。SORTではLIMITとOFFSETの合計が結果件数の半分未満の場合だけ部分ソートを使い、最後にOFFSETとLIMITが適用されます。" />
 
-### 1. 制約の強い用語を先に配置
+### 1. 制約の強い検索語を先に配置 {#_1-制約の強い用語を先に配置}
 
 ```mygram
--- 良い: 具体的な用語を先に
+-- 良い: 具体的な検索語を先に
 SEARCH articles "machine learning" AND tutorial
 
--- 最適ではない: 一般的な用語を先に
+-- 最適ではない: 一般的な検索語を先に
 SEARCH articles tutorial AND "machine learning"
 ```
 
@@ -738,7 +738,7 @@ SEARCH threads golang OR python AND web OR api
 ### 3. 先頭のNOT演算子を避ける
 
 ```mygram
--- 良い: 肯定的な用語を先に
+-- 良い: 肯定的な検索語を先に
 SEARCH articles tech NOT old
 
 -- 最適ではない: 先頭のNOT
@@ -759,14 +759,16 @@ SEARCH articles tech AND ai AND published
 
 インデックス化されたカラムのフィルタは、同じ条件を通常のテキスト検索語として扱うより高速です。
 
-### 5. 大規模結果セットにはLIMITを付ける
+### 5. ソートするページの範囲を小さくする
+
+マッチ件数の半分より `LIMIT + OFFSET` が小さい場合、サーバーは部分ソートを使います。`LIMIT` を省略すると `api.default_limit` が有効値になります。ページサイズが小さくても、OFFSETが大きいと完全ソートになることがあります。
 
 ```mygram
--- 良い: LIMITが結果件数に対して十分小さい場合はpartial_sortを使える
+-- マッチ件数の半分より小さいページは部分ソートを使える
 SEARCH articles tech SORT created_at DESC LIMIT 10
 
--- 遅い: すべての結果の完全ソート
-SEARCH articles tech SORT created_at DESC
+-- OFFSETが大きいと部分ソートを使えない場合がある
+SEARCH articles tech SORT created_at DESC LIMIT 10 OFFSET 10000
 ```
 
 ### 6. 深いページネーションを避ける
@@ -812,7 +814,7 @@ COUNT posts database AND (mysql OR postgresql) NOT sqlite
 
 クエリは適切な演算子優先順位を持つ抽象構文木（AST）に解析されます：
 
-```bnf
+```text
 query     → or_expr
 or_expr   → and_expr (OR and_expr)*
 and_expr  → not_expr (AND not_expr)*

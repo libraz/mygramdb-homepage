@@ -202,7 +202,7 @@ OK FACET <returned_value_count> <total_distinct_values>
 
 ```
 
-The value and count are separated by a tab, and an empty line terminates the response. The second header count includes values omitted by `LIMIT` or `OFFSET`. Equal-count values keep a stable order, so pages do not reshuffle ties between requests.
+The first header count is the number of values returned on this page. The second is the total number of distinct values for the query, including values omitted by `LIMIT` or `OFFSET`. Each value and its document count are separated by a tab, and an empty line terminates the response. Equal-count values keep a stable order, so pages do not reshuffle ties between requests.
 
 FACET supports the same AND/NOT/FILTER/LIMIT clauses as `SEARCH` when scoping aggregation to a query.
 

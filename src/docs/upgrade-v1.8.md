@@ -66,7 +66,7 @@ v1.8.1 adds boolean filter columns, bounded V2 dump restore settings, and a size
 
 Date/time parsing now accepts date-only strings such as `2024-01-15` and truncates fractional epoch seconds to whole seconds.
 
-`SYNC` is now rejected while `OPTIMIZE` or `DUMP SAVE`/`LOAD` is in progress; retry after the operation completes.
+`SYNC` is now rejected while `OPTIMIZE`, `DUMP SAVE`, or `DUMP LOAD` is in progress; retry after the operation completes.
 
 CLI `DOC` output now decodes escaped values such as `\n`, `\t`, `\\`, `\"`, and `\xHH` instead of passing them through verbatim.
 

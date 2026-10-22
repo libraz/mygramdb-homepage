@@ -158,7 +158,7 @@ Table names, column names, filter keys, and names passed to `SetVariable` must n
 Use `SearchOptions` when a query needs comparison filters, fuzzy matching, highlighting, sorting, or pagination. Use `SearchRaw` only for a boolean expression you construct deliberately.
 
 ::: warning Concurrency per connection
-`MygramClient` serializes concurrent commands on its single TCP connection, so it is safe to share — but one instance executes one request at a time. Use several instances when you need throughput, and never call `Disconnect()` while a request is in flight.
+`MygramClient` serializes concurrent commands on its single TCP connection, so it is safe to share for correctness; one instance still executes one request at a time. Use several instances when you need throughput.
 :::
 
 ::: info Thinking about connections
@@ -197,7 +197,7 @@ if (result) {
 
 ### Facet pagination
 
-`Facet` returns one page of values in `facets`. `total_count` is the number of distinct facet values before `offset` and `limit`, so it is suitable for pagination controls.
+`Facet` returns one page of values in `facets`. Each facet's `count` is the number of documents with that value; `total_count` is the number of distinct facet values before `offset` and `limit`. Use `facets.size()` for the returned page size and `total_count` to calculate pagination.
 
 ```cpp
 auto response = client.Facet("app_db.articles", "category", "technology", 10,
@@ -235,7 +235,7 @@ if (result) {
 
 ### Administrative authentication
 
-Administrative methods use connection-scoped authentication. `ClientConfig` has no `admin_token` field: after connecting, send `AUTH` on that same `MygramClient` and require the exact `OK AUTHENTICATED` response before `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, or `EnableDebug`/`DisableDebug`. A successful raw send only means a response was received. Authenticate again after every reconnect. Search, count, get, and facet operations do not require this authentication.
+Administrative authentication is required only when the server has a non-empty `api.admin_token`. The C++ `ClientConfig` has no admin-token field, so send `AUTH` on that same `MygramClient` and require the exact `OK AUTHENTICATED` response before `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, or `EnableDebug`/`DisableDebug`. A successful raw send only means a response was received. A manually sent `AUTH` applies to the current connection; authenticate again after reconnecting. Search, count, get, and facet operations do not require authentication.
 
 ```cpp
 #include <cstdlib>
@@ -431,7 +431,7 @@ cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 
 ### Administrative authentication
 
-Administrative authentication is scoped to one connected `MygramClient_C`. Before administrative methods, send `AUTH` with `mygramclient_send_command` and require the exact `OK AUTHENTICATED` response; a `0` return only means a raw response was received and clears the last error. Use `mygramclient_get_last_error` only when the return value is nonzero. Repeat it after reconnecting. This applies to the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, and `EnableDebug`/`DisableDebug`, but not to search, count, get, or facet operations. Free the response with `mygramclient_free_string` and never log the token or command.
+Administrative authentication is required only when the server has a non-empty `api.admin_token`. `MygramClientConfig_C` and `MygramClientConfigV2_C` have no admin-token field. In that case, before calling an administrative method, send `AUTH` with `mygramclient_send_command` on the same connected `MygramClient_C` and require the exact `OK AUTHENTICATED` response; a `0` return only means a raw response was received and clears the last error. Use `mygramclient_get_last_error` only when the return value is nonzero. A manually sent `AUTH` applies to the current connection, so send it again after reconnecting. This applies to the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, and `EnableDebug`/`DisableDebug`, but not to search, count, get, or facet operations. Free the response with `mygramclient_free_string` and never log the token or command.
 
 The C API uses the same quoting rule for literal search text, AND/NOT terms, filter values, and highlight tags. A failed send after a reset returns a nonzero status; inspect `mygramclient_get_last_error`, reconnect, and then retry.
 
@@ -468,6 +468,8 @@ if (!authenticated) {
 ### Advanced Search (C API)
 
 For new code, use `MygramSearchOptions_C` and `mygramclient_search_with_options`. Zero-initialize the structure and set `struct_size`; its typed filters support `=`, `!=`, `>`, `>=`, `<`, and `<=`, and `fuzzy_distance` is `1` or `2`. Set `query_mode` to `MYGRAM_QUERY_BOOLEAN` to send a boolean expression instead of a literal query.
+
+In `MygramSearchOptions_C`, `sort_desc` values of `0` or greater mean descending, and a negative value means ascending. Zero-initializing the typed structure therefore keeps the default descending order. The older `mygramclient_search_advanced()` function uses a different convention: its `sort_desc` argument is `0` for ascending and non-zero for descending.
 
 `MygramClientConfigV2_C` is the preferred configuration for new C programs. `timeout_ms` is the ordinary operation deadline; `connect_timeout_ms` is the connection deadline and falls back to `timeout_ms` when zero. `max_response_bytes` limits a response frame and defaults to 64 MiB when zero. The dedicated `dump_*_timeout_ms` and `optimize_timeout_ms` fields use the client defaults when zero or unavailable in an older structure. Set `unix_socket_path` to use a Unix socket; it takes precedence over TCP host and port.
 
@@ -655,7 +657,7 @@ Key functions:
 
 ## Thread Safety
 
-`MygramClient` serializes concurrent commands on its single TCP connection, so it is safe to share for correctness but executes one request at a time. Use separate instances when you need more throughput. Do not call `Disconnect()` while another thread has a request in flight.
+Connection lifecycle calls and commands on a `MygramClient` share one mutex. `Disconnect()` waits for an in-flight command to finish; it does not cancel that command. Destruction and move operations must not race with member calls. The C API also serializes connection lifecycle calls and commands, and `mygramclient_destroy()` must not race with another call on the same handle.
 
 ## Error Handling
 

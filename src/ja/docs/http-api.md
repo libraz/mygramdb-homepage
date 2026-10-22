@@ -48,6 +48,8 @@ api:
 
 ## API エンドポイント
 
+HTTP の `network.allow_cidrs` は、リクエストヘッダの解析後、本文の読み取り前に確認されます。許可されない接続元には本文を読まずに `403` を返しますが、確認が済むまでは接続枠を使用します。HTTP ソケットを受け付ける時点で拒否する仕組みではありません。
+
 ハンドラーが生成するレスポンスは、`/metrics` を除き `Content-Type: application/json` の JSON を返します。`/metrics` は Prometheus テキストを返します。CORS プリフライトの `OPTIONS` リクエストは本文なしの `204 No Content` を返します。テーブルルートは単一の
 識別子セグメント `/tables/{identity}` を使用します。`{identity}` は DB 修飾名 `` `database.table` ``
 です（たとえば `app_db` データベースの `articles` テーブルは `/tables/app_db.articles` と指定します）。
@@ -58,6 +60,8 @@ api:
 v1.7.0 で旧ルートの `/{table}/search`、`/{table}/count`、`/{table}/{primary_key}` は削除されました。テーブル操作はすべて `/tables/{identity}/...` を使ってください。
 
 パスはルーティング前にパーセントデコードされます。ドキュメント GET ルートは手動でディスパッチするため、デコード後のパスが 256 バイトを超えても（URI の上限までは）ハンドラーに到達します。主キーの `%2F` は `/` として利用できます。
+
+POST の設定は JSON 本文に指定してください。クエリ文字列のパラメーターは無視されます。不正な JSON 構文、または配列・オブジェクトの入れ子が 32 階層を超える JSON 本文は、`error_code: 3000` を含む `400 Bad Request` になります。`HEAD` リクエストは対応する `GET` ハンドラーで処理します。
 
 ::: tip identity の考え方
 `identity` は「検索対象テーブルを一意に表す名前」です。単一DBでは `articles`、複数DBでは `app_db.articles` のように指定します。
@@ -271,7 +275,7 @@ Content-Type: application/json
   "filters": {
     "status": 1
   },
-  "limit": 10
+  "limit": 2
 }
 ```
 
@@ -281,12 +285,15 @@ Content-Type: application/json
 {
   "column": "category",
   "count": 2,
+  "total_count": 17,
   "facets": [
     {"value": "tech", "count": 15},
     {"value": "ops", "count": 7}
   ]
 }
 ```
+
+`count` はこのページで返したファセット値の数です。`total_count` は `limit` と `offset` の適用前にある異なる値の総数です。ページ数の計算には `total_count` を使います。
 
 ### HTTP API の公開範囲
 
@@ -330,6 +337,8 @@ GET /tables/app_db.threads/thread_12345 HTTP/1.1
 }
 ```
 
+レスポンスには主キーと、設定済みのフィルタ値だけが含まれます。元のドキュメント本文やハイライト付きスニペットは返しません。スニペットが必要な場合は `POST /tables/{identity}/search` に `highlight` を指定してください。
+
 **エラーレスポンス (404 Not Found):**
 
 ```json
@@ -358,7 +367,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -477,10 +486,10 @@ GET /metrics HTTP/1.1
 
 **レスポンス (200 OK):**
 
-```prometheus
+```text
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.11.0"} 1
+mygramdb_server_info{version="1.11.1"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -715,6 +724,7 @@ curl -X POST http://localhost:8080/tables/threads/search \
   -H "Content-Type: application/json" \
   -d '{
     "q": "機械学習 AND Python",
+    "mode": "boolean",
     "filters": {"status": 1},
     "limit": 10
   }'
@@ -756,6 +766,7 @@ const response = await fetch('http://localhost:8080/tables/threads/search', {
   },
   body: JSON.stringify({
     q: '機械学習 AND Python',
+    mode: 'boolean',
     filters: { status: 1 },
     limit: 10
   })
@@ -776,6 +787,7 @@ import requests
 # 検索
 response = requests.post('http://localhost:8080/tables/threads/search', json={
     'q': '機械学習 AND Python',
+    'mode': 'boolean',
     'filters': {'status': 1},
     'limit': 10
 })
@@ -805,6 +817,8 @@ for doc in data['results']:
 ```
 
 `error_code` は機械処理用の MygramDB エラーコードです。原因に応じてクライアントの動作を分ける場合は、人間向けの `error` 文字列ではなくこの値を使ってください。リクエスト本文が大きすぎる場合の `413 Payload Too Large` は HTTP サーバーがルーティング前に返すため、このレスポンスでは JSON 本文や `error_code` ではなくステータスコードに基づいて処理してください。
+
+不正な JSON、32 階層を超える JSON の入れ子、不正な Boolean 式は `error_code: 3000` を含む `400` を返します。フィールドによっては個別のコードを使います。たとえば、不正なフィルタ条件は `3006` です。
 
 **HTTPステータスコード:**
 

@@ -22,7 +22,7 @@ MygramDBは「既にMySQL/MariaDBに正本データがあり、検索だけを�
 | **レイテンシ** | [実測値](/ja/benchmarks) | このサイトでは未計測 | [実測値](/ja/benchmarks) |
 | **導入** | 独立した検索サービス | 単一ノードまたはクラスタ | MySQL に組み込み |
 | **データ同期** | MySQL / MariaDB binlog | アプリまたはコネクタでインデックスへ投入 | 元データを直接利用 |
-| **スケール** | フルレプリカ、アプリ側で分割 | 分散インデックス | DB 側のレプリケーションや分割 |
+| **スケール** | フルレプリカ、アプリ側で分割 | 分散インデックス | DB 側のレプリケーション（MySQL FULLTEXT はパーティションテーブル非対応。[MySQL の制約](https://dev.mysql.com/doc/refman/8.4/en/fulltext-restrictions.html)） |
 | **メモリ** | [実測値](/ja/benchmarks) | インデックスと負荷に依存 | バッファプールと負荷に依存 |
 | **日本語対応** | N-gram（ICU NFKC） | アナライザーを設定可能 | パーサーを設定可能 |
 | **集計** | FACET | Aggregations | SQL クエリ |
@@ -31,15 +31,15 @@ MygramDBは「既にMySQL/MariaDBに正本データがあり、検索だけを�
 
 ### MygramDB
 
-**向いているケース:** MySQLを使っていて、手軽に検索を高速化したい
+**向いているケース:** MySQLを正本とし、データが1ノードのメモリに収まり、検索経路をMygramDBのAPIへ切り替えられる場合
 
 **良い点:**
 - キャッシュ無効のベンチマーク結果を公開
 - MySQL / MariaDB の binlog から自動同期（MySQL 8.4/9.x および MariaDB 10.11+/11.x/12.x に対応）
-- バイナリ1つ置くだけで動く
+- 単一バイナリで起動できる（MySQL側の設定と初回同期は必要）
 - クラスタ管理なし
-- 日本語のN-gram検索が得意
-- BM25関連度スコア・ハイライト・ファジー検索・ファセット集計・シノニム展開に対応
+- UnicodeテキストをN-gramで検索（ICU NFKC正規化）
+- BM25関連度スコア・ハイライト・ファジー検索・ファセット集計・同義語展開に対応
 
 **注意点:**
 - 分散検索はできない
@@ -87,10 +87,6 @@ MygramDBでは、アプリケーションが検索用データを別途pushす�
 2. MygramDBを横に立てる
 3. 検索だけMygramDBに向ける
 4. 書き込みはMySQLのまま
-
-::: warning HTTPルートのバージョン差
-v1.7.0以降のHTTP APIは `/tables/{identity}/search` を使います。古い `/{table}/search` 形式は削除されています。移行時は[v1.7 へのアップグレード](/ja/docs/migration-v1.7)を確認してください。
-:::
 
 [Docker デプロイガイド](/ja/docs/docker-deployment)に沿って MySQL の接続先、認証情報、bind アドレス、ネットワーク許可範囲を設定してください。初期インデックスは `SYNC` を実行するか `replication.auto_initial_snapshot` を有効にして構築し、その後で検索を MygramDB の TCP または HTTP API へ送ります。
 

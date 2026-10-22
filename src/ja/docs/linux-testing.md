@@ -1,6 +1,6 @@
 ---
 title: MygramDB DockerによるLinux CIテスト
-description: GitHub Actions CIと同じLinux環境でMygramDBをテスト。Dockerベースのビルド、リント、フォーマット、テストのターゲット。pushする前にプラットフォーム固有の問題を検出。
+description: Docker で MygramDB の Linux 互換性を確認します。ネイティブビルドとは作業コピーを分け、ビルド、リント、フォーマット、既定のテストを実行します。
 head:
   - - meta
     - name: keywords
@@ -11,7 +11,7 @@ head:
 
 ## 概要
 
-このガイドでは、GitHub Actions CI と同じLinux環境でコードをテストし、プラットフォーム固有の問題（ヘッダの記載漏れやコンパイラの違い）を**pushする前に**検出する方法を説明します。
+Docker の開発用イメージを使い、Linux 固有のヘッダやコンパイラの問題を確認します。
 
 ::: info このページを読むタイミング
 macOSで開発していて、GitHub ActionsやLinux上のビルド失敗を事前に潰したい場合に使います。通常の利用者がMygramDBをインストールするための手順ではありません。
@@ -30,9 +30,11 @@ macOSで開発している場合、以下の問題がLinux環境でのみ発生�
 
 ## 解決策
 
-GitHub Actions CI環境（Ubuntu 22.04と同じ依存関係）をDockerで再現し、手元でLinuxビルド・リント・テストを実行できるようにしています。
+開発用イメージは Ubuntu 22.04 とビルドに必要な依存ライブラリを使います。GitHub Actions は `ubuntu-latest` を使い、`MYGRAMDB_PORTABLE_BUILD` も有効にします。Docker のターゲットではこのオプションを有効にしません。ローカルの Linux 確認は、CI 全体の再現ではありません。
 
 ## クイックスタート
+
+以下は、ネイティブビルドとは別の Linux 専用作業コピーで実行してください。作業コピーの作成方法は[推奨ワークフロー](#推奨ワークフロー)を参照してください。
 
 ### 1. フルCIチェック（push前に推奨）
 
@@ -40,13 +42,14 @@ GitHub Actions CI環境（Ubuntu 22.04と同じ依存関係）をDockerで再現
 make docker-ci-check
 ```
 
-これでCI相当のチェックをまとめて実行します：
-1. コードフォーマットチェック
-2. ビルド（CIと同じフラグ）
-3. clang-tidyリント
-4. 全テスト実行
+ローカルの Linux 確認として、次を順に実行します。
 
-大きめの変更やLinux依存の変更を入れたときは、push前に実行してください。
+1. コードフォーマットチェック
+2. カバレッジ、ICU、MySQL を有効にした Debug ビルド
+3. clang-tidyリント
+4. `SLOW` と `LOAD` を除く既定のテスト実行
+
+全 CTest 階層は Linux シェル内で `make test-all` を実行してください。実データベースとの E2E スイートは別の確認です。[開発ガイド](/ja/docs/development#e2e-スイート)を参照してください。
 
 ### 2. 個別ステップの実行
 
@@ -84,80 +87,64 @@ make lint
 
 ### Dockerイメージ: `support/dev/Dockerfile`
 
-`support/dev/Dockerfile` は、GitHub Actions CI環境に近いLinux開発環境を作成します：
+`support/dev/Dockerfile` は、次のローカル Linux 開発環境を作成します。
 
 - **ベース**: Ubuntu 22.04
-- **コンパイラ**: GCC（CIと同じ）
+- **コンパイラ**: GCC
 - **ツール**: clang-format-18, clang-tidy-18, ccache
 - **依存関係**: libmysqlclient-dev, libicu-dev など
 
 ### Makefileターゲット
 
-全てのLinuxテストターゲットは `docker-*-linux` パターンに従います：
+Makefile には、次の Linux 開発用ターゲットがあります。
 
 | ターゲット | 説明 |
 |-----------|------|
 | `docker-dev-build` | Linux Dockerイメージのビルド（他のターゲットから自動実行） |
 | `docker-dev-shell` | Linuxコンテナでの対話的シェル |
-| `docker-build-linux` | Linuxでプロジェクトをビルド（CIを再現） |
+| `docker-build-linux` | Linux でプロジェクトをビルド |
 | `docker-test-linux` | Linuxでテストを実行 |
 | `docker-lint-linux` | Linuxでclang-tidyを実行 |
 | `docker-format-check-linux` | Linuxでフォーマットをチェック |
 | `docker-clean-linux` | Linuxでビルドディレクトリをクリーン |
-| `docker-ci-check` | 全CIチェックを実行（推奨） |
+| `docker-ci-check` | ローカルのフォーマット、ビルド、リント、既定のテストを実行 |
 
 ## 推奨ワークフロー
 
-### パターン1: push前チェック（推奨）
+Docker 用には別の作業コピーを使ってください。各ターゲットはリポジトリをマウントして `build/` を構成するため、macOS の CMake キャッシュは再利用できません。同じ作業コピーでネイティブビルドとコンテナビルドを並行実行したり、複数の Docker ビルドを同時に実行したりしないでください。
+
+ローカルクローンにはコミット済みの変更だけが含まれます。確認する変更を先にコミットするか、別の作業コピーへ反映してから実行してください。
 
 ```bash
-# macOSでの通常開発
-make format              # コードフォーマット
-make build              # ビルド確認
-make test               # テスト実行
-
-# push前のLinux確認
-make docker-ci-check    # Linux環境で全チェック
-
-# 問題なければコミット
-git commit -m "..."
-git push
+git clone --no-hardlinks . ../mygram-db-linux
+cd ../mygram-db-linux
+make docker-ci-check
 ```
 
 ### パターン2: 継続的テスト
 
-Linux固有の問題に取り組んでいる場合や頻繁にテストしたい場合：
+Linux 用の作業コピーで順に実行します。
 
 ```bash
-# ターミナル1: Linuxでビルドを継続
 make docker-build-linux
-
-# ターミナル2: Linuxでテストを継続
 make docker-test-linux
-
-# または対話的シェルで高速イテレーション
-make docker-dev-shell
-# コンテナ内: make build && make test
 ```
+
+`docker-test-linux` はビルドターゲットに依存します。対話的シェルでも、リポジトリのルートから `make build`、`make test`、`make lint` を実行できます。
 
 ### パターン3: CI失敗時のデバッグ
 
-CIで特定のエラーが発生した場合：
-
 ```bash
-# CI環境を正確に再現
 make docker-dev-shell
 
-# コンテナ内で失敗したステップを実行
-cd build
-cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON -DUSE_ICU=ON -DUSE_MYSQL=ON ..
-make -j$(nproc)
+# コンテナ内のリポジトリルートから実行
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON -DUSE_ICU=ON -DUSE_MYSQL=ON
+cmake --build build -j$(nproc)
 make lint
-
-# 問題を修正後、検証
 exit
-make docker-ci-check
 ```
+
+CI の失敗を再現する際は、失敗したジョブのビルド設定に合わせてください。上記は開発用コンテナの設定です。
 
 ## パフォーマンスのヒント
 
@@ -165,8 +152,7 @@ make docker-ci-check
 
 Dockerイメージは初回ビルド後にキャッシュされます。以降の実行はずっと高速です：
 
-- **初回**: ~5-10分（LLVMや依存関係のダウンロードとインストール）
-- **2回目以降**: ~10-30秒（コードのビルドのみ）
+初回は依存関係のインストールと全体のコンパイルが必要です。以降はイメージとビルド済みファイルを再利用します。所要時間はホストと変更内容によって変わります。
 
 ### 2. インクリメンタルビルド
 
@@ -190,7 +176,7 @@ make docker-test-linux  # $(nproc) コアを使用
 
 ### 4. ccache
 
-コンテナはccacheを使用してコンパイルを高速化します。これはビルド間で共有されます。
+コンテナは ccache を使いますが、既定のターゲットは ccache 用の永続ボリュームをマウントしません。キャッシュは同じコンテナ内で再利用され、`--rm` でコンテナを削除すると失われます。`build/` のコンパイル済みファイルは作業コピーに残ります。
 
 ::: info 用語補足
 **ccache** は、同じコンパイル結果を再利用するためのキャッシュです。ヘッダやコンパイルオプションが変わっていないファイルは再コンパイルを省けるため、2回目以降のビルドが速くなります。
@@ -246,7 +232,7 @@ ccache --set-config=max_size=1G
 
 ## CI環境の詳細
 
-`support/dev/Dockerfile` 環境は `.github/workflows/ci.yml` と一致します：
+以下は `support/dev/Dockerfile` の構成です。CI の OS とビルド設定は [ワークフロー](https://github.com/libraz/mygram-db/blob/main/.github/workflows/ci.yml)を参照してください。
 
 | コンポーネント | バージョン |
 |--------------|----------|
@@ -286,17 +272,16 @@ chmod +x .git/hooks/pre-push
 
 ```bash
 # 異なるオプションでビルド
-docker run --rm -v $(pwd):/workspace -w /workspace mygramdb-dev:latest \
-    bash -c "mkdir -p build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_ASAN=ON .. && \
-    make -j$(nproc)"
+docker run --rm -v "$PWD:/workspace" -w /workspace mygramdb-dev:latest \
+    bash -c 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON && \
+    cmake --build build-asan -j$(nproc)'
 ```
 
 ### 特定のテストを実行
 
 ```bash
-docker run --rm -v $(pwd):/workspace -w /workspace mygramdb-dev:latest \
-    bash -c "cd build && ctest -R 'MyTest.*' --verbose"
+docker run --rm -v "$PWD:/workspace" -w /workspace mygramdb-dev:latest \
+    bash -c 'ctest --test-dir build -R "MyTest.*" --verbose'
 ```
 
 ### カバレッジレポートの生成
@@ -314,7 +299,7 @@ make coverage
 | 側面 | macOS (`make build`) | Linux (`make docker-build-linux`) |
 |------|----------------------|----------------------------------|
 | 速度 | 高速（ネイティブ） | やや遅い（コンテナ化） |
-| 環境 | あなたのmacOS | CI環境（Ubuntu 22.04） |
+| 環境 | 開発用の macOS | 開発用イメージ（Ubuntu 22.04） |
 | 用途 | 高速イテレーション | push前の検証 |
 | コンパイラ | Clang（macOS） | GCC（Linux） |
 | ヘッダ | より寛容 | より厳格（記載漏れを検出） |

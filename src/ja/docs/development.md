@@ -33,9 +33,9 @@ brew install icu4c
 
 # LLVM 18 をデフォルトで使用するためのシンボリックリンクを作成
 # 重要: CI と一貫したコードフォーマットを保証するため
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-format /opt/homebrew/bin/clang-format
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-tidy /opt/homebrew/bin/clang-tidy
-ln -sf /opt/homebrew/opt/llvm@18/bin/clangd /opt/homebrew/bin/clangd
+ln -sf "$(brew --prefix llvm@18)/bin/clang-format" "$(brew --prefix)/bin/clang-format"
+ln -sf "$(brew --prefix llvm@18)/bin/clang-tidy" "$(brew --prefix)/bin/clang-tidy"
+ln -sf "$(brew --prefix llvm@18)/bin/clangd" "$(brew --prefix)/bin/clangd"
 ```
 
 ### Linux（Ubuntu/Debian）
@@ -123,16 +123,22 @@ VS Code を開いて、推奨エクステンションをインストールしま
 `.vscode/settings.json` を編集して変更：
 
 ```json
-"C_Cpp.codeAnalysis.clangTidy.enabled": true,
-"C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+{
+  "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+  "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+  "C_Cpp.codeAnalysis.clangTidy.path": "/absolute/path/to/llvm18/bin/clang-tidy",
+  "C_Cpp.clang_format_path": "/absolute/path/to/llvm18/bin/clang-format"
+}
 ```
+
+macOS では `brew --prefix llvm@18` の出力に `/bin/clang-tidy` または `/bin/clang-format` を付けた絶対パスへ置き換えてください。Linux では `/usr/bin/clang-tidy-18` と `/usr/bin/clang-format-18` を使います。リポジトリの `/opt/homebrew/opt/llvm/bin` は LLVM 18 を指すとは限りません。
 
 VS Code ウィンドウをリロード（Cmd/Ctrl + Shift + P → "Developer: Reload Window"）
 
 ### オプション B: clangd を使用（高速）
 
 1. clangd エクステンションがインストールされていることを確認
-2. `.vscode/settings.json` を編集して clangd セクションをアンコメント（OPTION 1）
+2. clangd セクションを有効にし、`clangd.path` を LLVM 18 の絶対パスにします。macOS では `brew --prefix llvm@18` の出力に `/bin/clangd` を付け、Linux では `/usr/bin/clangd-18` を指定します。
 3. C/C++ エクステンションセクションをコメントアウト（OPTION 2）
 4. VS Code ウィンドウをリロード
 
@@ -217,16 +223,16 @@ snprintf(buf, sizeof(buf), "%d",
 
 ## テストの実行
 
-既定の target は `SLOW` と `LOAD` ラベルのテストを除外します。
+既定のターゲット は `SLOW` と `LOAD` ラベルのテストを除外します。
 
 ```bash
-# 既定の unit / integration スイート
+# 既定の単体・結合テスト
 make test
 
-# SLOW テストも含める
+# SLOW と LOAD のテストも含める
 make test-all
 
-# Docker 上の MySQL を起動する opt-in テスト
+# 明示的に実行する、Docker 上の MySQL を起動するテスト
 make test-mysql
 make test-large-dump
 ```
@@ -237,15 +243,15 @@ make test-large-dump
 # 既定の MySQL 8.4 スイート
 make e2e-test
 
-# MySQL 8.4/9.7、MariaDB 10.11/11.8/12.3 の matrix
+# MySQL 8.4/9.7、MariaDB 10.11/11.8/12.3 の組み合わせ
 make e2e-matrix
 ```
 
-marker の指定方法と MariaDB 専用 runner は [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e) を参照してください。
+テストの選択方法と MariaDB 専用の実行手順 は [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e) を参照してください。
 
-### ローカル sanitizer と fuzz
+### ローカルでのサニタイザーとファジング
 
-sanitizer build と fuzz harness は、明示的に実行するローカル確認です。CI job は増やさず、fuzz harness は CTest に登録しません。
+サニタイザー付きビルドとファジングは、明示的に実行するローカル確認です。CI のジョブには含まれず、ファジング用のプログラムは CTest に登録されません。
 
 ```bash
 # 必要に応じて ENABLE_ASAN を ENABLE_TSAN または ENABLE_UBSAN に置き換える。
@@ -253,7 +259,7 @@ cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
 cmake --build build-asan -j
 ctest --test-dir build-asan -L CONCURRENCY -LE LOAD --output-on-failure
 
-# standalone の parser・dump header 用ランダム化 harness。対応するコンパイラなら動作し、反復回数を入力にします。
+# パーサーとダンプヘッダーをランダム入力で検証します。反復回数を引数で指定します。
 cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DBUILD_FUZZERS=ON -DFUZZER_ENGINE=standalone
 cmake --build build-fuzz --target binary_input_fuzz -j
 ./build-fuzz/bin/binary_input_fuzz 100000
@@ -277,7 +283,7 @@ cmake --build build-libfuzzer --target binary_input_fuzz -j
 ```bash
 # macOS
 brew install llvm@18
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-tidy /opt/homebrew/bin/clang-tidy
+ln -sf "$(brew --prefix llvm@18)/bin/clang-tidy" "$(brew --prefix)/bin/clang-tidy"
 
 # Linux
 wget https://apt.llvm.org/llvm.sh
@@ -301,7 +307,7 @@ sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang
 ```bash
 # macOS
 brew install llvm@18
-ln -sf /opt/homebrew/opt/llvm@18/bin/clang-format /opt/homebrew/bin/clang-format
+ln -sf "$(brew --prefix llvm@18)/bin/clang-format" "$(brew --prefix)/bin/clang-format"
 
 # Linux
 wget https://apt.llvm.org/llvm.sh
@@ -349,58 +355,10 @@ clang-format --version  # 18.x.x であることを確認
 
 ## Linux CI テスト（macOS開発者向け）
 
-macOSで開発している場合、一部の問題（ヘッダの記載漏れ、コンパイラの違いなど）はLinux環境でのみ発生し、CIで失敗します。
-
-**解決策**: **pushする前に**GitHub Actions CI と同じLinux環境でコードをテストします。
+Linux 固有のヘッダやコンパイラの問題を確認するには、Docker の Ubuntu 22.04 環境を使います。GitHub Actions の `ubuntu-latest` と同一の OS・ビルド設定ではありません。ネイティブビルドと `build/` を共有しない別の作業コピーで実行してください。
 
 ```bash
-# フルCIチェック（git pushの前に推奨）
 make docker-ci-check
 ```
 
-これで以下を実行します：
-1. コードフォーマットチェック
-2. ビルド（CIと同じフラグ）
-3. clang-tidyリント
-4. 全テスト実行
-
-**個別チェック:**
-
-```bash
-make docker-build-linux       # ビルドのみ
-make docker-test-linux        # テストのみ
-make docker-lint-linux        # リントのみ
-make docker-format-check-linux # フォーマットチェックのみ
-```
-
-**対話的シェル:**
-
-```bash
-make docker-dev-shell         # デバッグ用にLinuxコンテナに入る
-```
-
-詳細は [Linux CIテストガイド](/ja/docs/linux-testing) を参照してください。
-
-## 推奨ワークフロー（参考）
-
-コード品質を保つための標準的な流れです。必須ではありませんが、PRを出す前に同じ確認をしておくとCIでの失敗を減らせます。
-
-### コミット前の確認
-
-1. **コードを記述** - Google C++ Style Guide に従う
-2. **`make format` を実行** - コードを自動整形
-3. **`make lint` を実行** - 問題を早期に見つける（時間がかかります）
-4. **`make test` を実行** - すべてのテストが通ることを確認
-5. **`make docker-ci-check` を実行** - Linux互換性を検証（macOSのみ）
-
-### CI要件
-
-以下はCIで自動的に確認されます:
-
-- コードフォーマット（clang-format）
-- 静的解析（clang-tidy）
-- すべてのテストが通る
-- コンパイラ警告なし
-- Linuxビルド互換性
-
-ローカルで全てを実行しなくても、最終的にPRがCIを通過していれば問題ありません。
+フォーマット、ビルド、clang-tidy、既定のテストを順に実行します。`SLOW` と `LOAD` は除外されます。全テストは `make test-all`、実データベースとの検証は E2E スイートで実行します。CI の実際の構成は [ワークフロー](https://github.com/libraz/mygram-db/blob/main/.github/workflows/ci.yml)、作業コピーの分離方法と個別コマンドは [Linux テストガイド](/ja/docs/linux-testing)を参照してください。

@@ -51,16 +51,16 @@ curl -X POST http://localhost:8080/tables/app_db.articles/search \
 
 ### テーブル識別子
 
-設定済みテーブルは、内部的に必ず `<database>.<table>` の有効識別子を持ちます。
+設定済みテーブルは、内部的に必ず `<database>.<table>` のテーブル識別子を持ちます。
 
 ```yaml
 mysql:
   database: app_db
 
 tables:
-  - name: articles          # 有効識別子: app_db.articles
+  - name: articles          # テーブル識別子: app_db.articles
   - database: archive_db
-    name: articles          # 有効識別子: archive_db.articles
+    name: articles          # テーブル識別子: archive_db.articles
 ```
 
 設定内のすべてのテーブルが1つのDBに属する場合、修飾なしのテーブル名も引き続き使えます。
@@ -91,6 +91,7 @@ curl -X POST http://localhost:8080/tables/app_db.articles/facet \
   -d '{
     "column": "category",
     "q": "database OR mysql",
+    "mode": "boolean",
     "filters": {"status": 1},
     "limit": 10
   }'
