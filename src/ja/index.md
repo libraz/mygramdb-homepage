@@ -198,7 +198,7 @@ async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
     <span class="repo-card__name">mysql-event-stream</span>
     <span class="repo-card__cta">GitHub<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg></span>
   </div>
-  <p class="repo-card__desc">MygramDBから抽出した軽量なMySQL / MariaDB CDCエンジン。binlogレプリケーションイベントをパースし、アプリケーション向けのストリーミングAPIを提供します。MySQL 8.4/9.x・MariaDB 10.11+/11.xに対応し、Node.js (N-API) とPython (ctypes) バインディングを備えます。</p>
+  <p class="repo-card__desc">MygramDBから抽出した軽量なMySQL / MariaDB CDCエンジン。binlogレプリケーションイベントをパースし、アプリケーション向けのストリーミングAPIを提供します。MySQL 8.4以降・MariaDB 10.11以降に対応し、Node.js (N-API) とPython (ctypes) バインディングを備えます。</p>
   <div class="repo-card__tags">
     <span class="repo-card__tag">CDC</span>
     <span class="repo-card__tag">binlog</span>
