@@ -24,7 +24,7 @@ MygramDB reads GTID-based binlog events from MySQL and applies row changes to it
 :::
 
 MygramDB requires:
-- **Supported database matrix**: MySQL 8.4 and 9.7, or MariaDB 10.11, 11.4, 11.8, and 12.3
+- **Supported database matrix**: MySQL 8.4, 9.7, and 26.x, or MariaDB 10.11, 11.4, 11.8, and 12.3
 - **GTID Mode**: Must be enabled for MySQL; MariaDB uses its native GTID format
 - **Binary Log Format**: ROW format required
 - **Row metadata**: `binlog_row_metadata=FULL` is required so each `TABLE_MAP` event includes column names

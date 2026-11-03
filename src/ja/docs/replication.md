@@ -20,7 +20,7 @@ MygramDB は、GTIDベースのbinlogイベントを MySQL から読み取り、
 ### MySQL サーバー要件
 
 MygramDB には以下が必要です:
-- **対応データベース**: MySQL 8.4/9.7、または MariaDB 10.11/11.8/12.3
+- **対応データベース**: MySQL 8.4/9.7/26.x、または MariaDB 10.11/11.4/11.8/12.3
 - **GTID モード**: MySQLでは有効化必須。MariaDBはネイティブGTID形式を使用
 - **バイナリログ形式**: ROW 形式が必要
 - **行イメージ**: `binlog_row_image=FULL` が必要
