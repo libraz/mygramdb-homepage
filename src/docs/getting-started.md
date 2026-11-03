@@ -13,7 +13,7 @@ This guide installs the package, loads existing MySQL rows, and runs a search. F
 
 ## Prerequisites
 
-- MySQL 8.4/9.x with GTID enabled, or MariaDB 10.11+/11.x/12.x
+- MySQL 8.4/9.7/26.x with GTID enabled, or MariaDB 10.11+/11.x/12.x
 - RHEL/AlmaLinux/Rocky Linux 9 or 10, or Ubuntu 22.04/24.04
 - A MySQL replication account with `SELECT`, `REPLICATION SLAVE`, and `REPLICATION CLIENT` privileges
 

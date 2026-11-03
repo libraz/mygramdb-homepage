@@ -48,7 +48,7 @@ binlog_row_metadata = FULL
 | --- | --- |
 | ソース自体がレプリカ | MySQL では `log_replica_updates`、MariaDB では `log_slave_updates` を有効にします。MySQL の接続アカウントには `SHOW REPLICA STATUS` 用の `REPLICATION CLIENT` 権限が必要です。 |
 | MariaDB が `binlog_storage_engine` を使用 | エンジン統合型 binlog を使わないソースにします。この方式には、必要なイベント単位のチェックサムがありません。 |
-| 監視対象テーブルが、更新または削除時に `CASCADE`、`SET NULL`、`SET DEFAULT` を実行する外部キーの子テーブル | 子の各行の変更が binlog に記録されるスキーマにします。MySQL 9.x で `innodb_native_foreign_keys=OFF` の場合は例外です。 |
+| 監視対象テーブルが、更新または削除時に `CASCADE`、`SET NULL`、`SET DEFAULT` を実行する外部キーの子テーブル | 子の各行の変更が binlog に記録されるスキーマにします。MySQL 9.0 以降で `innodb_native_foreign_keys=OFF` の場合は例外です。 |
 | 設定したキーに独立した単一カラムの一意制約がない、または単一カラムの一意制約が `NULL` を許可 | 単一カラムの `PRIMARY KEY` または `UNIQUE NOT NULL` キーを使います。 |
 | MariaDB のいずれかのカラムが、`n > 0` の旧形式の `TIME(n)`、`DATETIME(n)`、`TIMESTAMP(n)` | `ALTER TABLE ... MODIFY` でカラムを再構築します。`SHOW COLUMNS` に `/* mariadb-5.3 */` と表示される形式が対象です。 |
 | 設定したカラムが `year(2)` | 対応するカラム型へ変更します。 |

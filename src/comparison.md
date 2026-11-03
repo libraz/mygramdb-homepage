@@ -35,7 +35,7 @@ MygramDB targets one specific case: the system of record is already in MySQL or 
 
 **Pros:**
 - Cache-off benchmark results published with the test configuration
-- Binlog-based data sync (MySQL 8.4/9.x and MariaDB 10.11+/11.x/12.x)
+- Binlog-based data sync (MySQL 8.4/9.7/26.x and MariaDB 10.11+/11.x/12.x)
 - Single binary deployment
 - No cluster management
 - Language-agnostic N-gram tokenization with first-class multibyte UTF-8 support

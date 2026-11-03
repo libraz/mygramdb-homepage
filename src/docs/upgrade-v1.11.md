@@ -48,7 +48,7 @@ The [replication requirements](/docs/replication) describe the complete source s
 | --- | --- |
 | The source is itself a replica | Enable `log_replica_updates` on MySQL or `log_slave_updates` on MariaDB. The MySQL account needs `REPLICATION CLIENT` for `SHOW REPLICA STATUS`. |
 | MariaDB uses `binlog_storage_engine` | Use a source without engine-integrated binlogging; this mode lacks the required per-event checksum. |
-| A monitored table is the child of a foreign key with `CASCADE`, `SET NULL`, or `SET DEFAULT` on update or delete | Use a schema that emits every child-row change in the binlog. MySQL 9.x with `innodb_native_foreign_keys=OFF` is exempt. |
+| A monitored table is the child of a foreign key with `CASCADE`, `SET NULL`, or `SET DEFAULT` on update or delete | Use a schema that emits every child-row change in the binlog. MySQL 9.0 or later with `innodb_native_foreign_keys=OFF` is exempt. |
 | The configured key has no independent single-column unique constraint, or its only single-column unique constraint allows `NULL` | Use a single-column `PRIMARY KEY` or a single-column `UNIQUE NOT NULL` key. |
 | Any MariaDB column uses old-format `TIME(n)`, `DATETIME(n)`, or `TIMESTAMP(n)` with `n > 0` | Rebuild the column with `ALTER TABLE ... MODIFY`; `SHOW COLUMNS` identifies this format with `/* mariadb-5.3 */`. |
 | A configured column uses `year(2)` | Change it to a supported column type. |

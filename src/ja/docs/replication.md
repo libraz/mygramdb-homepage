@@ -107,7 +107,7 @@ MygramDBはスナップショット作成前にソースを検証し、再接続
 
 MySQLでソースがレプリカかどうかを調べるため、MygramDBは `SHOW REPLICA STATUS` を実行します。そのため、レプリケーションユーザーには `REPLICATION CLIENT` が必要です。MariaDBでは `gtid_slave_pos` を使うため、この追加権限を必要とするクエリはありません。
 
-各監視対象テーブルの `primary_key` は、単独カラムの `PRIMARY KEY` または `UNIQUE NOT NULL` 制約で独立して一意性が保証されている必要があります。NULLを許す単独カラムのUNIQUEキーは `2012` で拒否されます。一意性が複合 `PRIMARY KEY` / `UNIQUE` 制約だけで保証され、独立した単独カラム制約がない場合は `2011` で拒否されます。複合キーにも含まれるカラムでも、条件を満たす単独カラム制約があれば使用できます。子テーブルに対して `ON UPDATE` または `ON DELETE CASCADE`、`SET NULL`、`SET DEFAULT` を指定した外部キーがある場合は `2012` で拒否されます。InnoDBはこうした子行の変更をrowイベントに記録しないためです。MySQL 9.xで `innodb_native_foreign_keys=OFF` の場合は、サーバー層が各子行のイベントを書き込むため対象外です。
+各監視対象テーブルの `primary_key` は、単独カラムの `PRIMARY KEY` または `UNIQUE NOT NULL` 制約で独立して一意性が保証されている必要があります。NULLを許す単独カラムのUNIQUEキーは `2012` で拒否されます。一意性が複合 `PRIMARY KEY` / `UNIQUE` 制約だけで保証され、独立した単独カラム制約がない場合は `2011` で拒否されます。複合キーにも含まれるカラムでも、条件を満たす単独カラム制約があれば使用できます。子テーブルに対して `ON UPDATE` または `ON DELETE CASCADE`、`SET NULL`、`SET DEFAULT` を指定した外部キーがある場合は `2012` で拒否されます。InnoDBはこうした子行の変更をrowイベントに記録しないためです。MySQL 9.0 以降で `innodb_native_foreign_keys=OFF` の場合は、サーバー層が各子行のイベントを書き込むため対象外です。
 
 MariaDBでは、未設定カラムも含むテーブル内のどのカラムも、旧形式の `TIME(n)`、`DATETIME(n)`、`TIMESTAMP(n)`（`n > 0`）を使えません。TABLE_MAPに幅が記録されないため、`2012` で拒否されます。同じ型でも `n = 0` は使用できます。設定カラムの `year(2)` も `2012` で拒否されます。DDL後に設定カラムの型、NULL可否、照合順序、生成方法、生成式が変わった場合もスキーマ変更として扱います。
 

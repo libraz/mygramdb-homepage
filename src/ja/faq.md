@@ -89,7 +89,7 @@ MygramDB はインデックスをノード間で分割しません。同じデ�
 
 ### MariaDBで動作しますか？
 
-はい。MygramDB は MariaDB 10.11+/11.x/12.x に対応し、MariaDB ネイティブの GTID 形式（`domain-server-sequence`）でレプリケーションします。機能プローブでサーバー種別を判定するため、MySQL 8.4/9.x と MariaDB で同じ `mysql` セクションを使用できます。E2E テストでは MariaDB 10.11、11.8、12.3 を検証しています。
+はい。MygramDB は MariaDB 10.11+/11.x/12.x に対応し、MariaDB ネイティブの GTID 形式（`domain-server-sequence`）でレプリケーションします。機能プローブでサーバー種別を判定するため、MySQL 8.4/9.7/26.x と MariaDB で同じ `mysql` セクションを使用できます。E2E テストでは MariaDB 10.11、11.4、11.8、12.3 を検証しています。
 
 ## インデックスと検索
 

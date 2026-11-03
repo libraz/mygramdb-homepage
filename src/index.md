@@ -28,7 +28,7 @@ features:
   - icon:
       src: /icons/refresh-cw.svg
     title: Real-time MySQL / MariaDB sync
-    details: GTID-based binlog replication for MySQL 8.4/9.x and MariaDB 10.11+/11.x/12.x. Keep writes where they are, just speed up search.
+    details: GTID-based binlog replication for MySQL 8.4/9.7/26.x and MariaDB 10.11+/11.x/12.x. Keep writes where they are, just speed up search.
   - icon:
       src: /icons/globe.svg
     title: Full Unicode, multibyte-ready

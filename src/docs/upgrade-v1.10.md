@@ -41,7 +41,7 @@ Validate the exact production file before rollout:
 mygramdb -t /etc/mygramdb/config.yaml
 ```
 
-MygramDB supports MySQL 8.4/9.x and MariaDB 10.11+/11.x/12.x. Use GTID replication with `binlog_format=ROW` and `binlog_row_image=FULL`.
+MygramDB supports MySQL 8.4/9.7/26.x and MariaDB 10.11+/11.x/12.x. Use GTID replication with `binlog_format=ROW` and `binlog_row_image=FULL`.
 
 ### Check settings that now refuse startup
 

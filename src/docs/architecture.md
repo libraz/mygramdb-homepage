@@ -9,7 +9,7 @@ head:
 
 # Architecture
 
-MygramDB runs as a sidecar process alongside MySQL (8.4/9.x) or MariaDB (10.11+/11.x/12.x). It reads the upstream server's binary log to build and maintain an in-memory full-text index, then serves search queries over TCP and HTTP. The server flavor is detected with a capability probe, so the same binary and config work with either.
+MygramDB runs as a sidecar process alongside MySQL (8.4/9.7/26.x) or MariaDB (10.11+/11.x/12.x). It reads the upstream server's binary log to build and maintain an in-memory full-text index, then serves search queries over TCP and HTTP. The server flavor is detected with a capability probe, so the same binary and config work with either.
 
 <DocDiagram name="system-flow" alt="MySQL remains the source of truth while MygramDB reads snapshots and binlog events, maintains an in-memory index, and serves search traffic over TCP or HTTP." />
 

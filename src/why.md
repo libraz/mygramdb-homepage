@@ -55,7 +55,7 @@ The index stays in memory, so a search does not read MySQL's FULLTEXT index. Myg
 
 ### Real-time MySQL / MariaDB Sync
 
-GTID-based binlog replication applies changes from MySQL 8.4/9.x or MariaDB 10.11+/11.x/12.x. A separate search ETL job is unnecessary, but setup still requires MySQL replication configuration, an initial snapshot or `SYNC`, and routing search requests to MygramDB. Lag depends on the source, network, and MygramDB's processing rate.
+GTID-based binlog replication applies changes from MySQL 8.4/9.7/26.x or MariaDB 10.11+/11.x/12.x. A separate search ETL job is unnecessary, but setup still requires MySQL replication configuration, an initial snapshot or `SYNC`, and routing search requests to MygramDB. Lag depends on the source, network, and MygramDB's processing rate.
 
 ::: info What is ETL?
 **ETL** stands for extract, transform, load — the pipeline that copies data from one system into another. MygramDB reads the MySQL binlog directly, so there is no separate sync job to build and operate.

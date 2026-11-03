@@ -24,7 +24,7 @@ MygramDB reads GTID-based binlog events from MySQL and applies row changes to it
 :::
 
 MygramDB requires:
-- **Supported database matrix**: MySQL 8.4 and 9.7, or MariaDB 10.11, 11.8, and 12.3
+- **Supported database matrix**: MySQL 8.4 and 9.7, or MariaDB 10.11, 11.4, 11.8, and 12.3
 - **GTID Mode**: Must be enabled for MySQL; MariaDB uses its native GTID format
 - **Binary Log Format**: ROW format required
 - **Row metadata**: `binlog_row_metadata=FULL` is required so each `TABLE_MAP` event includes column names
@@ -108,7 +108,7 @@ MygramDB validates the source before building a snapshot and repeats the checks 
 
 When checking a MySQL source for replica status, MygramDB runs `SHOW REPLICA STATUS`; the replication account therefore needs `REPLICATION CLIENT`. MariaDB's check uses `gtid_slave_pos` and does not need that extra query privilege.
 
-Each monitored table's `primary_key` must have an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. A nullable single-column unique key is refused with `2012`; if uniqueness comes only from a composite `PRIMARY KEY` or `UNIQUE` key, the column is refused with `2011`. A column that also appears in a composite key is accepted when it has its own qualifying single-column constraint. A table that is the child of a foreign key with `ON UPDATE` or `ON DELETE CASCADE`, `SET NULL`, or `SET DEFAULT` is refused with `2012`, because InnoDB does not write row events for those child changes. MySQL 9.x with `innodb_native_foreign_keys=OFF` is exempt because the server writes an event for every child row.
+Each monitored table's `primary_key` must have an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. A nullable single-column unique key is refused with `2012`; if uniqueness comes only from a composite `PRIMARY KEY` or `UNIQUE` key, the column is refused with `2011`. A column that also appears in a composite key is accepted when it has its own qualifying single-column constraint. A table that is the child of a foreign key with `ON UPDATE` or `ON DELETE CASCADE`, `SET NULL`, or `SET DEFAULT` is refused with `2012`, because InnoDB does not write row events for those child changes. MySQL 9.0 or later with `innodb_native_foreign_keys=OFF` is exempt because the server writes an event for every child row.
 
 On MariaDB, any column in the table, including an unconfigured column, using old-format `TIME(n)`, `DATETIME(n)`, or `TIMESTAMP(n)` with `n > 0` is refused with `2012`; TABLE_MAP does not carry its width. The same types with `n = 0` are accepted. A configured `year(2)` column is also refused with `2012`. Changes to a configured column's type, nullability, collation, generated kind, or generated expression are treated as schema changes.
 

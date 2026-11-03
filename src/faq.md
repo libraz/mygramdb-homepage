@@ -93,7 +93,7 @@ No. MygramDB relies on MySQL's binary log replication protocol, which is MySQL-s
 
 ### Does MygramDB work with MariaDB?
 
-Yes. MygramDB supports MariaDB 10.11+/11.x/12.x using MariaDB-native GTIDs (`domain-server-sequence`). A capability probe detects the server flavor, so the same `mysql` config section works for both MySQL 8.4/9.x and MariaDB. The E2E matrix covers MariaDB 10.11, 11.8, and 12.3.
+Yes. MygramDB supports MariaDB 10.11+/11.x/12.x using MariaDB-native GTIDs (`domain-server-sequence`). A capability probe detects the server flavor, so the same `mysql` config section works for both MySQL 8.4/9.7/26.x and MariaDB. The E2E matrix covers MariaDB 10.11, 11.4, 11.8, and 12.3.
 
 ## Indexing and Search
 

@@ -35,7 +35,7 @@ MygramDBは「既にMySQL/MariaDBに正本データがあり、検索だけを�
 
 **良い点:**
 - キャッシュ無効のベンチマーク結果を公開
-- MySQL / MariaDB の binlog から自動同期（MySQL 8.4/9.x および MariaDB 10.11+/11.x/12.x に対応）
+- MySQL / MariaDB の binlog から自動同期（MySQL 8.4/9.7/26.x および MariaDB 10.11+/11.x/12.x に対応）
 - 単一バイナリで起動できる（MySQL側の設定と初回同期は必要）
 - クラスタ管理なし
 - UnicodeテキストをN-gramで検索（ICU NFKC正規化）

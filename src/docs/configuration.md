@@ -49,7 +49,7 @@ Writing the config file does not load any data. After starting the server, synch
 
 ## MySQL / MariaDB Connection
 
-MygramDB works with MySQL 8.4/9.x and MariaDB 10.11+/11.x/12.x. The same `mysql` section is used for both; MygramDB uses a capability probe to select the correct GTID format.
+MygramDB works with MySQL 8.4/9.7/26.x and MariaDB 10.11+/11.x/12.x. The same `mysql` section is used for both; MygramDB uses a capability probe to select the correct GTID format.
 
 ```yaml
 mysql:

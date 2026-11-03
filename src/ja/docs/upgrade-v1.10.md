@@ -41,7 +41,7 @@ TCP クライアントは、管理コマンドより前に同じ接続で `AUTH 
 mygramdb -t /etc/mygramdb/config.yaml
 ```
 
-MygramDB は MySQL 8.4/9.x と MariaDB 10.11+/11.x/12.x に対応します。GTID レプリケーションを使い、`binlog_format=ROW` と `binlog_row_image=FULL` を設定してください。
+MygramDB は MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応します。GTID レプリケーションを使い、`binlog_format=ROW` と `binlog_row_image=FULL` を設定してください。
 
 ### 起動を拒否する設定を確認する
 

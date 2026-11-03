@@ -13,7 +13,7 @@ head:
 
 ## 前提条件
 
-- GTIDが有効な MySQL 8.4/9.x、または MariaDB 10.11+/11.x/12.x
+- GTIDが有効な MySQL 8.4/9.7/26.x、または MariaDB 10.11+/11.x/12.x
 - RHEL/AlmaLinux/Rocky Linux 9/10、または Ubuntu 22.04/24.04
 - `SELECT`、`REPLICATION SLAVE`、`REPLICATION CLIENT` 権限を持つMySQLレプリケーションアカウント
 

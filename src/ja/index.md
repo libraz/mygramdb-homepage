@@ -28,7 +28,7 @@ features:
   - icon:
       src: /icons/refresh-cw.svg
     title: MySQL / MariaDBのbinlogに追従
-    details: MySQL 8.4/9.x と MariaDB 10.11+/11.x/12.x に対応した GTID ベースの binlog レプリケーション。書き込みは MySQL のまま、検索処理を分離。
+    details: MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応した GTID ベースの binlog レプリケーション。書き込みは MySQL のまま、検索処理を分離。
   - icon:
       src: /icons/globe.svg
     title: 日本語対応

@@ -49,7 +49,7 @@ network:
 
 ## MySQL / MariaDB 接続
 
-MygramDB は MySQL 8.4/9.x と MariaDB 10.11+/11.x/12.x に対応します。同じ `mysql` セクションを使い、機能プローブでサーバー種別を判定して適切なGTID形式を選びます。
+MygramDB は MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応します。同じ `mysql` セクションを使い、機能プローブでサーバー種別を判定して適切なGTID形式を選びます。
 
 ```yaml
 mysql:
