@@ -1,78 +1,77 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 520" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 424" role="img">
   <title>Initial snapshot sequence</title>
   <defs>
-    <marker id="is-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    <marker id="is-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="is-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <style>
-      .dg{--fs:16px;
-        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
-        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
-        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
-        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
-      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
-      .dg .t{font-size:calc(var(--fs)*1.14);font-weight:700;fill:var(--ink)}
-      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
-      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.86);fill:var(--ink)}
-      .dg .box{stroke-width:2}
-      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
-      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
-      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
-      .dg .life{stroke:var(--gd);stroke-width:2;stroke-dasharray:6 7}
-      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#is-a)}
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
       .dg [data-i18n]{display:none}
       .dg [data-i18n="en"]{display:inline}
     </style>
   </defs>
 
   <!-- lifelines -->
-  <rect class="box blue" x="150" y="24" width="220" height="52" rx="10"/>
-  <rect class="box sky" x="740" y="24" width="220" height="52" rx="10"/>
-  <path class="life" d="M260 80 L260 470"/>
-  <path class="life" d="M850 80 L850 470"/>
-
-  <!-- messages -->
-  <path class="e" d="M262 128 L846 128"/>
-  <path class="e" d="M262 186 L846 186"/>
-  <path class="e" d="M262 296 L846 296"/>
-  <path class="e" d="M262 406 L846 406"/>
+  <path class="seam" d="M 200 64 V 380"/>
+  <path class="seam" d="M 760 64 V 380"/>
+  <rect class="card" x="110" y="24" width="180" height="40" rx="8"/>
+  <rect class="alt" x="670" y="24" width="180" height="40" rx="8"/>
 
   <!-- notes -->
-  <rect class="box amber" x="98" y="212" width="324" height="40" rx="8"/>
-  <rect class="box amber" x="98" y="322" width="324" height="40" rx="8"/>
-  <rect class="box amber" x="98" y="432" width="324" height="40" rx="8"/>
+  <rect class="chip" x="50" y="164" width="300" height="28" rx="5"/>
+  <rect class="chip" x="50" y="248" width="300" height="28" rx="5"/>
+  <rect class="chip" x="50" y="332" width="300" height="28" rx="5"/>
+
+  <!-- messages -->
+  <path class="ln" d="M 202 104 H 758" marker-end="url(#is-a)"/>
+  <path class="ln" d="M 202 148 H 758" marker-end="url(#is-a)"/>
+  <path class="ln" d="M 202 232 H 758" marker-end="url(#is-a)"/>
+  <path class="ln" d="M 202 316 H 758" marker-end="url(#is-a)"/>
+
+  <!-- language-neutral text -->
+  <text class="h" x="200" y="49" text-anchor="middle">MygramDB</text>
+  <text class="h" x="760" y="49" text-anchor="middle">MySQL</text>
+  <text class="mono" x="480" y="140" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
+  <text class="mono" x="480" y="224" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
+  <text class="mono" x="480" y="308" text-anchor="middle">COMMIT</text>
 
   <!-- text: en -->
   <g data-i18n="en">
-    <text class="t" x="260" y="57" text-anchor="middle">MygramDB</text>
-    <text class="t" x="850" y="57" text-anchor="middle">MySQL</text>
-
-    <text class="m" x="554" y="120" text-anchor="middle">Capture safe lower-bound GTID</text>
-    <text class="m" x="554" y="178" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="m" x="554" y="288" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
-    <text class="m" x="554" y="398" text-anchor="middle">COMMIT</text>
-
-    <text class="s" x="260" y="238" text-anchor="middle">snapshot starts after GTID capture</text>
-    <text class="s" x="260" y="348" text-anchor="middle">stream rows, build the index</text>
-    <text class="s" x="260" y="458" text-anchor="middle">resume binlog from a safe position</text>
-
-    <text class="s" x="560" y="504" text-anchor="middle">The pre-snapshot GTID prevents gaps; commits in the gap may replay, and row application is idempotent.</text>
+    <text class="s" x="480" y="96" text-anchor="middle">Capture safe lower-bound GTID</text>
+    <text class="s" x="200" y="182" text-anchor="middle">snapshot starts after GTID capture</text>
+    <text class="s" x="200" y="266" text-anchor="middle">stream rows, build the index</text>
+    <text class="s" x="200" y="350" text-anchor="middle">resume binlog from a safe position</text>
+    <text class="s" x="480" y="404" text-anchor="middle">The pre-snapshot GTID prevents gaps; commits in the gap may replay, and row application is idempotent.</text>
   </g>
 
   <!-- text: ja -->
   <g data-i18n="ja">
-    <text class="t" x="260" y="57" text-anchor="middle">MygramDB</text>
-    <text class="t" x="850" y="57" text-anchor="middle">MySQL</text>
-
-    <text class="m" x="554" y="120" text-anchor="middle">安全な下限 GTID を取得</text>
-    <text class="m" x="554" y="178" text-anchor="middle">START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="m" x="554" y="288" text-anchor="middle">SELECT id, text_col, filter_cols FROM table</text>
-    <text class="m" x="554" y="398" text-anchor="middle">COMMIT</text>
-
-    <text class="s" x="260" y="238" text-anchor="middle">GTID 取得後にスナップショット開始</text>
-    <text class="s" x="260" y="348" text-anchor="middle">行をストリーム処理してインデックス構築</text>
-    <text class="s" x="260" y="458" text-anchor="middle">安全な位置から binlog を再開</text>
-
-    <text class="s" x="560" y="504" text-anchor="middle">事前の GTID で欠落を防ぎます。間のコミットは再適用されることがありますが、行への適用は冪等です。</text>
+    <text class="s" x="480" y="96" text-anchor="middle">安全な下限 GTID を取得</text>
+    <text class="s" x="200" y="182" text-anchor="middle">GTID 取得後にスナップショット開始</text>
+    <text class="s" x="200" y="266" text-anchor="middle">行をストリーム処理してインデックス構築</text>
+    <text class="s" x="200" y="350" text-anchor="middle">安全な位置から binlog を再開</text>
+    <text class="s" x="480" y="404" text-anchor="middle">事前の GTID で欠落を防ぎます。間のコミットは再適用されることがありますが、行への適用は冪等です。</text>
   </g>
 </svg>

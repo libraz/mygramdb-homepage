@@ -1,86 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 430" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 332" role="img">
   <title>Snapshot-based persistence cycle</title>
   <defs>
-    <marker id="pc-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    <marker id="pc-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="pc-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <style>
-      .dg{--fs:16px;
-        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
-        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
-        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
-        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
-      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
-      .dg .t{font-size:calc(var(--fs)*1.14);font-weight:700;fill:var(--ink)}
-      .dg .g{font-size:calc(var(--fs)*0.82);font-weight:700;fill:var(--mut);letter-spacing:.08em}
-      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
-      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.82);fill:var(--mut)}
-      .dg .box{stroke-width:2}
-      .dg .grp{fill:none;stroke:var(--gd);stroke-width:2;stroke-dasharray:5 5}
-      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
-      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
-      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
-      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#pc-a)}
-      .dg .ed{fill:none;stroke:var(--ln);stroke-width:2;stroke-dasharray:7 6;marker-end:url(#pc-a)}
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
       .dg [data-i18n]{display:none}
       .dg [data-i18n="en"]{display:inline}
     </style>
   </defs>
 
   <!-- groups -->
-  <rect class="grp" x="40" y="44" width="400" height="240" rx="14"/>
-  <rect class="grp" x="680" y="44" width="400" height="240" rx="14"/>
+  <rect class="grp" x="24" y="24" width="336" height="196" rx="8"/>
+  <rect class="grp" x="600" y="24" width="336" height="196" rx="8"/>
 
-  <!-- boxes -->
-  <rect class="box blue" x="64" y="84" width="352" height="82" rx="11"/>
-  <rect class="box sky" x="64" y="184" width="352" height="76" rx="11"/>
-  <rect class="box slate" x="704" y="106" width="352" height="132" rx="11"/>
+  <!-- chips -->
+  <rect class="card" x="40" y="64" width="304" height="64" rx="5"/>
+  <rect class="card" x="40" y="140" width="304" height="64" rx="5"/>
+  <rect class="chip" x="616" y="64" width="304" height="140" rx="5"/>
 
   <!-- edges -->
-  <path class="e" d="M420 116 L700 140"/>
-  <path class="e" d="M420 216 L700 200"/>
-  <!-- recovery path routes around the runtime group instead of across it -->
-  <path class="ed" d="M880 242 L880 322 Q880 332 870 332 L34 332 Q24 332 24 322 L24 135 Q24 125 34 125 L60 125"/>
+  <path class="ln" d="M 344 96 H 614" marker-end="url(#pc-a)"/>
+  <path class="ln" d="M 344 172 H 614" marker-end="url(#pc-a)"/>
+  <path class="ln2 dash" d="M 768 204 V 268 H 192 V 206" marker-end="url(#pc-b)"/>
+
+  <!-- language-neutral text -->
+  <text class="h" x="56" y="90">Index + DocStore</text>
+  <text class="mono" x="632" y="164">.dmp</text>
 
   <!-- text: en -->
   <g data-i18n="en">
-    <text class="g" x="240" y="68" text-anchor="middle">RUNTIME (MEMORY)</text>
-    <text class="t" x="240" y="118" text-anchor="middle">Index + DocStore</text>
-    <text class="s" x="240" y="146" text-anchor="middle">everything queries read from</text>
-    <text class="t" x="240" y="216" text-anchor="middle">Current GTID position</text>
-    <text class="s" x="240" y="242" text-anchor="middle">how far the binlog has been read</text>
-
-    <text class="g" x="880" y="68" text-anchor="middle">DISK</text>
-    <text class="t" x="880" y="146" text-anchor="middle">Snapshot file</text>
-    <text class="s" x="880" y="176" text-anchor="middle">index + document store + GTID,</text>
-    <text class="s" x="880" y="198" text-anchor="middle">written to a temp file and renamed</text>
-    <text class="m" x="880" y="222" text-anchor="middle">.dmp</text>
-
-    <text class="s" x="560" y="112" text-anchor="middle">periodic dump</text>
-    <text class="s" x="560" y="238" text-anchor="middle">saved with the snapshot</text>
-    <text class="s" x="560" y="356" text-anchor="middle">DUMP LOAD, then replay the binlog from the saved GTID</text>
-
-    <text class="s" x="560" y="404" text-anchor="middle">There is no write-ahead log. Recovery is the last snapshot plus catch-up from MySQL, so a lost dump costs time, not data.</text>
+    <text class="lbl" x="40" y="46">RUNTIME (MEMORY)</text>
+    <text class="s" x="56" y="110">everything queries read from</text>
+    <text class="h" x="56" y="166">Current GTID position</text>
+    <text class="s" x="56" y="186">how far the binlog has been read</text>
+    <text class="lbl" x="616" y="46">DISK</text>
+    <text class="h" x="632" y="90">Snapshot file</text>
+    <text class="s" x="632" y="112">index + document store + GTID,</text>
+    <text class="s" x="632" y="127">written to a temp file and renamed</text>
+    <text class="s" x="480" y="88" text-anchor="middle">periodic dump</text>
+    <text class="s" x="480" y="164" text-anchor="middle">saved with the snapshot</text>
+    <text class="s" x="480" y="260" text-anchor="middle">DUMP LOAD, then replay the binlog from the saved GTID</text>
+    <text class="s" x="480" y="308" text-anchor="middle">There is no write-ahead log. Recovery is the last snapshot plus catch-up from MySQL, so a lost dump costs time, not data.</text>
   </g>
 
   <!-- text: ja -->
   <g data-i18n="ja">
-    <text class="g" x="240" y="68" text-anchor="middle">ランタイム（メモリ上）</text>
-    <text class="t" x="240" y="118" text-anchor="middle">Index + DocStore</text>
-    <text class="s" x="240" y="146" text-anchor="middle">検索が参照するすべてのデータ</text>
-    <text class="t" x="240" y="216" text-anchor="middle">現在の GTID 位置</text>
-    <text class="s" x="240" y="242" text-anchor="middle">binlog をどこまで読んだか</text>
-
-    <text class="g" x="880" y="68" text-anchor="middle">ディスク</text>
-    <text class="t" x="880" y="146" text-anchor="middle">スナップショットファイル</text>
-    <text class="s" x="880" y="176" text-anchor="middle">インデックス + ドキュメントストア + GTID。</text>
-    <text class="s" x="880" y="198" text-anchor="middle">一時ファイルに書いてから rename</text>
-    <text class="m" x="880" y="222" text-anchor="middle">.dmp</text>
-
-    <text class="s" x="560" y="112" text-anchor="middle">定期ダンプ</text>
-    <text class="s" x="560" y="238" text-anchor="middle">スナップショットと一緒に保存</text>
-    <text class="s" x="560" y="356" text-anchor="middle">DUMP LOAD 後、保存済み GTID から binlog を再適用</text>
-
-    <text class="s" x="560" y="404" text-anchor="middle">WAL は持ちません。復旧は「最後のスナップショット + MySQL からの追いつき」なので、ダンプを失っても失うのは時間だけです。</text>
+    <text class="lbl" x="40" y="46">ランタイム（メモリ上）</text>
+    <text class="s" x="56" y="110">検索が参照するすべてのデータ</text>
+    <text class="h" x="56" y="166">現在の GTID 位置</text>
+    <text class="s" x="56" y="186">binlog をどこまで読んだか</text>
+    <text class="lbl" x="616" y="46">ディスク</text>
+    <text class="h" x="632" y="90">スナップショットファイル</text>
+    <text class="s" x="632" y="112">インデックス + ドキュメントストア + GTID。</text>
+    <text class="s" x="632" y="127">一時ファイルに書いてから rename</text>
+    <text class="s" x="480" y="88" text-anchor="middle">定期ダンプ</text>
+    <text class="s" x="480" y="164" text-anchor="middle">スナップショットと一緒に保存</text>
+    <text class="s" x="480" y="260" text-anchor="middle">DUMP LOAD 後、保存済み GTID から binlog を再適用</text>
+    <text class="s" x="480" y="308" text-anchor="middle">WAL は持ちません。復旧は「最後のスナップショット + MySQL からの追いつき」なので、ダンプを失っても失うのは時間だけです。</text>
   </g>
 </svg>

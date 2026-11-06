@@ -1,153 +1,153 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 580" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 496" role="img">
   <title>Reconnect validation and replication halts</title>
   <defs>
-    <marker id="fv-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    <marker id="fv-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
-    <marker id="fv-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--rs)"/>
+    <marker id="fv-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="fv-w" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="warnt" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <style>
-      .dg{--fs:18px;
-        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
-        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
-        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
-        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);--rs:var(--dg-rose-br,#be123c)}
-      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
-      .dg .t{font-size:calc(var(--fs)*1.16);font-weight:700;fill:var(--ink)}
-      .dg .l{font-size:calc(var(--fs)*1.02);font-weight:600;fill:var(--ink)}
-      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
-      .dg .box{stroke-width:2}
-      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
-      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
-      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
-      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
-      .dg .rose{fill:var(--dg-rose-bg,#ffe4e6);stroke:var(--dg-rose-br,#be123c)}
-      .dg .i-rose{fill:var(--dg-rose-br,#be123c);font-weight:700}
-      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#fv-a)}
-      .dg .ed{fill:none;stroke:var(--ln);stroke-width:2;stroke-dasharray:7 6;marker-end:url(#fv-a)}
-      .dg .er{fill:none;stroke:var(--rs);stroke-width:2;marker-end:url(#fv-r)}
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
       .dg [data-i18n]{display:none}
       .dg [data-i18n="en"]{display:inline}
     </style>
   </defs>
 
-  <!-- ========================= left state chain ========================= -->
-  <rect class="box blue" x="24" y="60" width="220" height="84" rx="12"/>
-  <rect class="box slate" x="24" y="190" width="220" height="64" rx="12"/>
-  <rect class="box slate" x="24" y="300" width="220" height="100" rx="12"/>
+  <!-- shapes -->
+  <rect class="card" x="24" y="40" width="176" height="60" rx="8"/>
+  <rect class="chip" x="24" y="140" width="176" height="48" rx="8"/>
+  <rect class="card" x="24" y="228" width="176" height="72" rx="8"/>
 
-  <path class="er" d="M134 148 L134 186"/>
-  <path class="e" d="M134 258 L134 296"/>
-  <path class="ed" d="M76 404 C64 442 204 442 192 404"/>
+  <rect class="card" x="264" y="40" width="192" height="66" rx="8"/>
+  <rect class="card" x="264" y="146" width="192" height="66" rx="8"/>
+  <rect class="card" x="264" y="252" width="192" height="66" rx="8"/>
 
-  <!-- =========================== gate column =========================== -->
-  <rect class="box amber" x="320" y="48" width="230" height="96" rx="12"/>
-  <rect class="box amber" x="320" y="196" width="230" height="96" rx="12"/>
-  <rect class="box amber" x="320" y="336" width="230" height="96" rx="12"/>
+  <rect class="warn" x="512" y="40" width="424" height="66" rx="8"/>
+  <rect class="warn" x="512" y="146" width="424" height="66" rx="8"/>
+  <rect class="warn" x="512" y="252" width="424" height="66" rx="8"/>
 
-  <path class="e" d="M248 350 L268 350 Q276 350 276 342 L276 104 Q276 96 284 96 L316 96"/>
-  <path class="e" d="M435 148 L435 192"/>
-  <path class="e" d="M435 296 L435 332"/>
-  <path class="e" d="M435 436 L435 470"/>
+  <rect class="card" x="264" y="358" width="424" height="64" rx="8"/>
 
-  <!-- ============================ outcomes ============================ -->
-  <path class="er" d="M556 96 L636 96"/>
-  <rect class="box rose" x="640" y="52" width="456" height="92" rx="12"/>
+  <path class="rule" d="M 24 446 H 936"/>
 
-  <path class="er" d="M556 244 L636 244"/>
-  <rect class="box rose" x="640" y="200" width="456" height="92" rx="12"/>
+  <!-- edges -->
+  <path class="warn" d="M 112 100 V 138" marker-end="url(#fv-w)"/>
+  <path class="ln" d="M 112 188 V 226" marker-end="url(#fv-a)"/>
+  <path class="ln dash" d="M 72 302 C 64 336 160 336 152 304" marker-end="url(#fv-a)"/>
+  <path class="ln" d="M 200 264 H 232 V 73 H 262" marker-end="url(#fv-a)"/>
 
-  <path class="er" d="M556 384 L636 384"/>
-  <rect class="box rose" x="640" y="340" width="456" height="88" rx="12"/>
+  <path class="ln" d="M 360 106 V 144" marker-end="url(#fv-a)"/>
+  <path class="ln" d="M 360 212 V 250" marker-end="url(#fv-a)"/>
+  <path class="ln" d="M 360 318 V 356" marker-end="url(#fv-a)"/>
 
-  <rect class="box green" x="320" y="474" width="456" height="68" rx="12"/>
+  <path class="warn" d="M 456 73 H 510" marker-end="url(#fv-w)"/>
+  <path class="warn" d="M 456 179 H 510" marker-end="url(#fv-w)"/>
+  <path class="warn" d="M 456 285 H 510" marker-end="url(#fv-w)"/>
 
-  <!-- ============================= text: en ============================= -->
+  <!-- text: en -->
   <g data-i18n="en">
-    <text class="t" x="134" y="96" text-anchor="middle">streaming</text>
-    <text class="s" x="134" y="122" text-anchor="middle">from the saved GTID</text>
+    <text class="h" x="40" y="66">streaming</text>
+    <text class="s" x="40" y="86">from the saved GTID</text>
+    <text class="s warnt" x="124" y="124">network drop</text>
+    <text class="h" x="40" y="169">connection lost</text>
+    <text class="h" x="40" y="254">reconnect using</text>
+    <text class="h" x="40" y="272">built-in retries</text>
+    <text class="s" x="40" y="290">configured endpoint</text>
+    <text class="s" x="112" y="352" text-anchor="middle">retry</text>
 
-    <text class="l" x="134" y="230" text-anchor="middle">connection lost</text>
+    <text class="h" x="280" y="70">GTID mode</text>
+    <text class="h" x="280" y="88">enabled?</text>
+    <text class="h" x="280" y="176">configured tables</text>
+    <text class="h" x="280" y="194">exist?</text>
+    <text class="h" x="280" y="282">same server</text>
+    <text class="h" x="280" y="300">UUID?</text>
 
-    <text class="l" x="134" y="338" text-anchor="middle">reconnect using</text>
-    <text class="l" x="134" y="362" text-anchor="middle">built-in retries</text>
-    <text class="s" x="134" y="386" text-anchor="middle">configured endpoint</text>
-    <text class="s" x="134" y="446" text-anchor="middle">retry</text>
-    <text class="s i-rose" x="152" y="174">network drop</text>
+    <text class="s" x="372" y="130">yes</text>
+    <text class="s" x="372" y="236">yes</text>
+    <text class="s" x="372" y="342">yes</text>
+    <text class="s warnt" x="484" y="65" text-anchor="middle">no</text>
+    <text class="s warnt" x="484" y="171" text-anchor="middle">no</text>
+    <text class="s warnt" x="484" y="277" text-anchor="middle">no</text>
 
-    <text class="l" x="435" y="90" text-anchor="middle">GTID mode</text>
-    <text class="l" x="435" y="114" text-anchor="middle">enabled?</text>
-    <text class="l" x="435" y="238" text-anchor="middle">configured tables</text>
-    <text class="l" x="435" y="262" text-anchor="middle">exist?</text>
-    <text class="l" x="435" y="378" text-anchor="middle">same server</text>
-    <text class="l" x="435" y="402" text-anchor="middle">UUID?</text>
+    <text class="h warnt" x="528" y="64">replication STOPPED</text>
+    <text class="s" x="528" y="82">GTID mode is off on the upstream server</text>
+    <text class="s" x="528" y="97">manual intervention required</text>
 
-    <text class="s" x="452" y="176">yes</text>
-    <text class="s" x="452" y="320">yes</text>
-    <text class="s" x="452" y="462">yes</text>
-    <text class="s i-rose" x="596" y="84" text-anchor="middle">no</text>
-    <text class="s i-rose" x="596" y="232" text-anchor="middle">no</text>
-    <text class="s" x="596" y="372" text-anchor="middle">no</text>
+    <text class="h warnt" x="528" y="170">replication STOPPED</text>
+    <text class="s" x="528" y="188">a configured table is missing</text>
+    <text class="s" x="528" y="203">manual intervention required</text>
 
-    <text class="t i-rose" x="868" y="88" text-anchor="middle">replication STOPPED</text>
-    <text class="s" x="868" y="112" text-anchor="middle">GTID mode is off on the upstream server</text>
-    <text class="s" x="868" y="132" text-anchor="middle">manual intervention required</text>
+    <text class="h warnt" x="528" y="276">replication STOPPED</text>
+    <text class="s" x="528" y="294">source UUID changed; implicit failover is refused</text>
 
-    <text class="t i-rose" x="868" y="236" text-anchor="middle">replication STOPPED</text>
-    <text class="s" x="868" y="260" text-anchor="middle">a configured table is missing</text>
-    <text class="s" x="868" y="280" text-anchor="middle">manual intervention required</text>
+    <text class="h" x="280" y="386">resume streaming from the saved GTID</text>
+    <text class="s" x="280" y="406">replayed events are applied idempotently</text>
 
-    <text class="t i-rose" x="868" y="376" text-anchor="middle">replication STOPPED</text>
-    <text class="s" x="868" y="404" text-anchor="middle">source UUID changed; implicit failover is refused</text>
-
-    <text class="l" x="548" y="506" text-anchor="middle">resume streaming from the saved GTID</text>
-    <text class="s" x="548" y="530" text-anchor="middle">replayed events are applied idempotently</text>
-
-    <text class="s" x="560" y="568" text-anchor="middle">A changed source UUID fails validation; confirm the source and restart with the intended configuration.</text>
+    <text class="s" x="480" y="472" text-anchor="middle">A changed source UUID fails validation; confirm the source and restart with the intended configuration.</text>
   </g>
 
-  <!-- ============================= text: ja ============================= -->
+  <!-- text: ja -->
   <g data-i18n="ja">
-    <text class="t" x="134" y="96" text-anchor="middle">ストリーミング中</text>
-    <text class="s" x="134" y="122" text-anchor="middle">保存した GTID から</text>
+    <text class="h" x="40" y="66">ストリーミング中</text>
+    <text class="s" x="40" y="86">保存した GTID から</text>
+    <text class="s warnt" x="124" y="124">ネットワーク断</text>
+    <text class="h" x="40" y="169">接続が切れる</text>
+    <text class="h" x="40" y="254">組み込みの間隔で</text>
+    <text class="h" x="40" y="272">再接続</text>
+    <text class="s" x="40" y="290">設定済みの接続先</text>
+    <text class="s" x="112" y="352" text-anchor="middle">再試行</text>
 
-    <text class="l" x="134" y="230" text-anchor="middle">接続が切れる</text>
+    <text class="h" x="280" y="70">GTID モードが</text>
+    <text class="h" x="280" y="88">有効か？</text>
+    <text class="h" x="280" y="176">設定したテーブルが</text>
+    <text class="h" x="280" y="194">存在するか？</text>
+    <text class="h" x="280" y="282">サーバー UUID は</text>
+    <text class="h" x="280" y="300">同じか？</text>
 
-    <text class="l" x="134" y="338" text-anchor="middle">組み込みの間隔で</text>
-    <text class="l" x="134" y="362" text-anchor="middle">再接続</text>
-    <text class="s" x="134" y="386" text-anchor="middle">設定済みの接続先</text>
-    <text class="s" x="134" y="446" text-anchor="middle">再試行</text>
-    <text class="s i-rose" x="152" y="174">ネットワーク断</text>
+    <text class="s" x="372" y="130">はい</text>
+    <text class="s" x="372" y="236">はい</text>
+    <text class="s" x="372" y="342">はい</text>
+    <text class="s warnt" x="484" y="65" text-anchor="middle">いいえ</text>
+    <text class="s warnt" x="484" y="171" text-anchor="middle">いいえ</text>
+    <text class="s warnt" x="484" y="277" text-anchor="middle">いいえ</text>
 
-    <text class="l" x="435" y="90" text-anchor="middle">GTID モードが</text>
-    <text class="l" x="435" y="114" text-anchor="middle">有効か？</text>
-    <text class="l" x="435" y="238" text-anchor="middle">設定したテーブルが</text>
-    <text class="l" x="435" y="262" text-anchor="middle">存在するか？</text>
-    <text class="l" x="435" y="378" text-anchor="middle">サーバー UUID は</text>
-    <text class="l" x="435" y="402" text-anchor="middle">同じか？</text>
+    <text class="h warnt" x="528" y="64">レプリケーション停止</text>
+    <text class="s" x="528" y="82">上流サーバーで GTID モードが無効</text>
+    <text class="s" x="528" y="97">手動での対応が必要</text>
 
-    <text class="s" x="452" y="176">はい</text>
-    <text class="s" x="452" y="320">はい</text>
-    <text class="s" x="452" y="462">はい</text>
-    <text class="s i-rose" x="596" y="84" text-anchor="middle">いいえ</text>
-    <text class="s i-rose" x="596" y="232" text-anchor="middle">いいえ</text>
-    <text class="s" x="596" y="372" text-anchor="middle">いいえ</text>
+    <text class="h warnt" x="528" y="170">レプリケーション停止</text>
+    <text class="s" x="528" y="188">設定したテーブルが見つからない</text>
+    <text class="s" x="528" y="203">手動での対応が必要</text>
 
-    <text class="t i-rose" x="868" y="88" text-anchor="middle">レプリケーション停止</text>
-    <text class="s" x="868" y="112" text-anchor="middle">上流サーバーで GTID モードが無効</text>
-    <text class="s" x="868" y="132" text-anchor="middle">手動での対応が必要</text>
+    <text class="h warnt" x="528" y="276">レプリケーション停止</text>
+    <text class="s" x="528" y="294">ソース UUID の変更は拒否されます</text>
 
-    <text class="t i-rose" x="868" y="236" text-anchor="middle">レプリケーション停止</text>
-    <text class="s" x="868" y="260" text-anchor="middle">設定したテーブルが見つからない</text>
-    <text class="s" x="868" y="280" text-anchor="middle">手動での対応が必要</text>
+    <text class="h" x="280" y="386">保存した GTID からストリーミングを再開</text>
+    <text class="s" x="280" y="406">再送されたイベントの行適用は冪等です</text>
 
-    <text class="t i-rose" x="868" y="376" text-anchor="middle">レプリケーション停止</text>
-    <text class="s" x="868" y="404" text-anchor="middle">ソース UUID の変更は拒否されます</text>
-
-    <text class="l" x="548" y="506" text-anchor="middle">保存した GTID からストリーミングを再開</text>
-    <text class="s" x="548" y="530" text-anchor="middle">再送されたイベントの行適用は冪等です</text>
-
-    <text class="s" x="560" y="568" text-anchor="middle">ソース UUID が変わると検証に失敗します。接続先を確認し、意図した設定で再起動してください。</text>
+    <text class="s" x="480" y="472" text-anchor="middle">ソース UUID が変わると検証に失敗します。接続先を確認し、意図した設定で再起動してください。</text>
   </g>
 </svg>

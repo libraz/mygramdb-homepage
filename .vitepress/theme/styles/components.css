@@ -166,61 +166,38 @@
    properties and every SVG reads it through `var(--dg-*, <light fallback>)`.
    The fallback keeps a diagram file legible when opened on its own. */
 .vp-doc .doc-diagram {
-  --dg-canvas: #f8fafc;
-  --dg-ink: #0f172a;
-  --dg-text: #334155;
-  --dg-muted: #64748b;
-  --dg-line: #475569;
-  --dg-guide: #cbd5e1;
-
-  --dg-blue-bg: #dbeafe;
-  --dg-blue-br: #1d4ed8;
-  --dg-sky-bg: #e0f2fe;
-  --dg-sky-br: #0369a1;
-  --dg-amber-bg: #fef3c7;
-  --dg-amber-br: #b45309;
-  --dg-green-bg: #dcfce7;
-  --dg-green-br: #15803d;
-  --dg-rose-bg: #ffe4e6;
-  --dg-rose-br: #be123c;
-  --dg-slate-bg: #f1f5f9;
-  --dg-slate-br: #64748b;
-  --dg-orange-bg: #fff7ed;
-  --dg-orange-br: #c2410c;
+  --dg-canvas: #f7f5f1;
+  --dg-group: #edeae4;
+  --dg-chip: #ffffff;
+  --dg-chip-br: #d7d4cd;
+  --dg-seam: #b8b4ac;
+  --dg-ink: #1f2328;
+  --dg-muted: #6e7781;
+  --dg-accent: #8a6a1f;
+  --dg-accent-2: #3f6b8a;
+  --dg-warn: #a3401f;
 
   display: block;
   width: 100%;
   max-width: 1000px;
   margin: 26px auto;
-  padding: 18px 20px;
+  padding: 20px;
   background: var(--dg-canvas);
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
 }
 
 .dark .vp-doc .doc-diagram {
-  /* a shade above the page canvas so the figure still reads as a panel */
-  --dg-canvas: #101828;
-  --dg-ink: #e8eefb;
-  --dg-text: #cbd5e1;
-  --dg-muted: #94a3b8;
-  --dg-line: #94a3b8;
-  --dg-guide: #3a4a63;
-
-  --dg-blue-bg: rgba(59, 130, 246, 0.2);
-  --dg-blue-br: #60a5fa;
-  --dg-sky-bg: rgba(14, 165, 233, 0.18);
-  --dg-sky-br: #38bdf8;
-  --dg-amber-bg: rgba(245, 158, 11, 0.18);
-  --dg-amber-br: #fbbf24;
-  --dg-green-bg: rgba(34, 197, 94, 0.18);
-  --dg-green-br: #4ade80;
-  --dg-rose-bg: rgba(244, 63, 94, 0.18);
-  --dg-rose-br: #fb7185;
-  --dg-slate-bg: rgba(148, 163, 184, 0.14);
-  --dg-slate-br: #94a3b8;
-  --dg-orange-bg: rgba(249, 115, 22, 0.18);
-  --dg-orange-br: #fb923c;
+  --dg-canvas: #0d1117;
+  --dg-group: #12171d;
+  --dg-chip: #161b22;
+  --dg-chip-br: #30363d;
+  --dg-seam: #484f58;
+  --dg-ink: #e6edf3;
+  --dg-muted: #8b949e;
+  --dg-accent: #d9b45c;
+  --dg-accent-2: #7fb3d5;
+  --dg-warn: #e08a68;
 
   border-color: var(--mg-panel-border);
 }

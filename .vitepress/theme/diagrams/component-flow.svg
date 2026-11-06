@@ -1,115 +1,118 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1120 430" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 372" role="img">
   <title>MygramDB component flow</title>
   <defs>
-    <marker id="cf-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    <marker id="cf-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="cf-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <style>
-      .dg{--fs:16px;
-        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
-        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
-        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
-        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
-      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
-      .dg .t{font-size:calc(var(--fs)*1.14);font-weight:700;fill:var(--ink)}
-      .dg .t2{font-size:var(--fs);font-weight:700;fill:var(--ink)}
-      .dg .s{font-size:calc(var(--fs)*0.82);fill:var(--mut)}
-      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.82);fill:var(--mut)}
-      .dg .box{stroke-width:2}
-      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
-      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
-      .dg .orange{fill:var(--dg-orange-bg,#fff7ed);stroke:var(--dg-orange-br,#c2410c)}
-      .dg .slate{fill:var(--dg-slate-bg,#f1f5f9);stroke:var(--dg-slate-br,#64748b)}
-      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#cf-a)}
-      .dg .ed{fill:none;stroke:var(--ln);stroke-width:2;stroke-dasharray:7 6;marker-end:url(#cf-a)}
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
       .dg [data-i18n]{display:none}
       .dg [data-i18n="en"]{display:inline}
     </style>
   </defs>
 
   <!-- shapes -->
-  <rect class="box sky" x="24" y="132" width="150" height="96" rx="12"/>
-  <rect class="box blue" x="252" y="132" width="176" height="96" rx="12"/>
-  <rect class="box blue" x="520" y="112" width="196" height="136" rx="14"/>
-  <rect class="box blue" x="780" y="132" width="164" height="96" rx="12"/>
-  <rect class="box orange" x="978" y="62" width="122" height="86" rx="12"/>
-  <rect class="box orange" x="978" y="212" width="122" height="86" rx="12"/>
-  <rect class="box slate" x="520" y="322" width="196" height="72" rx="12"/>
+  <rect class="alt" x="24" y="76" width="120" height="72" rx="8"/>
+  <rect class="card" x="200" y="76" width="128" height="72" rx="8"/>
+  <rect class="card" x="400" y="56" width="176" height="112" rx="8"/>
+  <rect class="card" x="632" y="76" width="128" height="72" rx="8"/>
+  <rect class="chip" x="816" y="24" width="112" height="80" rx="8"/>
+  <rect class="chip" x="816" y="128" width="112" height="80" rx="8"/>
+  <rect class="chip" x="400" y="232" width="176" height="64" rx="8"/>
 
   <!-- edges -->
-  <path class="e" d="M178 180 L248 180"/>
-  <path class="e" d="M432 180 L516 180"/>
-  <path class="e" d="M720 180 L776 180"/>
-  <path class="e" d="M948 160 L974 118"/>
-  <path class="e" d="M948 200 L974 246"/>
-  <path class="e" d="M588 252 L588 318"/>
-  <path class="ed" d="M648 318 L648 252"/>
+  <path class="ln2" d="M 144 112 H 198" marker-end="url(#cf-b)"/>
+  <path class="ln" d="M 328 112 H 398" marker-end="url(#cf-a)"/>
+  <path class="ln" d="M 576 112 H 630" marker-end="url(#cf-a)"/>
+  <path class="ln" d="M 760 112 H 788 V 64 H 814" marker-end="url(#cf-a)"/>
+  <path class="ln" d="M 760 112 H 788 V 168 H 814" marker-end="url(#cf-a)"/>
+  <path class="ln" d="M 424 170 V 230" marker-end="url(#cf-a)"/>
+  <path class="ln dash" d="M 552 232 V 172" marker-end="url(#cf-a)"/>
+
+  <!-- language-neutral text -->
+  <text class="h" x="40" y="106">MySQL</text>
+  <text class="h" x="216" y="106">BinlogReader</text>
+  <text class="h" x="416" y="82">Index + DocStore</text>
+  <text class="h" x="648" y="106">SearchHandler</text>
+  <text class="mono" x="832" y="90">port 11016</text>
+  <text class="mono" x="832" y="194">port 8080</text>
+  <text class="s" x="172" y="104" text-anchor="middle">binlog</text>
 
   <!-- text: en -->
   <g data-i18n="en">
-    <text class="t" x="99" y="176" text-anchor="middle">MySQL</text>
-    <text class="s" x="99" y="200" text-anchor="middle">source of truth</text>
+    <text class="s" x="40" y="126">source of truth</text>
 
-    <text class="t" x="340" y="170" text-anchor="middle">BinlogReader</text>
-    <text class="s" x="340" y="196" text-anchor="middle">follows the GTID stream</text>
+    <text class="s" x="216" y="124">follows the</text>
+    <text class="s" x="216" y="139">GTID stream</text>
 
-    <text class="t" x="618" y="152" text-anchor="middle">Index + DocStore</text>
-    <text class="s" x="618" y="180" text-anchor="middle">n-grams, posting lists,</text>
-    <text class="s" x="618" y="202" text-anchor="middle">primary keys and filters</text>
-    <text class="s" x="618" y="228" text-anchor="middle">held in memory</text>
+    <text class="s" x="416" y="104">n-grams, posting lists,</text>
+    <text class="s" x="416" y="120">primary keys and filters</text>
+    <text class="s" x="416" y="136">held in memory</text>
 
-    <text class="t" x="862" y="170" text-anchor="middle">SearchHandler</text>
-    <text class="s" x="862" y="196" text-anchor="middle">parse and execute</text>
+    <text class="s" x="648" y="124">parse and execute</text>
 
-    <text class="t2" x="1039" y="100" text-anchor="middle">TCP client</text>
-    <text class="m" x="1039" y="134" text-anchor="middle">port 11016</text>
-    <text class="t2" x="1039" y="250" text-anchor="middle">HTTP client</text>
-    <text class="m" x="1039" y="284" text-anchor="middle">port 8080</text>
+    <text class="h" x="832" y="52">TCP client</text>
+    <text class="h" x="832" y="156">HTTP client</text>
 
-    <text class="t" x="618" y="354" text-anchor="middle">Snapshot file</text>
-    <text class="s" x="618" y="378" text-anchor="middle">index + GTID position</text>
+    <text class="h" x="416" y="258">Snapshot file</text>
+    <text class="s" x="416" y="276">index + GTID position</text>
 
-    <text class="s" x="213" y="166" text-anchor="middle">binlog</text>
-    <text class="s" x="476" y="166" text-anchor="middle">row events</text>
-    <text class="s" x="750" y="166" text-anchor="middle">results</text>
-    <text class="s" x="500" y="290" text-anchor="end">periodic dump</text>
-    <text class="s" x="736" y="290" text-anchor="start">load on startup</text>
+    <text class="s" x="364" y="104" text-anchor="middle">row events</text>
+    <text class="s" x="603" y="104" text-anchor="middle">results</text>
+    <text class="s" x="412" y="204" text-anchor="end">periodic dump</text>
+    <text class="s" x="564" y="204">load on startup</text>
 
-    <text class="s" x="560" y="418" text-anchor="middle">Every component after BinlogReader is derived state — it can be rebuilt from MySQL at any time.</text>
+    <text class="s" x="480" y="336" text-anchor="middle">Every component after BinlogReader is derived state — it can be rebuilt from MySQL at any time.</text>
   </g>
 
   <!-- text: ja -->
   <g data-i18n="ja">
-    <text class="t" x="99" y="176" text-anchor="middle">MySQL</text>
-    <text class="s" x="99" y="200" text-anchor="middle">正となるデータ</text>
+    <text class="s" x="40" y="126">正となるデータ</text>
 
-    <text class="t" x="340" y="170" text-anchor="middle">BinlogReader</text>
-    <text class="s" x="340" y="196" text-anchor="middle">GTID ストリームを追従</text>
+    <text class="s" x="216" y="124">GTID ストリームを</text>
+    <text class="s" x="216" y="139">追従</text>
 
-    <text class="t" x="618" y="152" text-anchor="middle">Index + DocStore</text>
-    <text class="s" x="618" y="180" text-anchor="middle">ポスティングリスト</text>
-    <text class="s" x="618" y="202" text-anchor="middle">主キー・フィルタ値</text>
-    <text class="s" x="618" y="228" text-anchor="middle">すべてメモリ上に保持</text>
+    <text class="s" x="416" y="104">N-gram・ポスティングリスト</text>
+    <text class="s" x="416" y="120">主キー・フィルタ値</text>
+    <text class="s" x="416" y="136">すべてメモリ上に保持</text>
 
-    <text class="t" x="862" y="170" text-anchor="middle">SearchHandler</text>
-    <text class="s" x="862" y="196" text-anchor="middle">解析して実行</text>
+    <text class="s" x="648" y="124">解析して実行</text>
 
-    <text class="t2" x="1039" y="92" text-anchor="middle">TCP</text>
-    <text class="t2" x="1039" y="112" text-anchor="middle">クライアント</text>
-    <text class="m" x="1039" y="134" text-anchor="middle">port 11016</text>
-    <text class="t2" x="1039" y="242" text-anchor="middle">HTTP</text>
-    <text class="t2" x="1039" y="262" text-anchor="middle">クライアント</text>
-    <text class="m" x="1039" y="284" text-anchor="middle">port 8080</text>
+    <text class="h" x="832" y="50">TCP</text>
+    <text class="h" x="832" y="68">クライアント</text>
+    <text class="h" x="832" y="154">HTTP</text>
+    <text class="h" x="832" y="172">クライアント</text>
 
-    <text class="t" x="618" y="354" text-anchor="middle">スナップショット</text>
-    <text class="s" x="618" y="378" text-anchor="middle">インデックス + GTID 位置</text>
+    <text class="h" x="416" y="258">スナップショット</text>
+    <text class="s" x="416" y="276">インデックス + GTID 位置</text>
 
-    <text class="s" x="213" y="166" text-anchor="middle">binlog</text>
-    <text class="s" x="476" y="166" text-anchor="middle">行イベント</text>
-    <text class="s" x="750" y="166" text-anchor="middle">検索結果</text>
-    <text class="s" x="500" y="290" text-anchor="end">定期ダンプ</text>
-    <text class="s" x="736" y="290" text-anchor="start">起動時に読み込み</text>
+    <text class="s" x="364" y="104" text-anchor="middle">行イベント</text>
+    <text class="s" x="603" y="104" text-anchor="middle">検索結果</text>
+    <text class="s" x="412" y="204" text-anchor="end">定期ダンプ</text>
+    <text class="s" x="564" y="204">起動時に読み込み</text>
 
-    <text class="s" x="560" y="418" text-anchor="middle">BinlogReader 以降はすべて派生データで、いつでも MySQL から再構築できます。</text>
+    <text class="s" x="480" y="336" text-anchor="middle">BinlogReader 以降はすべて派生データで、いつでも MySQL から再構築できます。</text>
   </g>
 </svg>

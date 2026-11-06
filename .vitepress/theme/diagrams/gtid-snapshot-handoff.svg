@@ -1,109 +1,108 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1080 430" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 408" role="img">
   <title>Consistent snapshot to binlog handoff</title>
   <defs>
-    <marker id="gs-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    <marker id="gs-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="gs-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <style>
-      .dg{--fs:17px;
-        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
-        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
-        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
-        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1)}
-      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
-      .dg .l{font-size:calc(var(--fs)*1.06);font-weight:600;fill:var(--ink)}
-      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
-      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.8);font-weight:600;fill:var(--txt)}
-      .dg .box{stroke-width:2}
-      .dg .amber{fill:var(--dg-amber-bg,#fef3c7);stroke:var(--dg-amber-br,#b45309)}
-      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
-      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
-      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
-      .dg .i-amber{fill:var(--dg-amber-br,#b45309);font-weight:700}
-      .dg .i-blue{fill:var(--dg-blue-br,#1d4ed8)}
-      .dg .i-green{fill:var(--dg-green-br,#15803d)}
-      .dg .axis{fill:none;stroke:var(--ln);stroke-width:2.5}
-      .dg .stream{fill:none;stroke:var(--ln);stroke-width:2.5;marker-end:url(#gs-a)}
-      .dg .tick{stroke:var(--ln);stroke-width:2}
-      .dg .guide{fill:none;stroke:var(--gd);stroke-width:1.5;stroke-dasharray:6 6}
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
       .dg [data-i18n]{display:none}
       .dg [data-i18n="en"]{display:inline}
     </style>
   </defs>
 
-  <!-- guides first: the opaque spans below hide the segments that would
-       otherwise run straight through a label -->
-  <line class="guide" x1="360" y1="92" x2="360" y2="372"/>
-  <line class="guide" x1="790" y1="72" x2="790" y2="372"/>
+  <!-- guides sit behind the boxes so the opaque shapes hide the segments that cross them -->
+  <path class="seam" d="M 300 96 V 290"/>
+  <path class="seam" d="M 640 40 V 290"/>
 
-  <!-- ============================ shapes ============================ -->
-  <rect class="box amber" x="24" y="24" width="560" height="64" rx="10"/>
-  <rect class="box green" x="800" y="24" width="256" height="44" rx="22"/>
+  <!-- shapes -->
+  <rect class="card" x="24" y="40" width="352" height="56" rx="8"/>
+  <rect class="chip" x="656" y="40" width="160" height="32" rx="5"/>
 
-  <rect class="box sky" x="360" y="110" width="640" height="76" rx="10"/>
-  <rect class="box blue" x="360" y="296" width="430" height="76" rx="10"/>
+  <rect class="alt" x="300" y="112" width="636" height="60" rx="8"/>
 
-  <!-- ============================= timeline ============================= -->
-  <line class="axis" x1="60" y1="250" x2="790" y2="250"/>
-  <path class="stream" d="M790 250 L1032 250"/>
+  <rect class="card" x="300" y="290" width="340" height="64" rx="8"/>
+  <rect class="card" x="656" y="290" width="280" height="64" rx="8"/>
 
-  <line class="tick" x1="180" y1="243" x2="180" y2="257"/>
-  <line class="tick" x1="270" y1="243" x2="270" y2="257"/>
-  <line class="tick" x1="470" y1="243" x2="470" y2="257"/>
-  <line class="tick" x1="590" y1="243" x2="590" y2="257"/>
-  <line class="tick" x1="790" y1="243" x2="790" y2="257"/>
+  <path class="rule" d="M 24 374 H 936"/>
 
-  <polygon class="box amber" points="360,228 382,250 360,272 338,250"/>
+  <!-- timeline -->
+  <path class="ln2" d="M 40 232 H 640"/>
+  <path class="ln" d="M 640 232 H 934" marker-end="url(#gs-a)"/>
+  <path class="rule" d="M 100 225 V 239"/>
+  <path class="rule" d="M 180 225 V 239"/>
+  <path class="rule" d="M 400 225 V 239"/>
+  <path class="rule" d="M 500 225 V 239"/>
+  <path class="rule" d="M 640 225 V 239"/>
+  <polygon class="card" points="300,219 313,232 300,245 287,232"/>
 
-  <!-- ============================= text: en ============================= -->
+  <!-- language-neutral text -->
+  <text class="mono" x="100" y="214" text-anchor="middle">N-2</text>
+  <text class="mono" x="180" y="214" text-anchor="middle">N-1</text>
+  <text class="mono" x="400" y="214" text-anchor="middle">N+1</text>
+  <text class="mono" x="500" y="214" text-anchor="middle">…</text>
+  <text class="mono" x="650" y="214">M</text>
+  <text class="mono" x="316" y="268">t0 = N</text>
+
+  <!-- text: en -->
   <g data-i18n="en">
-    <text class="l" x="304" y="52" text-anchor="middle">Capture safe lower-bound GTID = N</text>
-    <text class="s" x="304" y="76" text-anchor="middle">then START TRANSACTION WITH CONSISTENT SNAPSHOT</text>
-    <text class="l i-green" x="928" y="52" text-anchor="middle">no missed commits</text>
+    <text class="h" x="40" y="66">Capture safe lower-bound GTID = N</text>
+    <text class="s" x="40" y="84">then <tspan class="mono">START TRANSACTION WITH CONSISTENT SNAPSHOT</tspan></text>
+    <text class="h" x="672" y="61">no missed commits</text>
 
-    <text class="l" x="680" y="142" text-anchor="middle">application writes continue</text>
-    <text class="s" x="680" y="168" text-anchor="middle">transactions after N appear in the binlog</text>
+    <text class="h" x="316" y="138">application writes continue</text>
+    <text class="s" x="316" y="156">transactions after N appear in the binlog</text>
 
-    <text class="m" x="180" y="232" text-anchor="middle">N-2</text>
-    <text class="m" x="270" y="232" text-anchor="middle">N-1</text>
-    <text class="m" x="470" y="232" text-anchor="middle">N+1</text>
-    <text class="m" x="590" y="232" text-anchor="middle">…</text>
-    <text class="m" x="790" y="232" text-anchor="middle">M</text>
-    <text class="s" x="920" y="232" text-anchor="middle">real time →</text>
-    <text class="s i-amber" x="360" y="292" text-anchor="middle">t0 = N</text>
+    <text class="s" x="936" y="214" text-anchor="end">real time →</text>
 
-    <text class="l" x="575" y="328" text-anchor="middle">table data read inside the transaction</text>
-    <text class="s" x="575" y="354" text-anchor="middle">the view may include commits after N</text>
+    <text class="h" x="316" y="316">table data read inside the transaction</text>
+    <text class="s" x="316" y="334">the view may include commits after N</text>
 
-    <text class="l i-blue" x="935" y="326" text-anchor="middle">replay after N</text>
-    <text class="s" x="935" y="352" text-anchor="middle">then follow live writes</text>
+    <text class="h" x="672" y="316">replay after N</text>
+    <text class="s" x="672" y="334">then follow live writes</text>
 
-    <text class="s" x="540" y="406" text-anchor="middle">The lower bound prevents gaps; some commits may replay after the snapshot, and row updates are idempotent.</text>
+    <text class="s" x="480" y="398" text-anchor="middle">The lower bound prevents gaps; some commits may replay after the snapshot, and row updates are idempotent.</text>
   </g>
 
-  <!-- ============================= text: ja ============================= -->
+  <!-- text: ja -->
   <g data-i18n="ja">
-    <text class="l" x="304" y="52" text-anchor="middle">安全な下限 GTID = N を取得</text>
-    <text class="s" x="304" y="76" text-anchor="middle">その後に整合スナップショットのトランザクションを開始</text>
-    <text class="l i-green" x="928" y="52" text-anchor="middle">コミットの欠落なし</text>
+    <text class="h" x="40" y="66">安全な下限 GTID = N を取得</text>
+    <text class="s" x="40" y="84">その後に整合スナップショットのトランザクションを開始</text>
+    <text class="h" x="672" y="61">コミットの欠落なし</text>
 
-    <text class="l" x="680" y="142" text-anchor="middle">アプリの書き込みは続く</text>
-    <text class="s" x="680" y="168" text-anchor="middle">N 以降のトランザクションが binlog に記録される</text>
+    <text class="h" x="316" y="138">アプリの書き込みは続く</text>
+    <text class="s" x="316" y="156">N 以降のトランザクションが binlog に記録される</text>
 
-    <text class="m" x="180" y="232" text-anchor="middle">N-2</text>
-    <text class="m" x="270" y="232" text-anchor="middle">N-1</text>
-    <text class="m" x="470" y="232" text-anchor="middle">N+1</text>
-    <text class="m" x="590" y="232" text-anchor="middle">…</text>
-    <text class="m" x="790" y="232" text-anchor="middle">M</text>
-    <text class="s" x="920" y="232" text-anchor="middle">実時間 →</text>
-    <text class="s i-amber" x="360" y="292" text-anchor="middle">t0 = N</text>
+    <text class="s" x="936" y="214" text-anchor="end">実時間 →</text>
 
-    <text class="l" x="575" y="328" text-anchor="middle">テーブルはこのトランザクション内で読む</text>
-    <text class="s" x="575" y="354" text-anchor="middle">N より後のコミットを含む場合がある</text>
+    <text class="h" x="316" y="316">テーブルはこのトランザクション内で読む</text>
+    <text class="s" x="316" y="334">N より後のコミットを含む場合がある</text>
 
-    <text class="l i-blue" x="935" y="326" text-anchor="middle">N 以降を再適用</text>
-    <text class="s" x="935" y="352" text-anchor="middle">追いついた後は継続追従</text>
+    <text class="h" x="672" y="316">N 以降を再適用</text>
+    <text class="s" x="672" y="334">追いついた後は継続追従</text>
 
-    <text class="s" x="540" y="406" text-anchor="middle">下限で欠落を防ぎます。スナップショット後に一部を再適用する場合がありますが、行更新は冪等です。</text>
+    <text class="s" x="480" y="398" text-anchor="middle">下限で欠落を防ぎます。スナップショット後に一部を再適用する場合がありますが、行更新は冪等です。</text>
   </g>
 </svg>

@@ -1,100 +1,103 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 1040 400" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 364" role="img">
   <title>Where MygramDB sits</title>
   <defs>
-    <marker id="dt-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10z" fill="var(--ln)"/>
+    <marker id="dt-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="dt-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <style>
-      .dg{--fs:16px;
-        --dgf:'IBM Plex Sans','Hiragino Sans','Noto Sans JP','Yu Gothic',Meiryo,system-ui,sans-serif;
-        --dgm:'IBM Plex Mono','SF Mono',Consolas,monospace;
-        --ink:var(--dg-ink,#0f172a);--txt:var(--dg-text,#334155);--mut:var(--dg-muted,#64748b);
-        --ln:var(--dg-line,#475569);--gd:var(--dg-guide,#cbd5e1);--rs:var(--dg-rose-br,#be123c)}
-      .dg text{font-family:var(--dgf);font-size:var(--fs);font-weight:500;fill:var(--txt)}
-      .dg .t{font-size:calc(var(--fs)*1.28);font-weight:700;fill:var(--ink)}
-      .dg .l{font-size:calc(var(--fs)*1.06);font-weight:600;fill:var(--ink)}
-      .dg .s{font-size:calc(var(--fs)*0.85);fill:var(--mut)}
-      .dg .m{font-family:var(--dgm);font-size:calc(var(--fs)*0.82);font-weight:600;fill:var(--txt)}
-      .dg .box{stroke-width:2}
-      .dg .sky{fill:var(--dg-sky-bg,#e0f2fe);stroke:var(--dg-sky-br,#0369a1)}
-      .dg .blue{fill:var(--dg-blue-bg,#dbeafe);stroke:var(--dg-blue-br,#1d4ed8)}
-      .dg .green{fill:var(--dg-green-bg,#dcfce7);stroke:var(--dg-green-br,#15803d)}
-      .dg .orange{fill:var(--dg-orange-bg,#fff7ed);stroke:var(--dg-orange-br,#c2410c)}
-      .dg .e{fill:none;stroke:var(--ln);stroke-width:2;marker-end:url(#dt-a)}
-      .dg .ed{fill:none;stroke:var(--ln);stroke-width:2;stroke-dasharray:7 6;marker-end:url(#dt-a)}
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
       .dg [data-i18n]{display:none}
       .dg [data-i18n="en"]{display:inline}
     </style>
   </defs>
 
-  <!-- ============================ shapes ============================ -->
-  <rect class="box orange" x="20" y="98" width="210" height="140" rx="12"/>
-  <rect class="box sky" x="390" y="98" width="240" height="140" rx="12"/>
-  <rect class="box sky" x="420" y="186" width="180" height="34" rx="17" fill-opacity="0.55"/>
+  <!-- shapes -->
+  <rect class="chip" x="24" y="88" width="160" height="104" rx="8"/>
+  <rect class="alt" x="304" y="88" width="184" height="104" rx="8"/>
 
-  <rect class="box blue" x="760" y="50" width="260" height="226" rx="14"/>
-  <rect class="box blue" x="782" y="214" width="216" height="34" rx="17" fill-opacity="0.55"/>
+  <rect class="card" x="624" y="24" width="312" height="184" rx="8"/>
+  <rect class="chip" x="640" y="68" width="280" height="64" rx="5"/>
+  <rect class="chip" x="640" y="144" width="280" height="48" rx="5"/>
 
-  <rect class="box green" x="560" y="286" width="170" height="34" rx="17"/>
+  <!-- edges -->
+  <path class="ln2" d="M 184 140 H 302" marker-end="url(#dt-b)"/>
+  <path class="ln2" d="M 488 116 H 622" marker-end="url(#dt-b)"/>
+  <path class="ln2 dash" d="M 488 170 H 622" marker-end="url(#dt-b)"/>
+  <path class="ln" d="M 104 192 V 268 H 780 V 210" marker-end="url(#dt-a)"/>
 
-  <!-- ============================= edges ============================= -->
-  <path class="e" d="M234 168 L386 168"/>
-  <path class="e" d="M634 140 L756 140"/>
-  <path class="ed" d="M634 210 L756 210"/>
-  <path class="e" d="M125 242 L125 322 Q125 330 133 330 L882 330 Q890 330 890 322 L890 280"/>
+  <rect class="chip" x="500" y="254" width="128" height="28" rx="5"/>
 
-  <!-- ============================= text: en ============================= -->
+  <path class="rule" d="M 24 312 H 936"/>
+
+  <!-- language-neutral text -->
+  <text class="h" x="320" y="114">MySQL / MariaDB</text>
+  <text class="h" x="640" y="50">MygramDB</text>
+  <text class="mono" x="780" y="173" text-anchor="middle">TCP 11016 / HTTP 8080</text>
+  <text class="mono" x="564" y="272" text-anchor="middle">TCP / HTTP API</text>
+
+  <!-- text: en -->
   <g data-i18n="en">
-    <text class="t" x="125" y="140" text-anchor="middle">Application</text>
-    <text x="125" y="174" text-anchor="middle">writes SQL as before</text>
-    <text class="s" x="125" y="202" text-anchor="middle">search calls use MygramDB</text>
+    <text class="h" x="40" y="114">Application</text>
+    <text x="40" y="136">writes SQL as before</text>
+    <text class="s" x="40" y="156">search calls use</text>
+    <text class="s" x="40" y="171">MygramDB</text>
 
-    <text class="t" x="510" y="140" text-anchor="middle">MySQL / MariaDB</text>
-    <text class="s" x="510" y="172" text-anchor="middle">all writes land here</text>
-    <text class="s" x="510" y="208" text-anchor="middle">source of truth</text>
+    <text class="s" x="320" y="138">all writes land here</text>
+    <text class="s" x="320" y="156">source of truth</text>
 
-    <text class="t" x="890" y="88" text-anchor="middle">MygramDB</text>
-    <text class="l" x="890" y="136" text-anchor="middle">in-memory n-gram index</text>
-    <text class="s" x="890" y="166" text-anchor="middle">BM25 · filters · facets</text>
-    <text class="s" x="890" y="236" text-anchor="middle">TCP 11016 / HTTP 8080</text>
+    <text class="h" x="656" y="94">in-memory n-gram index</text>
+    <text class="s" x="656" y="114">BM25 · filters · facets</text>
 
-    <text class="s" x="310" y="156" text-anchor="middle">writes (unchanged)</text>
-    <text class="s" x="695" y="112" text-anchor="middle">GTID binlog</text>
-    <text class="s" x="695" y="129" text-anchor="middle">stream</text>
-    <text class="s" x="695" y="234" text-anchor="middle">initial SYNC</text>
-    <text class="s" x="695" y="251" text-anchor="middle">snapshot</text>
+    <text class="s" x="244" y="130" text-anchor="middle">writes (unchanged)</text>
+    <text class="s" x="555" y="106" text-anchor="middle">GTID binlog stream</text>
+    <text class="s" x="555" y="188" text-anchor="middle">initial SYNC</text>
+    <text class="s" x="555" y="203" text-anchor="middle">snapshot</text>
+    <text class="s" x="120" y="260">search queries</text>
 
-    <text class="s" x="300" y="318" text-anchor="middle">search queries</text>
-    <text class="l" x="645" y="308" text-anchor="middle">TCP / HTTP API</text>
-
-    <text class="s" x="520" y="374" text-anchor="middle">No write-path changes — MygramDB is a read-only search sidecar, not a second datastore.</text>
+    <text class="s" x="480" y="338" text-anchor="middle">No write-path changes — MygramDB is a read-only search sidecar, not a second datastore.</text>
   </g>
 
-  <!-- ============================= text: ja ============================= -->
+  <!-- text: ja -->
   <g data-i18n="ja">
-    <text class="t" x="125" y="140" text-anchor="middle">アプリケーション</text>
-    <text x="125" y="174" text-anchor="middle">SQL は従来どおり</text>
-    <text class="s" x="125" y="202" text-anchor="middle">検索先は MygramDB へ変更</text>
+    <text class="h" x="40" y="114">アプリケーション</text>
+    <text x="40" y="136">SQL は従来どおり</text>
+    <text class="s" x="40" y="156">検索先は</text>
+    <text class="s" x="40" y="171">MygramDB へ変更</text>
 
-    <text class="t" x="510" y="140" text-anchor="middle">MySQL / MariaDB</text>
-    <text class="s" x="510" y="172" text-anchor="middle">書き込みはすべてここへ</text>
-    <text class="s" x="510" y="208" text-anchor="middle">正となるデータ</text>
+    <text class="s" x="320" y="138">書き込みはすべてここへ</text>
+    <text class="s" x="320" y="156">正となるデータ</text>
 
-    <text class="t" x="890" y="88" text-anchor="middle">MygramDB</text>
-    <text class="l" x="890" y="128" text-anchor="middle">インメモリ</text>
-    <text class="l" x="890" y="152" text-anchor="middle">N-gram インデックス</text>
-    <text class="s" x="890" y="180" text-anchor="middle">BM25・フィルタ・ファセット</text>
-    <text class="s" x="890" y="236" text-anchor="middle">TCP 11016 / HTTP 8080</text>
+    <text class="h" x="656" y="94">インメモリ N-gram インデックス</text>
+    <text class="s" x="656" y="114">BM25・フィルタ・ファセット</text>
 
-    <text class="s" x="310" y="156" text-anchor="middle">書き込み（変更なし）</text>
-    <text class="s" x="695" y="112" text-anchor="middle">GTID binlog</text>
-    <text class="s" x="695" y="129" text-anchor="middle">ストリーム</text>
-    <text class="s" x="695" y="234" text-anchor="middle">初回 SYNC</text>
-    <text class="s" x="695" y="251" text-anchor="middle">スナップショット</text>
+    <text class="s" x="244" y="130" text-anchor="middle">書き込み（変更なし）</text>
+    <text class="s" x="555" y="106" text-anchor="middle">GTID binlog ストリーム</text>
+    <text class="s" x="555" y="188" text-anchor="middle">初回 SYNC</text>
+    <text class="s" x="555" y="203" text-anchor="middle">スナップショット</text>
+    <text class="s" x="120" y="260">検索クエリ</text>
 
-    <text class="s" x="300" y="318" text-anchor="middle">検索クエリ</text>
-    <text class="l" x="645" y="308" text-anchor="middle">TCP / HTTP API</text>
-
-    <text class="s" x="520" y="374" text-anchor="middle">書き込み経路は変わりません。MygramDB は読み取り専用の検索サイドカーで、第二のデータストアではありません。</text>
+    <text class="s" x="480" y="338" text-anchor="middle">書き込み経路は変わりません。MygramDB は読み取り専用の検索サイドカーで、第二のデータストアではありません。</text>
   </g>
 </svg>
