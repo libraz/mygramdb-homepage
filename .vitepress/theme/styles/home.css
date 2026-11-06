@@ -133,29 +133,19 @@
 }
 
 /* --------------------------------------------------------- Custom callouts */
-/* soft filled cards with no edge decoration — severity is carried by the
-   background tint (deepened from VitePress's own per-type token) and by the
-   role-coloured type label + leading icon, never by an accent bar */
+/* light tint + full 1px hairline in the block's semantic hue, never an accent
+   bar; mixing into --vp-c-bg keeps the tint faint in both light and dark */
 .VPHome .vp-doc .custom-block {
-  border: none;
+  --mg-callout-hue: var(--vp-c-text-3);
+  background: color-mix(in srgb, var(--mg-callout-hue) 6%, var(--vp-c-bg));
+  border: 1px solid color-mix(in srgb, var(--mg-callout-hue) 24%, transparent);
   border-radius: 12px;
 }
 
-/* deepen each block's native VitePress tint toward its semantic hue so the
-   severity ordering reads without a coloured border (adapts in dark mode
-   because the base token and --mg-slow-1 both flip) */
-.VPHome .vp-doc .custom-block.tip {
-  background: color-mix(in srgb, var(--vp-custom-block-tip-bg) 80%, var(--vp-c-brand-3));
-}
-.VPHome .vp-doc .custom-block.warning {
-  background: color-mix(in srgb, var(--vp-custom-block-warning-bg) 82%, #b45309);
-}
-.VPHome .vp-doc .custom-block.danger {
-  background: color-mix(in srgb, var(--vp-custom-block-danger-bg) 82%, var(--mg-slow-1));
-}
-.VPHome .vp-doc .custom-block.caution {
-  background: color-mix(in srgb, var(--vp-custom-block-caution-bg) 82%, var(--mg-slow-1));
-}
+.VPHome .vp-doc .custom-block.tip { --mg-callout-hue: var(--vp-c-brand-3); }
+.VPHome .vp-doc .custom-block.warning { --mg-callout-hue: #d97706; }
+.VPHome .vp-doc .custom-block.danger,
+.VPHome .vp-doc .custom-block.caution { --mg-callout-hue: var(--mg-slow-1); }
 
 /* role-coloured type label; the leading icon inherits this via currentColor */
 .VPHome .vp-doc .custom-block.tip .custom-block-title { color: var(--vp-c-brand-3); }
@@ -206,7 +196,8 @@
 .VPHome .VPHero::before {
   content: '';
   position: absolute;
-  inset: -120px -40px 0;
+  /* no horizontal bleed: any negative left/right inset widens the page */
+  inset: -120px 0 0;
   z-index: 0;
   pointer-events: none;
   background-image:
@@ -415,6 +406,114 @@
   border-bottom: 1px solid var(--vp-c-divider);
 }
 
+/* ---------------------------------------------------- Quick-start steps */
+/* numbered step headings, set with `### Title {.qs-step}` in the page */
+.VPHome .vp-doc.container {
+  counter-reset: qs-step;
+}
+
+.VPHome .vp-doc.container h3.qs-step {
+  counter-increment: qs-step;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 36px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.VPHome .vp-doc.container h3.qs-step::before {
+  content: counter(qs-step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  border: 1px solid color-mix(in srgb, var(--vp-c-brand-3) 28%, transparent);
+  border-radius: 50%;
+}
+
+/* -------------------------------------------------------- Client cards */
+.VPHome .vp-doc .client-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 16px;
+}
+
+.VPHome .vp-doc .client-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+}
+
+.VPHome .vp-doc .client-card__lang {
+  font-family: var(--mg-font-head);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--vp-c-text-1);
+}
+
+.VPHome .vp-doc .client-card code.client-card__install {
+  display: block;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow-x: auto;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg);
+  border-radius: 6px;
+}
+
+.VPHome .vp-doc .client-card__repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vp-c-text-2);
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.VPHome .vp-doc .client-card__repo:hover {
+  color: var(--vp-c-brand-1);
+}
+
+/* ------------------------------------------------------ Related projects */
+.VPHome .vp-doc .repo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.VPHome .vp-doc .repo-grid .repo-card {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+}
+
+/* tags sit on a shared baseline across cards of different text length */
+.VPHome .vp-doc .repo-grid .repo-card__tags {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
 /* ---------------------------------------------------------------- Responsive */
 @media (max-width: 640px) {
   .VPHero .name {
@@ -426,5 +525,12 @@
   .VPHero .VPButton {
     min-width: 0;
     flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .VPHome .vp-doc .client-grid,
+  .VPHome .vp-doc .repo-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
