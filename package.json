@@ -10,9 +10,10 @@
   },
   "scripts": {
     "dev": "vitepress dev",
-    "build": "node scripts/check-facts.mjs && node scripts/generate-og-image.mjs && vitepress build",
+    "build": "node scripts/check-facts.mjs && node scripts/check-seo.mjs && node scripts/generate-og-image.mjs && vitepress build",
     "build:og": "node scripts/generate-og-image.mjs",
     "check:facts": "node scripts/check-facts.mjs",
+    "check:seo": "node scripts/check-seo.mjs",
     "preview:diagrams": "node scripts/preview-diagrams.mjs",
     "preview": "vitepress preview"
   },
