@@ -1,6 +1,6 @@
 ---
 title: MygramDB Query Syntax Reference - Boolean Search Grammar
-description: Complete MygramDB query syntax reference. Boolean AND/OR/NOT, parentheses, quoted phrases, FILTER conditions, SORT, LIMIT/OFFSET, BM25 _score, HIGHLIGHT, FUZZY, and error handling.
+description: "MygramDB query syntax reference: AND/OR/NOT, parentheses, quoted phrases, FILTER, SORT, LIMIT/OFFSET, BM25 _score, HIGHLIGHT, FUZZY, and errors."
 head:
   - - meta
     - name: keywords
@@ -9,7 +9,7 @@ head:
 
 # Query Syntax Guide
 
-MygramDB supports a rich boolean query syntax for complex text search operations.
+A query is a set of search terms combined with `AND`, `OR`, `NOT`, parentheses, and quoted phrases, followed by optional `FILTER`, `SORT`, `LIMIT`, and `OFFSET` clauses. This page is the reference. For task-oriented examples, see the [Query Guide](/docs/queries).
 
 ::: info This is not SQL
 MygramDB queries are a small search command language, not SQL. A query such as `SEARCH articles mysql FILTER status = 1 LIMIT 10` carries only search terms and search options.
@@ -95,7 +95,7 @@ OK COUNT 42
 Search for documents containing **all** specified terms.
 
 ::: tip How this differs from a bare space
-A plain `golang tutorial` is effectively treated as "contains both" as well. For anything more complex, writing `AND` explicitly is safer for readability.
+A bare space is not an AND. Without an operator, `golang tutorial` is searched as one contiguous string, as if it were quoted. Write `golang AND tutorial` to require both terms anywhere in the document.
 :::
 
 ```mygram
@@ -125,7 +125,7 @@ SEARCH threads golang OR python OR rust
 Exclude documents containing specific terms.
 
 ::: warning Using NOT well
-`NOT` removes documents from the result set. A query that leads with `NOT` tends to produce a very wide candidate set, so on large indexes pair it with positive terms wherever possible.
+`NOT` removes documents from the result set. A query that starts with `NOT` produces a very wide candidate set, so on large indexes pair it with positive terms.
 :::
 
 ```mygram
@@ -136,8 +136,6 @@ Example:
 ```mygram
 SEARCH threads tutorial NOT beginner
 ```
-
-**Important:** NOT excludes documents from the result set. Use it carefully with large indexes.
 
 `AND NOT` is accepted as an equivalent exclusion form. It is useful for expression converters that emit every additional condition after `AND`:
 
@@ -213,19 +211,14 @@ When no parentheses are used, operators have the following precedence (highest t
 
 ### Precedence Examples
 
-**Query:** `a OR b AND c`
-**Parsed as:** `a OR (b AND c)`
-
-**Query:** `NOT a AND b`
-**Parsed as:** `(NOT a) AND b`
-
-**Query:** `a AND b OR c AND d`
-**Parsed as:** `(a AND b) OR (c AND d)`
-
-**Best Practice:** Use parentheses to make intent explicit, even when not strictly necessary.
+| Query | Parsed as |
+|-------|-----------|
+| `a OR b AND c` | `a OR (b AND c)` |
+| `NOT a AND b` | `(NOT a) AND b` |
+| `a AND b OR c AND d` | `(a AND b) OR (c AND d)` |
 
 ::: tip Pin the intent with parentheses
-Even where they are not strictly required, parentheses prevent misreading in complex conditions.
+Parentheses are optional where the precedence already gives the result you want, but they keep complex conditions from being misread.
 :::
 
 ---
@@ -241,14 +234,16 @@ SEARCH <table> 'machine learning'
 
 ### Escape Sequences
 
-Supported escape sequences inside quoted strings:
+Quoted strings support these escape sequences:
 
-- `\n` - Newline
-- `\t` - Tab
-- `\r` - Carriage return
-- `\\` - Backslash
-- `\"` - Double quote
-- `\'` - Single quote
+| Sequence | Meaning |
+|----------|---------|
+| `\n` | Newline |
+| `\t` | Tab |
+| `\r` | Carriage return |
+| `\\` | Backslash |
+| `\"` | Double quote |
+| `\'` | Single quote |
 
 Example:
 ```mygram
@@ -279,16 +274,18 @@ Filter results by column values using the `FILTER` clause.
 SEARCH <table> <query> FILTER <column> <operator> <value> [FILTER <col> <op> <val> ...]
 ```
 
-Multiple filters can be specified (all must match - AND logic).
+`FILTER` can be repeated. A document must match every filter (AND).
 
 ### Supported Operators
 
-- `=` or `EQ` - Equal
-- `!=`, `<>`, or `NE` - Not equal
-- `>` or `GT` - Greater than
-- `>=` or `GTE` - Greater than or equal
-- `<` or `LT` - Less than
-- `<=` or `LTE` - Less than or equal
+| Operator | Alias | Meaning |
+|----------|-------|---------|
+| `=` | `EQ` | Equal |
+| `!=` / `<>` | `NE` | Not equal |
+| `>` | `GT` | Greater than |
+| `>=` | `GTE` | Greater than or equal |
+| `<` | `LT` | Less than |
+| `<=` | `LTE` | Less than or equal |
 
 ### Examples
 
@@ -317,19 +314,17 @@ SEARCH threads (golang OR python) AND tutorial FILTER status = published
 
 ### Filter Column Types
 
-MygramDB supports filtering on indexed filter columns:
+`FILTER` accepts these value types:
 
 - **Integer**: `status=1`, `priority=5`
 - **String**: `category=tech`, `author=john`
 - **Date/Time**: query-time `date`, `datetime`, and `timestamp` values are integer Unix epoch seconds; for example, `created_at >= 1704067200` selects values from 2024-01-01 00:00:00 UTC onward. A `time` value is a signed duration in seconds, so `-90000` means minus 25 hours.
 
-**Note:** Columns configured under either `filters` or `required_filters` in `config.yaml` can be used in FILTER clauses.
-
-`required_filters` controls whether a row is indexed and has a separate configuration syntax. Its ISO 8601 or clock-time values do not apply to query-time `FILTER` values. The same column may be listed in both settings: `required_filters` controls index admission, while `FILTER` narrows indexed rows per request.
-
 ::: warning FILTER requires configuration
-A column not registered under either `filters` or `required_filters` in `config.yaml` cannot be used with `FILTER`. `required_filters` also decides whether a row is indexed at all.
+`FILTER` works only on columns registered under `filters` or `required_filters` in `config.yaml`. Any other column is rejected.
 :::
+
+`required_filters` decides whether a row is indexed at all, and it has its own configuration syntax. Its ISO 8601 and clock-time values do not apply to query-time `FILTER` values. The same column may be listed in both settings: `required_filters` controls index admission, while `FILTER` narrows the indexed rows for each request.
 
 ### Filter Performance
 
@@ -347,8 +342,6 @@ Sort search results using the `SORT` clause.
 ```mygram
 SEARCH <table> <query> SORT [BY] <column> [ASC|DESC]
 ```
-
-**Note:** The `ORDER BY` syntax is not supported. Use `SORT` instead.
 
 ::: info Not SQL's ORDER BY
 MygramDB has no `ORDER BY` syntax. Use `SORT` to order search results.
@@ -404,16 +397,12 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 **Sorting Algorithm:**
 - **With a small LIMIT**: Uses `partial_sort` when `LIMIT + OFFSET` is less than half of the result set, for O(N × log(K)) work where K = LIMIT + OFFSET.
 - **Otherwise**: Uses a full sort, O(N × log(N)). If `LIMIT` is omitted, the server uses `api.default_limit`; the effective limit and offset still determine which algorithm runs.
-- **Memory**: Sorting can allocate temporary sort-key storage for eligible result sets; do not assume it is in-place.
+- **Memory**: Sorting can allocate temporary sort-key storage for eligible result sets, so do not assume it is in-place.
 
 **For large result sets (e.g., 1M documents with 800K matches):**
 - Keep `LIMIT + OFFSET` well below the result count to use the partial-sort path.
 - Measure the chosen sort column on production-like data; primary-key sorting still compares the matching results.
-- Results are sorted **before** applying OFFSET/LIMIT (ensures correct pagination)
-
-**Example Performance:**
-- 800K results with LIMIT 100 use the partial-sort path.
-- Large result sets can require temporary sort-key storage.
+- Results are sorted **before** OFFSET and LIMIT are applied, so pagination is correct. For example, 800K matches with `LIMIT 100` use the partial-sort path.
 
 ### Column Validation
 
@@ -501,7 +490,6 @@ This query:
 
 ### Pagination Performance
 
-- **LIMIT optimization**: Uses partial sort only when `LIMIT + OFFSET` is less than half of the result set
 - **OFFSET cost**: O(N) where N = OFFSET (results are still generated, just not returned)
 - **Best practice**: Use LIMIT with SORT for consistent pagination
 - **Deep pagination**: Large OFFSET values (e.g., 10000+) can be slow
@@ -605,10 +593,6 @@ Longer snippets with more fragments:
 SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 ```
 
-### Requirements
-
-Highlighting does not require `memory.verify_text` to be `"ascii"` or `"all"`; normal server initialization retains the text needed for snippets.
-
 ### Combining with Other Clauses
 
 ```mygram
@@ -646,9 +630,11 @@ SEARCH articles "databse" FUZZY 2 LIMIT 10
 
 ### Performance
 
-Fuzzy search pre-filters candidates by length difference to avoid unnecessary distance computations. `FUZZY` includes every document returned by the same query without `FUZZY`, including terms shorter than the configured n-gram size and mixed CJK/ASCII terms, and may add edit-distance matches. Use `FUZZY 1` (default) for best performance.
+Fuzzy search pre-filters candidates by length difference to avoid unnecessary distance computations. `FUZZY 1` (the default) is the fastest.
 
-`FUZZY` accepts only `1` or `2`. Other distance values return an explicit query error.
+`FUZZY` returns every document that the same query returns without `FUZZY`, including terms shorter than the configured n-gram size and mixed CJK/ASCII terms, and may add edit-distance matches.
+
+`FUZZY` accepts only `1` or `2`. Other distances return a query error.
 
 ---
 
@@ -656,43 +642,17 @@ Fuzzy search pre-filters candidates by length difference to avoid unnecessary di
 
 ### Invalid Queries
 
-The following will return errors:
+These queries return errors. Syntax errors use code `3000`; an expression that the boolean parser cannot read uses `3010`.
 
-**Empty parentheses:**
-```mygram
-SEARCH threads ()
-ERROR 3000 Invalid query: empty expression in parentheses
-```
+| Query | Response |
+|-------|----------|
+| `SEARCH threads (golang AND python` | `ERROR 3000 Unclosed parenthesis` |
+| `SEARCH threads golang AND python)` | `ERROR 3000 Unmatched closing parenthesis` |
+| `SEARCH threads golang AND` | `ERROR 3000 AND requires a term` |
+| `SEARCH threads golang NOT` | `ERROR 3000 NOT requires a term` |
+| `SEARCH threads "golang tutorial` | `ERROR 3000 Unclosed quote: "` |
 
-**Unclosed parentheses:**
-```mygram
-SEARCH threads (golang AND python
-ERROR 3000 Invalid query: unclosed parentheses
-```
-
-**Extra closing parentheses:**
-```mygram
-SEARCH threads golang AND python)
-ERROR 3000 Invalid query: unexpected closing parenthesis
-```
-
-**Operator without operands:**
-```mygram
-SEARCH threads AND
-ERROR 3000 Invalid query: operator without operands
-```
-
-**Trailing operator:**
-```mygram
-SEARCH threads golang AND
-ERROR 3000 Invalid query: trailing operator
-```
-
-**Unclosed quotes:**
-```mygram
-SEARCH threads "golang tutorial
-ERROR 3000 Invalid query: unclosed quote
-```
+Empty parentheses or an operator with nothing on one side inside a group fail in the boolean parser, with a message such as `Expected term or opening parenthesis '('`.
 
 ### Invalid Filters
 
@@ -715,8 +675,6 @@ ERROR 3006 Invalid filter column
 SEARCH articles tech SORT nonexistent DESC
 ERROR 3007 Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
 ```
-
-Non-existent columns are rejected with an error.
 
 ---
 
@@ -823,7 +781,7 @@ COUNT posts database AND (mysql OR postgresql) NOT sqlite
 
 ### Grammar (BNF)
 
-Queries are parsed into an Abstract Syntax Tree (AST) with proper operator precedence:
+Queries are parsed into an abstract syntax tree (AST) with this grammar, which encodes the precedence described above:
 
 ```text
 query     → or_expr
@@ -886,8 +844,19 @@ SYNC STATUS
 
 **Response Examples:**
 ```mygram
+OK SYNC_STATUS
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
+```
+
+```mygram
+OK SYNC_STATUS
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
+```
+
+When no sync has run:
+
+```mygram
+OK SYNC_STATUS
 status=IDLE message="No sync operation performed"
 ```
 

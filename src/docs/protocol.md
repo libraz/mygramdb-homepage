@@ -1,6 +1,6 @@
 ---
 title: MygramDB Protocol Reference - TCP Text Commands
-description: Complete MygramDB TCP protocol reference. SEARCH, COUNT, GET, INFO, CONFIG, DUMP, FACET, REPLICATION, SYNC, OPTIMIZE, and DEBUG commands with syntax, responses, and examples.
+description: "MygramDB TCP protocol reference: SEARCH, COUNT, GET, INFO, CONFIG, DUMP, FACET, REPLICATION, SYNC, OPTIMIZE, and DEBUG syntax, responses, and examples."
 head:
   - - meta
     - name: keywords
@@ -46,15 +46,11 @@ The TCP protocol suits `mygram-cli` and administrative commands. For web applica
 
 Commands are text-based, one command per line. Responses are terminated with newline.
 
-If the thread-pool queue is full while a connection drain task is being scheduled, the server stops accepting normal responses, drains responses already queued for that connection, then sends terminal `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` and closes the connection. A pending-frame or shared-buffer limit can also produce a best-effort `ERROR 6030` before close.
+If the thread-pool queue is full when the server schedules a connection's drain task, it stops accepting normal responses on that connection and sends the responses already queued. It then sends the final `ERROR 6030 SERVER_BUSY Server is too busy, please try again later` and closes the connection. Reaching a pending-frame or shared-buffer limit can also produce a best-effort `ERROR 6030` before the connection closes.
 
 `SEARCH`, `COUNT`, `GET`, and `FACET` do not require authentication. When an administrative token is configured, `AUTH` is required for configuration commands, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` commands. A request made before authentication returns `ERROR 7 Administrative command requires AUTH`.
 
-Table references accept the database-qualified form `` `database.table` ``. For example, a table named
-`articles` in database `app_db` is addressed as `app_db.articles`. In a single-database deployment (only
-one distinct database is configured), a bare table name also works — for example `SEARCH articles hello`
-resolves to that one database. Qualification is required only when the configuration spans two or more
-databases; a bare name is then rejected as ambiguous.
+Table references use the database-qualified form `database.table`. For example, the table `articles` in database `app_db` is addressed as `app_db.articles`. If the configuration contains only one database, a bare table name also works: `SEARCH articles hello` resolves to that database. When the configuration spans two or more databases, qualification is required and a bare name is rejected as ambiguous.
 
 ---
 
@@ -172,7 +168,7 @@ Returns server information in Redis-style key-value format with multiple section
 OK INFO
 
 # Server
-version: 1.11.1
+version: 1.12.0
 uptime_seconds: 3600
 data_initialized: true
 readiness: ready
@@ -225,10 +221,12 @@ replication_deletes_applied: 5000
 
 ### Memory Health Status
 
-- **HEALTHY**: >20% system memory available
-- **WARNING**: 10-20% system memory available
-- **CRITICAL**: <10% system memory available (OPTIMIZE will be rejected)
-- **UNKNOWN**: Unable to determine status
+| Status | Available system memory | Note |
+|--------|-------------------------|------|
+| `HEALTHY` | More than 20% | |
+| `WARNING` | 10-20% | |
+| `CRITICAL` | Less than 10% | `OPTIMIZE` is rejected |
+| `UNKNOWN` | Cannot be determined | |
 
 ---
 
@@ -254,30 +252,33 @@ CONFIG HELP [path]
 
 **Examples:**
 
-Show all top-level configuration sections:
+List the top-level configuration sections:
 ```mygram
 CONFIG HELP
 ```
 
-Response:
+Response (sections are sorted by name; the `mysql` description is shortened here):
 ```mygram
 +OK
 Available configuration sections:
-  mysql        - MySQL connection settings
-  tables       - Table configuration (supports multiple tables)
-  build        - Index build configuration
-  replication  - Replication configuration
-  memory       - Memory management
-  dump         - Dump persistence (automatic backup)
   api          - API server configuration
-  network      - Network security (optional)
-  logging      - Logging configuration
+  bm25         - BM25 relevance scoring configuration
+  build        - Index build configuration
   cache        - Query cache configuration
+  dump         - Dump persistence configuration
+  index        - Legacy global index configuration (deprecated; prefer per-table ngram_size)
+  logging      - Logging configuration
+  memory       - Memory management configuration
+  mysql        - MySQL connection settings. Values can be overridden via environment variables: ...
+  network      - Network security configuration
+  replication  - Replication configuration
+  server       - Legacy server configuration (deprecated, use api.tcp instead)
+  tables       - Table configuration (supports multiple tables)
 
 Use "CONFIG HELP <section>" for detailed information.
 ```
 
-Show help for a specific section:
+Show help for a section:
 ```mygram
 CONFIG HELP mysql
 ```
@@ -285,31 +286,13 @@ CONFIG HELP mysql
 Response:
 ```mygram
 +OK
-mysql - MySQL connection settings
+mysql
 
-Properties:
-  host (string, default: "127.0.0.1")
-    MySQL server hostname or IP
-
-  port (integer, default: 3306, range: 1-65535)
-    MySQL server port
-
-  user (string, REQUIRED)
-    MySQL username for replication
-
-  password (string)
-    MySQL user password
-
-  database (string, REQUIRED)
-    Database name
-
-  use_gtid (boolean, default: true)
-    Enable GTID-based replication
-
-  ...
+Type: object
+Description: MySQL connection settings. Values can be overridden via environment variables: MYGRAM_MYSQL_USER, MYGRAM_MYSQL_PASSWORD, MYGRAM_MYSQL_HOST, MYGRAM_MYSQL_PORT, MYGRAM_MYSQL_DATABASE (env vars take precedence over config file values)
 ```
 
-Show help for a specific property:
+A section prints only its type and description. Ask for a property path to see its default and allowed range:
 ```mygram
 CONFIG HELP mysql.port
 ```
@@ -324,6 +307,8 @@ Default: 3306
 Range: 1 - 65535
 Description: MySQL server port
 ```
+
+The output text comes from the configuration schema and is always in English. An unknown path returns `ERROR 8 Configuration path not found: <path>`.
 
 ---
 
@@ -397,35 +382,33 @@ CONFIG VERIFY <filepath>
 ```
 
 **Parameters:**
-- `filepath` (required): Path to configuration file (YAML or JSON)
+- `filepath` (required): Path to a `.yaml` or `.yml` configuration file, relative to the directory containing the active configuration file
 
-Relative paths are resolved from the directory containing the active configuration file. Use an absolute path in automation when the service working directory differs.
+The server rejects absolute paths, paths containing `..`, symbolic links, and files with any other extension, so `CONFIG VERIFY` can only read candidate files placed next to the active configuration.
 
 **Examples:**
 
-Verify valid config:
+Verify a valid file:
 ```mygram
-CONFIG VERIFY /etc/mygramdb/config.yaml
+CONFIG VERIFY candidate.yaml
 ```
 
-Response (success):
+Response (success). The summary shows only the MySQL host and port; the user name and password are never printed:
 ```mygram
 +OK
 Configuration is valid
   Tables: 2 (articles, products)
-  MySQL: repl_user@127.0.0.1:3306
+  MySQL: 127.0.0.1:3306
 ```
 
-Verify invalid config:
+Verify an invalid file:
 ```mygram
-CONFIG VERIFY /tmp/invalid.yaml
+CONFIG VERIFY invalid.yaml
 ```
 
-Response (error):
+Response (error). Like every error, it is a single `ERROR <code>` line; line breaks inside the validation message are replaced with spaces:
 ```mygram
--ERR Configuration validation failed:
-  - mysql.port: value 99999 exceeds maximum 65535
-  - tables[0].name: missing required field
+ERROR 1002 Configuration validation failed:   <validation message>
 ```
 
 ---
@@ -457,7 +440,9 @@ OK DUMP_STARTED <filepath>
 DUMP SAVE mygramdb.dmp
 ```
 
-The filename resolves under `dump.dir`; a path outside that directory is refused. `mygram-cli` reads the filepath as the last non-empty token, decoded with the server escape rules, so quote a path containing spaces. If a token starts with `-`, the CLI sends the line to the server, which rejects it as an unknown `DUMP SAVE` flag. Use `DUMP STATUS` to monitor progress and check completion. `--with-stats` is not part of the grammar and is rejected as an unknown flag.
+The filename resolves under `dump.dir`; a path outside that directory is refused. Use `DUMP STATUS` to monitor progress and check completion.
+
+`mygram-cli` reads the filepath as the last non-empty token, decoded with the server escape rules, so quote a path that contains spaces. A token starting with `-` is sent to the server, which rejects it as an unknown `DUMP SAVE` flag. `--with-stats` is not part of the grammar and is rejected the same way.
 
 `DUMP SAVE` returns `ERROR 6029` until every configured table has completed its initial load. In a MySQL-enabled build with a binlog reader, it also returns `ERROR 6029` until a GTID position is available; run `SYNC` first to establish that position.
 
@@ -534,11 +519,14 @@ END
 ```
 
 **Status values:**
-- `IDLE`: No dump operation in progress
-- `SAVING`: DUMP SAVE in progress
-- `LOADING`: DUMP LOAD in progress
-- `COMPLETED`: Last dump operation completed successfully
-- `FAILED`: Last dump operation failed
+
+| Value | Meaning |
+|-------|---------|
+| `IDLE` | No dump operation in progress |
+| `SAVING` | `DUMP SAVE` in progress |
+| `LOADING` | `DUMP LOAD` in progress |
+| `COMPLETED` | The last dump operation completed successfully |
+| `FAILED` | The last dump operation failed |
 
 **Example (during save):**
 ```mygram
@@ -628,20 +616,27 @@ seconds_since_last_applied: <seconds>
 END
 ```
 
-- **status**: Current replication state: `running`, `stopped`, or `failed` when a binlog reader is configured; `not_configured` when it is not
-  - `running`: Actively replicating from MySQL
-  - `stopped`: Replication manually stopped
-  - `failed`: Replication stopped because of an error
-  - `not_configured`: MySQL replication not configured
-- **current_gtid**: Last processed GTID position
-- **processed_events**: Total binlog events processed
-- **queue_size**: Pending events in the queue; returned for every configured reader state, including `stopped` and `failed`
-- **crc_errors**: Total binlog event CRC errors detected
-- **schema_incompatible**: `true` when replication stopped because a monitored schema is incompatible
-- **last_error_code**: Numeric code for the last replication error, or `0` when there is none
-- **last_error**: Message for the last replication error, or an empty value when there is none
-- **last_applied_unixtime**: Unix timestamp of the last successfully applied position, or `0` when unknown
-- **seconds_since_last_applied**: Seconds since the last successfully applied position, or `-1` when unknown
+| Field | Description |
+|-------|-------------|
+| `status` | Replication state (values below) |
+| `current_gtid` | Last processed GTID position |
+| `processed_events` | Total binlog events processed |
+| `queue_size` | Pending events in the queue; returned in every state of a configured reader, including `stopped` and `failed` |
+| `crc_errors` | Total binlog event CRC errors detected |
+| `schema_incompatible` | `true` when replication stopped because a monitored schema is incompatible |
+| `last_error_code` | Numeric code of the last replication error, or `0` when there is none |
+| `last_error` | Message of the last replication error, or empty when there is none |
+| `last_applied_unixtime` | Unix timestamp of the last successfully applied position, or `0` when unknown |
+| `seconds_since_last_applied` | Seconds since the last successfully applied position, or `-1` when unknown |
+
+`status` is one of the following. `not_configured` is returned when no binlog reader is configured; the other three apply when one is.
+
+| Value | Meaning |
+|-------|---------|
+| `running` | Actively replicating from MySQL |
+| `stopped` | Replication was stopped manually |
+| `failed` | Replication stopped because of an error |
+| `not_configured` | MySQL replication is not configured |
 
 Example (running):
 ```mygram
@@ -754,19 +749,23 @@ ERROR 4010 Table '<name>' not found
 - On MySQL, commits between the GTID capture and the snapshot transaction may be replayed during replication; this at-least-once replay is intentional and idempotent
 - Drains replication and normally restarts it from the GTID drained before SYNC, so commits for other tables are not skipped; the `2017` recovery path restarts from the snapshot marker (the MySQL lower bound or MariaDB's exact snapshot position converted to a GTID)
 
+While a table is synchronizing, `SEARCH`, `COUNT`, `GET`, and `FACET` on that table are rejected with `Table '<name>' is synchronizing, please try again later`. Use `SYNC STATUS` for progress and failure reasons.
+
 ### Cancel a SYNC
 
 ```mygram
 SYNC STOP [<table_name>]
 ```
 
-Cancellation is asynchronous. Use `SYNC STATUS` until the operation reports `CANCELLED` or another terminal state.
+Stops the sync for the named table. Without a table name, cancellation is requested for every running sync. Cancellation is asynchronous. Use `SYNC STATUS` until the operation reports `CANCELLED` or another terminal state.
 
 ### Conflicts
 
-- **DUMP LOAD**: Blocked during SYNC (prevents data corruption)
-- **REPLICATION START**: Blocked during SYNC (SYNC auto-starts replication)
-- **SYNC**: Blocked while another long-running maintenance operation is in progress
+| Command | During SYNC | Reason |
+|---------|-------------|--------|
+| `DUMP LOAD` | Rejected | Prevents data corruption |
+| `REPLICATION START` | Rejected | SYNC starts replication automatically |
+| `SYNC` | Rejected while another long-running maintenance operation is in progress | |
 
 ### Example
 
@@ -904,14 +903,13 @@ Omit the table to optimize all configured tables. Name one table to optimize onl
 
 ### Memory Safety
 
-**Pre-execution Memory Checks:**
+**Pre-execution memory checks:**
 - Rejects execution if system memory health is **CRITICAL** (<10% available)
 - Estimates peak memory from the resident index, a full rebuild copy, 10% temporary overhead, a term-name snapshot, and batch bookkeeping
 - Requires roughly `2.1x` the index memory to be free; the exact estimate also grows with the number of distinct terms and the batch bookkeeping
 
-**Memory Usage Pattern:**
-- The existing index remains resident while the full optimized replacement is built, so peak usage approaches two index copies
-- The estimate includes the term-name snapshot and temporary structures in addition to the replacement copy
+**Memory usage pattern:**
+- The existing index stays resident while the full optimized replacement is built, so peak usage approaches two index copies
 - Batch size does not materially reduce peak memory; it limits per-batch bookkeeping and controls when replacements are published
 
 ### Global Exclusion
@@ -950,7 +948,7 @@ ERROR 6030 Memory critically low. Cannot start optimization: available=1.50 GB t
 
 Insufficient memory:
 ```mygram
-ERROR 6030 Insufficient memory for optimization: estimated=2.50 GB available=1.80 GB
+ERROR 6030 Insufficient memory for optimization: Insufficient memory: estimated=2.50 GB available=1.80 GB
 ```
 
 ---
@@ -992,15 +990,15 @@ OK DEBUG_OFF
 
 ### Debug Output Format
 
-When debug mode is enabled, SEARCH and COUNT commands return additional debug information:
+When debug mode is enabled, `SEARCH` appends a debug block to its response. Lines in brackets appear only when they apply:
 
 ```mygram
 OK RESULTS <count> <id1> <id2> ...
 
 # DEBUG
-query_time: <ms>
-index_time: <ms>
-filter_time: <ms>
+query_time: <ms>ms
+index_time: <ms>ms
+[filter_time: <ms>ms]
 terms: <n>
 ngrams: <n>
 candidates: <n>
@@ -1008,31 +1006,54 @@ after_intersection: <n>
 after_not: <n>
 after_filters: <n>
 final: <n>
-optimization: <strategy>
-order_by: <column> <direction>
+[optimization: <strategy>]
+[sort: <column> <direction>]
 limit: <value> [(default)]
-offset: <value> [(default)]
+[offset: <value> [(default)]]
+cache: hit | miss | disabled
+[cache_age_ms: <ms>]
+[cache_saved_ms: <ms>]
+[cache_reason: not_found | invalidated]
+[cache_cost_ms: <ms>]
 [cache_key: <canonical-key>]
 ```
 
-The `cache_key` line is included in SEARCH and COUNT responses whenever a canonical query key exists.
+`COUNT` returns a shorter block: the timing lines, `terms`, `ngrams`, and the cache lines. The candidate counts, `final`, `optimization`, `sort`, `limit`, and `offset` are `SEARCH`-only.
+
+```mygram
+OK COUNT <n>
+
+# DEBUG
+query_time: <ms>ms
+index_time: <ms>ms
+terms: <n>
+ngrams: <n>
+cache: hit | miss | disabled
+...
+```
 
 ### Debug Metrics Explained
 
-- **query_time**: Total query execution time in milliseconds
-- **index_time**: Time spent searching the index
-- **filter_time**: Time spent applying filters (if any)
-- **terms**: Number of search terms
-- **ngrams**: Total n-grams generated from search terms
-- **candidates**: Initial candidate documents from index
-- **after_intersection**: Results after AND term intersection
-- **after_not**: Results after NOT term filtering (if NOT used)
-- **after_filters**: Results after FILTER conditions (if filters used)
-- **final**: Total matching documents (before LIMIT/OFFSET)
-- **optimization**: Strategy used (e.g., `merge_join`, `early_exit`, `none`)
-- **order_by**: Applied sorting (column and direction)
-- **limit**: Maximum results returned (shows "(default)" if not explicitly specified)
-- **offset**: Result offset for pagination (shows "(default)" if not explicitly specified)
+| Field | Description |
+|-------|-------------|
+| `query_time` | Total query execution time, with an `ms` suffix |
+| `index_time` | Time spent searching the index, with an `ms` suffix |
+| `filter_time` | Time spent applying filters; printed only when greater than zero |
+| `terms` | Number of search terms |
+| `ngrams` | Total n-grams generated from the search terms |
+| `candidates` | Initial candidate documents from the index |
+| `after_intersection` | Results after AND term intersection |
+| `after_not` | Results after NOT term filtering |
+| `after_filters` | Results after FILTER conditions |
+| `final` | Total matching documents (before LIMIT/OFFSET) |
+| `optimization` | Strategy used (for example `merge_join` or `early_exit`); printed only when one was used |
+| `sort` | Applied sorting (column and direction); printed only when a sort was applied |
+| `limit` | Maximum results returned; shows `(default)` if not specified explicitly |
+| `offset` | Result offset for pagination; printed only when greater than zero |
+| `cache` | `hit`, `miss`, or `disabled` |
+| `cache_age_ms`, `cache_saved_ms` | On a hit: age of the cached entry and the execution time it saved |
+| `cache_reason`, `cache_cost_ms` | On a miss: `not_found` or `invalidated`, and the measured cost of this execution |
+| `cache_key` | Canonical query key, when one exists |
 
 ---
 
@@ -1194,7 +1215,10 @@ OK AUTHENTICATED
 | `-h HOST` | Server hostname (default: `127.0.0.1`) |
 | `-p PORT` | Server port (default: `11016`) |
 | `-s SOCKET_PATH` | Unix domain socket path; overrides `-h`/`-p` |
+| `--timeout MS` | Command timeout in milliseconds (default: `30000`; long operations such as `DUMP` and `OPTIMIZE`: `300000`) |
+| `--connect-timeout MS` | Connection timeout in milliseconds (default: `30000`) |
 | `--retry N` | Retry the connection N times if refused (default: `0`) |
+| `--retry-interval SEC` | Seconds between retries (default: `3`); with `--wait-ready` the default budget is 100 retries × 3 seconds |
 | `--wait-ready` | Retry within the configured budget until the server is ready (100 retries by default; `--retry N` overrides it); exit non-zero if it is still not ready |
 | `--version` | Print the client version and exit |
 | `--help` | Print usage and exit |
@@ -1205,14 +1229,18 @@ In interactive mode, type `help` to see available commands:
 
 ```
 > help
+Commands are sent to the server verbatim; quote search text yourself where needed.
+
 Available commands:
   SEARCH <db.table> <text> [(AND|OR|NOT) <term>...] [FILTER <col=val>...]
          [SORT [BY] <col>|ASC|DESC] [LIMIT <n>] [OFFSET <n>]
+         [HIGHLIGHT [TAG <open> <close>] [SNIPPET_LEN <n>] [MAX_FRAGMENTS <n>]]
+         [FUZZY [1|2]]
   COUNT <db.table> <text> [(AND|OR|NOT) <term>...] [FILTER <col=val>...]
   GET <db.table> <primary_key>
   INFO              - Show server statistics
   CONFIG            - Show current configuration
-  SET <variable>[ = ]<value> [, ...]       - Change runtime variables
+  SET <variable> = <value> [, ...]         - Change runtime variables
   SHOW VARIABLES [LIKE <pattern>]         - Show runtime variables
   FACET <db.table> <column> [text] [FILTER <col=val>...] [LIMIT <n>]
                     - Compute facet counts
@@ -1222,6 +1250,17 @@ Available commands:
   CACHE STATS|CLEAR|ENABLE|DISABLE
   DUMP SAVE|LOAD|VERIFY|INFO|STATUS
   SYNC <db.table>|STOP [db.table]|STATUS
+  AUTH <token>      - Unlock administrative commands on this connection
+
+Query syntax examples:
+  SEARCH app.threads golang                          # Simple search
+  SEARCH app.threads (golang OR python) AND tutorial # Boolean query
+  SEARCH app.threads golang SORT DESC LIMIT 10       # With sorting
+  SEARCH app.threads golang SORT BY created_at ASC   # Sort by column
+
+Other commands:
+  quit/exit - Exit the client
+  help - Show this help
 ```
 
 ::: info

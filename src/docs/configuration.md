@@ -1,6 +1,6 @@
 ---
 title: MygramDB Configuration Reference - config.yaml Options
-description: Complete MygramDB configuration reference. MySQL connection, table and filter definitions, n-grams, synonyms, replication, memory, API server, rate limiting, BM25, query cache, dumps, network ACLs, and logging.
+description: "MygramDB config.yaml reference: MySQL connection, tables and filters, n-grams, synonyms, replication, memory, API server, rate limits, cache, and logging."
 head:
   - - meta
     - name: keywords
@@ -37,14 +37,16 @@ network:
     - "127.0.0.1/32"
 ```
 
-`mysql.user`, `mysql.database`, and at least one table are required after environment overrides are applied. The `mysql` block may be omitted when the required values come from `MYGRAM_MYSQL_USER` and `MYGRAM_MYSQL_DATABASE`. When replication is enabled (the default), `replication.server_id` must be a unique non-zero value from `1` to `4294967295` among MySQL replicas and MygramDB instances.
+`mysql.user`, `mysql.database`, and at least one table are required after environment overrides are applied. The `mysql` block may be omitted when the values come from `MYGRAM_MYSQL_USER` and `MYGRAM_MYSQL_DATABASE`.
+
+Replication is enabled by default. In that case `replication.server_id` is required: a non-zero value from `1` to `4294967295` that is unique among MySQL replicas and MygramDB instances.
 
 ::: tip What to do after the minimal config
 Writing the config file does not load any data. After starting the server, synchronize each table you want with `SYNC articles` and confirm completion with `SYNC STATUS`.
 :::
 
 ::: info What is server_id?
-**server_id** is the identifier used for a MySQL replication connection. It must not collide with any other MySQL replica or MygramDB instance attached to the same MySQL — a duplicate makes the upstream unable to tell the two apart.
+**server_id** is the identifier used for a MySQL replication connection. It must not collide with any other MySQL replica or MygramDB instance attached to the same MySQL. With a duplicate, the upstream cannot tell the two apart.
 :::
 
 ## MySQL / MariaDB Connection
@@ -76,11 +78,35 @@ mysql:
 
 `datetime_timezone` controls how MySQL `DATETIME` and `DATE` values, and temporal `required_filters` literals, are interpreted. `TIME` values are durations in seconds and do not use this offset. `TIMESTAMP` values are always handled as UTC.
 
-`connect_timeout_ms`, `read_timeout_ms`, and `write_timeout_ms` are milliseconds; `session_timeout_sec` is seconds. TLS is disabled by default. This example enables TLS: replace its CA and client-certificate paths with files on the server. When TLS and server-certificate verification are enabled, `mysql.ssl_ca` is required and must point to the CA certificate that signed the server certificate. `mysql.ssl_cert` and `mysql.ssl_key` are optional unless the source also requires client-certificate authentication; remove those two example lines when client certificates are not required. For a source without TLS, set `ssl_enable: false` and remove the certificate paths. Keep `ssl_verify_server_cert: true` for verified TLS.
+`connect_timeout_ms`, `read_timeout_ms`, and `write_timeout_ms` are in milliseconds; `session_timeout_sec` is in seconds.
 
-Environment variables can override `mysql.host`, `mysql.port`, `mysql.user`, `mysql.password`, and `mysql.database` through `MYGRAM_MYSQL_HOST`, `MYGRAM_MYSQL_PORT`, `MYGRAM_MYSQL_USER`, `MYGRAM_MYSQL_PASSWORD`, and `MYGRAM_MYSQL_DATABASE`. These overrides also work when the `mysql` block is absent. `MYGRAM_MYSQL_PORT` must be an integer from `1` through `65535`; an invalid value stops startup.
+TLS is disabled by default. The example above enables it, so replace its certificate paths with files on your server. For a source without TLS, set `ssl_enable: false` and remove the certificate paths.
 
-`mysql.ignored_ddl_prefixes` is an empty startup-only list by default. Add reviewed single-statement prefixes only when an otherwise unclassified standalone DDL `QUERY_EVENT` is known to be safe to skip. Each entry must be non-empty, contain no semicolon, and begin (case-insensitively) with one of `ALTER`, `ANALYZE`, `CHECK`, `CREATE`, `DROP`, `OPTIMIZE`, `RENAME`, `REPAIR`, or `TRUNCATE`; DML prefixes are rejected. The list does not override configured-table or configured-database safety: `DROP DATABASE` or `DROP SCHEMA` for a configured database still stops replication, even when `DROP` is listed. Changes take effect after restart.
+| Key | Role |
+|-----|------|
+| `ssl_enable` | Turns TLS on (default `false`) |
+| `ssl_verify_server_cert` | Verifies the server certificate; keep `true` for verified TLS |
+| `ssl_ca` | Required when verification is on; the CA certificate that signed the server certificate |
+| `ssl_cert`, `ssl_key` | Needed only if the source requires client-certificate authentication; otherwise remove them |
+
+Environment variables override these `mysql` keys, and they also work when the `mysql` block is absent:
+
+| Key | Environment variable |
+|-----|----------------------|
+| `mysql.host` | `MYGRAM_MYSQL_HOST` |
+| `mysql.port` | `MYGRAM_MYSQL_PORT` |
+| `mysql.user` | `MYGRAM_MYSQL_USER` |
+| `mysql.password` | `MYGRAM_MYSQL_PASSWORD` |
+| `mysql.database` | `MYGRAM_MYSQL_DATABASE` |
+
+`MYGRAM_MYSQL_PORT` must be an integer from `1` through `65535`; an invalid value stops startup.
+
+`mysql.ignored_ddl_prefixes` is an empty, startup-only list by default. Add a prefix only when you have reviewed an otherwise unclassified standalone DDL `QUERY_EVENT` and know it is safe to skip. Each entry must:
+
+- be non-empty and contain no semicolon;
+- begin (case-insensitively) with one of `ALTER`, `ANALYZE`, `CHECK`, `CREATE`, `DROP`, `OPTIMIZE`, `RENAME`, `REPAIR`, or `TRUNCATE`. DML prefixes are rejected.
+
+The list does not override the safety checks for configured tables and databases. `DROP DATABASE` or `DROP SCHEMA` for a configured database still stops replication, even when `DROP` is listed. Changes take effect after a restart.
 
 `mysql.binlog_format` and `mysql.binlog_row_image` assert the source server's values; they do not change MySQL or MariaDB settings. Set `binlog_row_metadata=FULL` on the source as well. It is a server setting, not a MygramDB configuration key. See [MySQL Replication](/docs/replication) for the required source and table checks.
 
@@ -97,7 +123,9 @@ binlog_row_metadata = FULL
 binlog_checksum = CRC32
 ```
 
-These settings belong on the MySQL or MariaDB source. MygramDB validates them at startup and on reconnect; its YAML `mysql` block does not configure the source server. The source must also write uncompressed binlog events: set `binlog_transaction_compression=OFF` on MySQL or `log_bin_compress=OFF` on MariaDB. On MySQL, `binlog_row_value_options` must not include `PARTIAL_JSON`.
+These settings belong on the MySQL or MariaDB source. MygramDB validates them at startup and on reconnect; its YAML `mysql` block does not configure the source server.
+
+The source must also write uncompressed binlog events: set `binlog_transaction_compression=OFF` on MySQL or `log_bin_compress=OFF` on MariaDB. On MySQL, `binlog_row_value_options` must not include `PARTIAL_JSON`.
 
 For MySQL, enable GTID:
 
@@ -106,7 +134,9 @@ gtid_mode = ON
 enforce_gtid_consistency = ON
 ```
 
-For MariaDB, GTID uses MariaDB's native `domain-server-sequence` format. Ensure `server_id` is set, row-based binlogging is enabled, and `binlog_storage_engine` is unset. If the source is itself a replica, enable `log_replica_updates` on MySQL or `log_slave_updates` on MariaDB so replicated changes are written to its binlog.
+For MariaDB, GTID uses MariaDB's native `domain-server-sequence` format. Set `server_id`, enable row-based binlogging, and leave `binlog_storage_engine` unset.
+
+If the source is itself a replica, enable `log_replica_updates` on MySQL or `log_slave_updates` on MariaDB so replicated changes are written to its binlog.
 
 ### Required Privileges
 
@@ -162,7 +192,12 @@ A **table identity** is the name MygramDB uses to refer to one searchable table.
 
 ::: warning Configured column validation
 
-Names must be non-empty SQL identifiers without NUL bytes. They are not limited to ASCII: spaces, `$`, Unicode, and embedded backticks are supported and safely quoted. Table identity is the `(database, table)` pair, and duplicate pairs are rejected. Configured primary-key, text-source, and filter columns cannot use `FLOAT`, `JSON`, `GEOMETRY` or its subtypes, `VECTOR`, `ZEROFILL`, `BINARY`, `VARBINARY`, any `BLOB` type, or a type this build cannot decode from a row image. Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. MygramDB checks these rules before replication starts so the initial loader and binlog reader can represent the same values.
+MygramDB checks these rules before replication starts, so the initial loader and the binlog reader represent the same values.
+
+- Names must be non-empty SQL identifiers without NUL bytes. They are not limited to ASCII: spaces, `$`, Unicode, and embedded backticks are supported and safely quoted.
+- Table identity is the `(database, table)` pair, and duplicate pairs are rejected.
+- Configured primary-key, text-source, and filter columns cannot use `FLOAT`, `JSON`, `GEOMETRY` or its subtypes, `VECTOR`, `ZEROFILL`, `BINARY`, `VARBINARY`, any `BLOB` type, or a type this build cannot decode from a row image.
+- Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation.
 :::
 
 ## Identifier and Ingestion Limits
@@ -222,9 +257,22 @@ tables:
         type: "datetime"
 ```
 
-Supported filter types include signed and unsigned integer sizes (including `mediumint` and `mediumint_unsigned`), `double`, `boolean`, `string`, `varchar`, `text`, `datetime`, `date`, `timestamp`, and `time`. `float`, `enum`, and `set` are not accepted filter types. A `FLOAT` column is also refused when configured as a primary key or text source because the initial-load result and binlog row image do not preserve the same value. A `boolean` filter maps to a signed MySQL `TINYINT(1)`. Query-time `FILTER` values must be lowercase `true`/`false` or `1`/`0`; required boolean filters accept those values case-insensitively and support `=`, `!=`, `IS NULL`, and `IS NOT NULL`.
+Supported filter types are:
 
-For `required_filters` with type `datetime`, `date`, or `timestamp`, use epoch seconds or an ISO date/time in the offset configured by `mysql.datetime_timezone`. Fractional seconds are accepted, but a trailing `Z`, numeric offset, or other suffix is rejected. `time` values accept signed duration seconds or a MySQL `TIME` clock such as `HH:MM:SS`, with optional fractional seconds, and must fit the range `-838:59:59` through `838:59:59`. Search-time `FILTER` values use epoch seconds for `datetime`, `date`, and `timestamp`, and signed duration seconds for `time`.
+- signed and unsigned integers of every size, including `mediumint` and `mediumint_unsigned`
+- `double`, `boolean`, `string`, `varchar`, `text`
+- `datetime`, `date`, `timestamp`, `time`
+
+`float`, `enum`, and `set` are not accepted filter types. A `FLOAT` column is also refused as a primary key or text source, because the initial-load result and the binlog row image do not preserve the same value.
+
+A `boolean` filter maps to a signed MySQL `TINYINT(1)`. Boolean values, in query-time `FILTER` and in `required_filters` alike, are `true`/`false` or `1`/`0` in any letter case. A `boolean` required filter supports `=`, `!=`, `IS NULL`, and `IS NOT NULL`.
+
+Date and time filters take different value formats in `required_filters` and in a search-time `FILTER`:
+
+| Filter type | `required_filters` value | Search-time `FILTER` value |
+|-------------|--------------------------|----------------------------|
+| `datetime`, `date`, `timestamp` | Epoch seconds, or an ISO date/time in the offset set by `mysql.datetime_timezone`. Fractional seconds are accepted; a trailing `Z`, numeric offset, or other suffix is rejected | Epoch seconds |
+| `time` | Signed duration seconds, or a MySQL `TIME` clock such as `HH:MM:SS` with optional fractional seconds, from `-838:59:59` through `838:59:59` | Signed duration seconds |
 
 ::: warning Reserved filter keys
 `bitmap_index`, `dict_compress`, and `bucket` are accepted by the schema and preserved across dumps, but they do not change behavior yet. Setting them has no effect on indexing or query performance.
@@ -303,9 +351,11 @@ replication:
 |-------|----------|
 | `snapshot` | Resume from the GTID captured by the snapshot/dump |
 | `latest` | Start from the source's current GTID, ignoring older changes |
-| `gtid=<position>` | Start from a MySQL GTID set (`UUID:txn[-txn]`, comma-separated) or MariaDB GTID list (`domain-server-seq`, comma-separated) |
+| `gtid=<position>` | Start from a MySQL GTID set (`UUID[:tag]:txn[-txn]`, comma-separated) or MariaDB GTID list (`domain-server-seq`, comma-separated) |
 
-MySQL GTID transaction numbers must be below `2^63−1`; MariaDB uses its separate `domain-server-seq` grammar. A single MySQL `UUID:txn` position means through that transaction. For a `gtid=...` value, malformed positions are rejected during config validation. If replay can include TABLE_MAP events written before the source enabled `binlog_row_metadata=FULL`, run `SYNC` for every replicated table after changing the source setting.
+MySQL GTID transaction numbers must be below `2^63−1`; MariaDB uses its separate `domain-server-seq` grammar. A single MySQL `UUID:txn` or `UUID:tag:txn` position means through that transaction. A malformed `gtid=...` value, including one holding only separators such as `gtid=,`, is rejected during config validation.
+
+If replay can include TABLE_MAP events written before the source enabled `binlog_row_metadata=FULL`, run `SYNC` for every replicated table after changing the source setting.
 
 ## Memory
 
@@ -323,7 +373,15 @@ memory:
 
 `hard_limit_mb` and `soft_target_mb` are reserved and do not enforce a process memory limit. They still have configuration bounds: `hard_limit_mb` accepts `256` through `2147483647`, and `soft_target_mb` accepts `128` through `2147483647`. `arena_chunk_mb` and `minute_epoch` are also reserved. Size the host so the full index and stored normalized text fit in RAM.
 
-`memory.normalize.nfkc` enables Unicode NFKC normalization, `width` accepts `keep`, `narrow`, or `wide` for character-width handling, and `lower` controls lowercasing. Their defaults are `true`, `narrow`, and `false`. These settings affect indexed text and queries alike. A dump must use the same normalization settings as the running configuration.
+The `memory.normalize` keys control text normalization:
+
+| Key | Values | Default |
+|-----|--------|---------|
+| `nfkc` | `true` / `false`: Unicode NFKC normalization | `true` |
+| `width` | `keep`, `narrow`, `wide`: character-width handling | `narrow` |
+| `lower` | `true` / `false`: lowercasing | `false` |
+
+These settings affect indexed text and queries alike. A dump must use the same normalization settings as the running configuration.
 
 ::: warning About the memory limit
 `hard_limit_mb` does not currently stop the process at the OS level. In production, estimate from the row count, stored text, `verify_text` mode, and cache size, then provision enough RAM.
@@ -379,7 +437,23 @@ api:
   admin_token: "replace-with-a-high-entropy-secret"
 ```
 
-TCP and HTTP bind to loopback by default. `worker_threads: 0` selects the automatic worker count. `idle_timeout_sec: 0` disables TCP idle reaping. The pending-frame limits cap completed requests waiting for a worker; `max_pending_frame_bytes` defaults to 4 MiB and is a separate per-connection byte budget, while `max_query_length` counts Unicode characters. Reads pause at 75% of either pending-frame limit and resume after the queue drains. `api.default_limit` defaults to 100 results. `max_query_length` defaults to 128 characters; `0` removes that limit. `api.http.max_connections` caps admitted HTTP connections, including sockets waiting for workers. When CORS is enabled for HTTP, `cors_allow_origin` must contain the origin value to return; it is not a list. `api.http.trusted_proxies` is a list of numeric reverse-proxy IP addresses whose `X-Forwarded-For` value may determine the client identity for ACLs and rate limiting; leave it empty unless requests arrive through those proxies. `api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`; network binds, HTTP body limit, and most connection settings require restart.
+TCP and HTTP bind to loopback by default. Notes on individual settings:
+
+| Setting | Behavior |
+|---------|----------|
+| `tcp.worker_threads` | `0` selects the automatic worker count |
+| `tcp.idle_timeout_sec` | `0` disables TCP idle reaping |
+| `tcp.max_pending_frames` | Caps completed requests waiting for a worker |
+| `tcp.max_pending_frame_bytes` | Per-connection byte budget for pending frames; defaults to 4 MiB |
+| `max_query_length` | Counts Unicode characters; defaults to 128, and `0` removes the limit |
+| `default_limit` | Default result count; defaults to 100 |
+| `http.max_connections` | Caps admitted HTTP connections, including sockets waiting for workers |
+| `http.cors_allow_origin` | With CORS enabled, the single origin value to return; it is not a list |
+| `http.trusted_proxies` | Numeric IP addresses of reverse proxies whose `X-Forwarded-For` value may set the client identity for ACLs and rate limiting; leave empty unless requests arrive through those proxies |
+
+Reads pause at 75% of either pending-frame limit and resume after the queue drains.
+
+`api.default_limit` and `api.max_query_length` can be changed at runtime with `SET`. Network binds, the HTTP body limit, and most connection settings require a restart.
 
 To use a Unix socket, set `api.unix_socket.path` and connect with `mygram-cli -s /path/to/mygramdb.sock`. On startup, MygramDB removes an existing socket only when a connection probe confirms it is stale. It refuses to replace a regular file, an active socket, or a path whose status is uncertain, with error 6015.
 
@@ -452,7 +526,18 @@ cache:
     max_queue_size: 100000
 ```
 
-`max_memory_mb` is a shared budget for cached results, cache containers, indexes, invalidation metadata, and the deferred invalidation queue. Startup rejects values below `1`, values above `1048576` MB, and—when the cache is enabled—values above 50% of detected physical memory. If physical memory cannot be detected, the ratio check is skipped with a warning. `ttl_seconds` accepts `0` through `2147483647`; `eviction_batch_size` and `invalidation.batch_size` accept `1` through `2147483647`; `invalidation.max_delay_ms` accepts `0` through `2147483647`; and `invalidation.max_queue_size` must be at least `1`. `ttl_seconds: 0` disables expiry. `min_query_cost_ms` must be finite when changed at runtime.
+`max_memory_mb` is a shared budget for cached results, cache containers, indexes, invalidation metadata, and the deferred invalidation queue. Startup rejects values outside these ranges:
+
+| Setting | Accepted range |
+|---------|----------------|
+| `max_memory_mb` | `1` through `1048576`; when the cache is enabled, also at most 50% of detected physical memory |
+| `ttl_seconds` | `0` through `2147483647`; `0` disables expiry |
+| `eviction_batch_size` | `1` through `2147483647` |
+| `invalidation.batch_size` | `1` through `2147483647` |
+| `invalidation.max_delay_ms` | `0` through `2147483647` |
+| `invalidation.max_queue_size` | `1` or more |
+
+If physical memory cannot be detected, the 50% check is skipped with a warning. `min_query_cost_ms` must be finite when changed at runtime.
 
 Only queries slower than `min_query_cost_ms` are cached, so cheap lookups do not evict useful entries. `invalidation_strategy: "ngram"` invalidates just the entries whose terms overlap a changed row; `"table"` drops every entry for the table, which is cheaper to compute but far more destructive.
 
@@ -485,7 +570,16 @@ dump:
   restore_max_section_mb: 2048
 ```
 
-`interval_sec` is measured in seconds. Its default is `0`, which disables automatic dumps; the example enables them every 7200 seconds (two hours). `retain` controls automatic dump rotation. Manual `DUMP SAVE` uses `default_filename` unless a path is provided; `DUMP SAVE .` is refused. `restore_memory_budget_mb` bounds aggregate staged data during a V2 restore; `restore_max_section_mb` bounds one encoded V2 section. `dump.load_on_startup: true` tries the default dump before a MySQL snapshot, validates the source identity and GTID, and falls back to MySQL when the dump cannot be loaded. It requires `replication.start_from: "snapshot"`. `DUMP SAVE` rejects documents that exceed restore limits instead of producing a dump that cannot be loaded. Every configured table must have completed its initial load before `DUMP SAVE`; otherwise it returns error 6029. In a MySQL-enabled build with a binlog reader, a GTID position is also required; a missing position returns 6029.
+| Key | Behavior |
+|-----|----------|
+| `interval_sec` | Seconds between automatic dumps. The default `0` disables them; the example uses 7200 (two hours) |
+| `retain` | Controls automatic dump rotation |
+| `default_filename` | File used by `DUMP SAVE` when no path is given; `DUMP SAVE .` is refused |
+| `restore_memory_budget_mb` | Bounds the total staged data during a V2 restore |
+| `restore_max_section_mb` | Bounds one encoded V2 section |
+| `load_on_startup` | Tries the default dump before a MySQL snapshot, validates the source identity and GTID, and falls back to MySQL if the dump cannot be loaded. Requires `replication.start_from: "snapshot"` |
+
+`DUMP SAVE` rejects documents that exceed the restore limits instead of writing a dump that cannot be loaded. Every configured table must have completed its initial load before `DUMP SAVE`, otherwise it returns error 6029. In a MySQL-enabled build with a binlog reader, a GTID position is also required, and a missing position returns 6029.
 
 ::: warning Put the dump directory on persistent storage
 Under Docker or Kubernetes, point `dump.dir` at a persistent volume. Writing dumps to the container's ephemeral filesystem loses them when the container is recreated.
@@ -533,4 +627,12 @@ SET cache.enabled = false
 SET api.default_limit = 200
 ```
 
-Only variables marked mutable by `SHOW VARIABLES` can be changed at runtime. If MygramDB was started with `--schema`, that schema's constraints also apply to `SET`; a value that violates them returns error 1004. Unknown variables return 1008, and startup-only variables return 1009. MySQL connection identity, tables, `memory.verify_text`, dump directory, network ACLs, and listener binds require restart.
+Only variables marked mutable by `SHOW VARIABLES` can be changed at runtime. If MygramDB was started with `--schema`, that schema's constraints also apply to `SET`. A failed `SET` returns one of these errors:
+
+| Error | Cause |
+|-------|-------|
+| 1004 | The value violates the `--schema` constraints |
+| 1008 | Unknown variable |
+| 1009 | Startup-only variable |
+
+The MySQL connection identity, tables, `memory.verify_text`, the dump directory, network ACLs, and listener binds require a restart.

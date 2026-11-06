@@ -78,15 +78,24 @@ Readiness stays false while any configured table has not been initialized. A suc
 
 ## Replication diagnostics
 
-Use `INFO`, `/health/ready`, `/health/detail`, or `/metrics` to observe replication. When `api.admin_token` is set, TCP `INFO` omits the entire `# Replication` section until the connection completes `AUTH`. HTTP `/metrics` remains public but omits all `mygramdb_replication_` metrics unless the request carries the bearer token. The health routes remain public and redact the current GTID, processed-event and queue counters, CRC counts, schema-incompatibility details, and raw MySQL error text. `/replication/status` also requires the token when `api.admin_token` is configured. The full error remains available to authorized clients and in the logs.
+Use `INFO`, `/health/ready`, `/health/detail`, or `/metrics` to observe replication. When `api.admin_token` is set, access is restricted as follows:
 
-The lag timestamp is updated when MygramDB advances the applied GTID. Treat `replication_seconds_since_last_applied` as an elapsed-time signal, not proof that MySQL currently has no new commits: an idle source also has no recent applied event. Alert on it together with MySQL write activity, replication state, and the error fields.
+| Endpoint | Behavior with `api.admin_token` set |
+| --- | --- |
+| TCP `INFO` | Omits the entire `# Replication` section until the connection completes `AUTH`. |
+| HTTP `/metrics` | Stays public, but omits all `mygramdb_replication_` metrics unless the request carries the bearer token. |
+| Health routes | Stay public, but redact the current GTID, processed-event and queue counters, CRC counts, schema-incompatibility details, and raw MySQL error text. |
+| `/replication/status` | Requires the token. |
+
+The full error remains available to authorized clients and in the logs.
+
+The lag timestamp is updated when MygramDB advances the applied GTID. `replication_seconds_since_last_applied` is an elapsed-time signal, not proof that MySQL has no new commits: an idle source also has no recent applied event. Alert on it together with MySQL write activity, replication state, and the error fields.
 
 If readiness returns `503`, use its `reason` first. Common states are an initial load that has not happened, an active `SYNC`, an active dump load, a stopped replication reader, or an incompatible schema. See [Replication](/docs/replication) for recovery and [Snapshot and dump recovery](/docs/snapshot) for dump procedures.
 
 ## Safe operational changes
 
-Long-running operations share one maintenance slot. `SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and scheduled snapshots cannot overlap. Schedule them deliberately, watch their status, and keep traffic out of a table while it is synchronizing.
+Long-running operations share one maintenance slot. `SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and scheduled dumps cannot overlap. Schedule them deliberately, watch their status, and keep traffic out of a table while it is synchronizing.
 
 `OPTIMIZE` checks memory before rebuilding an index. Its admission estimate includes the resident index, a full rebuild copy, term snapshots, batch bookkeeping, and a safety margin, so keep roughly 2.1 times the current index memory free. If the estimate does not fit, `OPTIMIZE` is refused before it starts; provision memory or reduce the indexed data before retrying.
 

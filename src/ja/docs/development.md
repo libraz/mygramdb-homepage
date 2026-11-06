@@ -1,6 +1,6 @@
 ---
 title: MygramDB 開発環境セットアップ - ビルド、リント、ツール
-description: MygramDBの開発環境セットアップ。CMake、LLVM 18、MySQLクライアント、ICUのインストール、VS Codeリンティング設定、Google C++スタイル規約、ビルド・フォーマット・テストの流れ。
+description: MygramDB の開発環境セットアップ。CMake、LLVM 18、MySQL クライアント、ICU のインストール、VS Code リンティング設定、Google C++スタイル規約、ビルド・フォーマット・テストの流れ。
 head:
   - - meta
     - name: keywords
@@ -9,10 +9,10 @@ head:
 
 # 開発環境セットアップ
 
-このガイドでは、リアルタイムリンティングと自動フォーマット（JavaScript の ESLint/Prettier のような機能）を備えた MygramDB の開発環境をセットアップする方法を説明します。
+MygramDB の C++ コードをビルド、整形、静的解析、テストするためのツールを準備します。
 
 ::: info このページの対象
-MygramDB本体をビルドしたり、C++コードを変更したりする開発者向けのページです。MygramDBを使うだけなら、まず[インストール](/ja/docs/installation)と[設定](/ja/docs/configuration)を読んでください。
+MygramDB 本体をビルドしたり、C++ コードを変更したりする開発者向けのページです。MygramDB を使うだけなら、まず[インストール](/ja/docs/installation)と[設定](/ja/docs/configuration)を読んでください。
 :::
 
 ## 前提条件
@@ -75,14 +75,14 @@ sudo update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-18 100
 
 ```bash
 # ツールがインストールされているか確認
-cmake --version        # 3.16+ であることを確認
+cmake --version        # 3.18+ であることを確認
 clang-format --version # 18.x.x であることを確認
 clang-tidy --version   # 18.x.x であることを確認
 clangd --version       # 18.x.x であることを確認（オプション、LSP 用）
 ```
 
 ::: info 用語補足
-**clang-format** はC++コードの見た目を自動整形するツール、**clang-tidy** は危険な書き方やスタイル違反を検出する静的解析ツールです。バージョンが違うと整形結果も変わるため、このプロジェクトではCIと同じバージョン18に揃えています。
+**clang-format** は C++コードの見た目を自動整形するツール、**clang-tidy** は危険な書き方やスタイル違反を検出する静的解析ツールです。バージョンが違うと整形結果も変わるため、このプロジェクトでは CI と同じバージョン 18 に揃えています。
 :::
 
 ## プロジェクトのビルド
@@ -102,25 +102,25 @@ make format
 
 ## VS Code セットアップ
 
-### 必須エクステンション
+### 必須の拡張機能
 
-VS Code を開いて、推奨エクステンションをインストールします：
+VS Code を開き、次の推奨拡張機能をインストールします。
 
 1. **C/C++**（`ms-vscode.cpptools`）- IntelliSense とデバッグ
 2. **CMake Tools**（`ms-vscode.cmake-tools`）- CMake 統合
 3. **Error Lens**（`usernamehw.errorlens`）- インラインエラー表示（ESLint のような）
 
-### オプションのエクステンション（快適に開発するため）
+### 任意の拡張機能（より快適に開発するため）
 
 4. **clangd**（`llvm-vs-code-extensions.vscode-clangd`）- リアルタイムリンティング用の高速 LSP
 
 ## リンティングを有効化
 
-プロジェクトをビルドした後、VS Code でリンティングを有効化します：
+プロジェクトをビルドしたあと、VS Code でリンティングを有効にします。
 
-### オプション A: C/C++ エクステンションを使用（シンプル）
+### オプション A: C/C++ 拡張機能を使う（シンプル）
 
-`.vscode/settings.json` を編集して変更：
+`.vscode/settings.json` を次のように編集します。
 
 ```json
 {
@@ -135,16 +135,16 @@ macOS では `brew --prefix llvm@18` の出力に `/bin/clang-tidy` または `/
 
 VS Code ウィンドウをリロード（Cmd/Ctrl + Shift + P → "Developer: Reload Window"）
 
-### オプション B: clangd を使用（高速）
+### オプション B: clangd を使う（高速）
 
-1. clangd エクステンションがインストールされていることを確認
+1. clangd 拡張機能がインストールされていることを確認します。
 2. clangd セクションを有効にし、`clangd.path` を LLVM 18 の絶対パスにします。macOS では `brew --prefix llvm@18` の出力に `/bin/clangd` を付け、Linux では `/usr/bin/clangd-18` を指定します。
-3. C/C++ エクステンションセクションをコメントアウト（OPTION 2）
-4. VS Code ウィンドウをリロード
+3. C/C++ 拡張機能の設定セクション（OPTION 2）をコメントアウトします。
+4. VS Code ウィンドウをリロードします。
 
 ## 有効化される機能
 
-セットアップ後、以下が利用可能になります：
+セットアップすると、次の機能が使えます。
 
 - **リアルタイムリンティング** - タイプしながら clang-tidy がチェック
 - **自動フォーマット** - 保存時にコードをフォーマット（Google C++ スタイル）
@@ -154,7 +154,7 @@ VS Code ウィンドウをリロード（Cmd/Ctrl + Shift + P → "Developer: Re
 
 ## コーディング規約
 
-このプロジェクトは特定の設定で **Google C++ スタイルガイド** に従います：
+このプロジェクトは **Google C++ スタイルガイド** に従い、次の設定を使います。
 
 ### コードフォーマット
 
@@ -164,7 +164,7 @@ VS Code ウィンドウをリロード（Cmd/Ctrl + Shift + P → "Developer: Re
 - ポインタ配置: 左（`int* ptr`、`int *ptr` ではない）
 - ブレース: アタッチスタイル（`if (x) {`）
 
-フォーマットツールの実行:
+フォーマットツールは次のように実行します。
 
 ```bash
 make format        # コードを自動整形
@@ -185,7 +185,7 @@ make lint          # clang-tidy で静的解析（時間がかかる）
 
 ### ドキュメントコメント
 
-すべての公開 API に Doxygen スタイルのコメントを使用：
+すべての公開 API に Doxygen スタイルのコメントを付けます。
 
 ```cpp
 /**
@@ -199,7 +199,7 @@ ReturnType FunctionName(Type param_name);
 
 ### clang-tidy 警告の抑制
 
-必要に応じて、NOLINTコメントで警告を抑制します:
+必要な場合は、NOLINT コメントで警告を抑制します。
 
 ```cpp
 // 良い例: 問題のある行の前に NOLINTNEXTLINE を使用
@@ -219,14 +219,14 @@ snprintf(buf, sizeof(buf), "%d",
 // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 ```
 
-**重要:** NOLINTコメントは1行で記述する必要があります。複数行のコメントは認識されません。
+**重要:** NOLINT コメントは 1行で記述する必要があります。複数行のコメントは認識されません。
 
 ## テストの実行
 
-既定のターゲット は `SLOW` と `LOAD` ラベルのテストを除外します。
+デフォルトのターゲットは、`SLOW` と `LOAD` ラベルのテストを除外します。
 
 ```bash
-# 既定の単体・結合テスト
+# デフォルトの単体・結合テスト
 make test
 
 # SLOW と LOAD のテストも含める
@@ -240,18 +240,18 @@ make test-large-dump
 ### E2E スイート
 
 ```bash
-# 既定の MySQL 8.4 スイート
+# デフォルトの MySQL 8.4 スイート
 make e2e-test
 
-# MySQL 8.4/9.7、MariaDB 10.11/11.8/12.3 の組み合わせ
+# MySQL 8.4、9.7、最新の Innovation リリースと、MariaDB 10.11/11.4/11.8/12.3 の組み合わせ
 make e2e-matrix
 ```
 
-テストの選択方法と MariaDB 専用の実行手順 は [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e) を参照してください。
+テストの選択方法と MariaDB 専用の実行手順は [E2E test README](https://github.com/libraz/mygram-db/tree/develop/e2e) を参照してください。
 
 ### ローカルでのサニタイザーとファジング
 
-サニタイザー付きビルドとファジングは、明示的に実行するローカル確認です。CI のジョブには含まれず、ファジング用のプログラムは CTest に登録されません。
+サニタイザー付きビルドは、明示的に実行するローカル確認です。リポジトリのサニタイザー用ワークフローは、手動で起動したときだけ動きます。ファジング用のプログラムは CI の必須チェックにも CTest にも含まれません。
 
 ```bash
 # 必要に応じて ENABLE_ASAN を ENABLE_TSAN または ENABLE_UBSAN に置き換える。
@@ -274,11 +274,11 @@ cmake --build build-libfuzzer --target binary_input_fuzz -j
 
 ### "clangd: Unable to find compile_commands.json"
 
-**解決策:** 最初にプロジェクトをビルドするため `make` を実行。
+**解決策:** 先に `make` を実行してプロジェクトをビルドします。
 
 ### "clang-tidy: error while loading shared libraries"
 
-**解決策:** clang-tidy バージョン 18 をインストール：
+**解決策:** clang-tidy バージョン 18 をインストールします。
 
 ```bash
 # macOS
@@ -302,7 +302,7 @@ sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang
 
 ### "clang-format not working"
 
-**解決策:** clang-format バージョン 18 をインストール：
+**解決策:** clang-format バージョン 18 をインストールします。
 
 ```bash
 # macOS
@@ -317,7 +317,7 @@ sudo apt-get install -y clang-format-18
 sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 100
 ```
 
-バージョンを確認：
+バージョンを確認します。
 
 ```bash
 clang-format --version  # 18.x.x であることを確認
@@ -332,13 +332,13 @@ clang-format --version  # 18.x.x であることを確認
 - [ ] ICU ライブラリをインストール
 - [ ] `make` を実行してプロジェクトをビルド
 - [ ] `build/compile_commands.json` が存在することを確認
-- [ ] VS Code エクステンションをインストール（C/C++、CMake Tools、Error Lens）
+- [ ] VS Code 拡張機能をインストール（C/C++、CMake Tools、Error Lens）
 - [ ] `.vscode/settings.json` で clang-tidy を有効化
 - [ ] VS Code ウィンドウをリロード
 
 ## 次のステップ
 
-セットアップが完了したら：
+セットアップが完了したら、次の手順で動作を確認します。
 
 1. 任意の `.cpp` または `.h` ファイルを開く
 2. 小さな変更を加える（例: スペースを追加）
@@ -347,18 +347,18 @@ clang-format --version  # 18.x.x であることを確認
 
 ## 開発の優先順位
 
-機能を実装したり変更を加えたりする場合、以下の順序で優先順位を付けます：
+機能を実装したり変更したりするときは、次の順で優先します。
 
 1. **パフォーマンス**: 速度と低レイテンシを最適化
 2. **メモリ効率**: メモリ使用量を抑える
 3. **保守性**: クリーンでテスト可能なコードを書く
 
-## Linux CI テスト（macOS開発者向け）
+## Linux CI テスト（macOS 開発者向け）
 
-Linux 固有のヘッダやコンパイラの問題を確認するには、Docker の Ubuntu 22.04 環境を使います。GitHub Actions の `ubuntu-latest` と同一の OS・ビルド設定ではありません。ネイティブビルドと `build/` を共有しない別の作業コピーで実行してください。
+Linux 固有のヘッダーやコンパイラの問題を確認するには、Docker の Ubuntu 22.04 環境を使います。GitHub Actions の `ubuntu-latest` と同一の OS・ビルド設定ではありません。ネイティブビルドと `build/` を共有しない別の作業コピーで実行してください。
 
 ```bash
 make docker-ci-check
 ```
 
-フォーマット、ビルド、clang-tidy、既定のテストを順に実行します。`SLOW` と `LOAD` は除外されます。全テストは `make test-all`、実データベースとの検証は E2E スイートで実行します。CI の実際の構成は [ワークフロー](https://github.com/libraz/mygram-db/blob/main/.github/workflows/ci.yml)、作業コピーの分離方法と個別コマンドは [Linux テストガイド](/ja/docs/linux-testing)を参照してください。
+フォーマット、ビルド、clang-tidy、デフォルトのテストを順に実行します。`SLOW` と `LOAD` は除外されます。全テストは `make test-all`、実データベースとの検証は E2E スイートで実行します。CI の実際の構成は [ワークフロー](https://github.com/libraz/mygram-db/blob/main/.github/workflows/ci.yml)、作業コピーの分離方法と個別コマンドは [Linux テストガイド](/ja/docs/linux-testing)を参照してください。

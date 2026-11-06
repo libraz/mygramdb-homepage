@@ -9,7 +9,7 @@ head:
 
 # MygramDB vs Elasticsearch vs MySQL FULLTEXT
 
-Choosing the right full-text search solution depends on your requirements. Here's a detailed comparison.
+The right full-text search option depends on your requirements. This page compares the three.
 
 ::: info The assumption behind this comparison
 MygramDB targets one specific case: the system of record is already in MySQL or MariaDB, and only search needs to be faster. If you want a search engine at the center of your data platform, or you need distributed analytics, Elasticsearch and similar tools are the better fit.
@@ -24,7 +24,7 @@ MygramDB targets one specific case: the system of record is already in MySQL or 
 | **Data sync** | MySQL / MariaDB binlog | Application or connector indexing | Native data |
 | **Scaling** | Full replicas; application-managed partitions | Distributed indexes | Database-level replication (MySQL FULLTEXT does not support partitioned tables; [MySQL docs](https://dev.mysql.com/doc/refman/8.4/en/fulltext-restrictions.html)) |
 | **Memory** | [Measured](/benchmarks) | Depends on index and workload | Buffer pool and workload |
-| **Multibyte / Unicode** | N-gram (ICU NFKC) | Configurable analyzers | Configurable parser |
+| **Multibyte / Unicode** | n-gram (ICU NFKC) | Configurable analyzers | Configurable parser |
 | **Aggregation** | FACET | Aggregations | SQL queries |
 
 ## Detailed Comparison
@@ -36,9 +36,9 @@ MygramDB targets one specific case: the system of record is already in MySQL or 
 **Pros:**
 - Cache-off benchmark results published with the test configuration
 - Binlog-based data sync (MySQL 8.4/9.7/26.x and MariaDB 10.11+/11.x/12.x)
-- Single binary deployment
+- Single binary deployment (MySQL still needs its own setup and an initial sync)
 - No cluster management
-- Language-agnostic N-gram tokenization with first-class multibyte UTF-8 support
+- Language-agnostic n-gram tokenization with first-class multibyte UTF-8 support
 - BM25 relevance scoring, highlighting, fuzzy search, faceted aggregation, and synonym expansion
 
 **Cons:**
@@ -92,11 +92,12 @@ See [Benchmarks](/benchmarks) for the current cache-off results and full test co
 The HTTP API uses `/tables/{identity}/search` from v1.7.0 onward; the older `/{table}/search` form was removed. Check [Upgrade to v1.7](/docs/migration-v1.7) before migrating.
 :::
 
-Follow the [Docker deployment guide](/docs/docker-deployment) to configure the MySQL source, credentials, bind addresses, and network allow list. Build the initial index with `SYNC` or enable `replication.auto_initial_snapshot`, then send search requests to MygramDB's TCP or HTTP API.
+Follow the [Docker deployment guide](/docs/docker-deployment) to configure the MySQL source, credentials, bind addresses, and network allowlist. Build the initial index with `SYNC` or enable `replication.auto_initial_snapshot`, then send search requests to MygramDB's TCP or HTTP API.
 
 ### From Elasticsearch to MygramDB
 
 Consider migrating if:
+
 - You don't need distributed search
 - Data fits in single-node RAM
 - Operational complexity is a concern

@@ -57,6 +57,29 @@
   background-color: var(--vp-c-brand-soft);
 }
 
+/* Between the hamburger breakpoint (768px) and 960px the full nav menu does not
+   fit (the Japanese labels overflow by ~100px), which widens the page and lets
+   it scroll sideways. Collapse search to its icon and tighten link padding. */
+@media (min-width: 768px) and (max-width: 959px) {
+  .VPNavBar .DocSearch-Button .DocSearch-Button-Placeholder,
+  .VPNavBar .DocSearch-Button .DocSearch-Button-Keys {
+    display: none;
+  }
+
+  .VPNavBar .DocSearch-Button .DocSearch-Search-Icon {
+    margin-right: 0;
+  }
+
+  .VPNavBar .VPNavBarSearch {
+    padding-left: 16px;
+  }
+
+  .VPNavBarMenuLink,
+  .VPNavBarMenuGroup .button {
+    padding: 0 9px;
+  }
+}
+
 /* ----------------------------------------------------------------- Footer */
 .VPFooter {
   border-top: 1px solid var(--vp-c-divider);

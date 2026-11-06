@@ -293,9 +293,11 @@ html[lang='ja'] .VPDoc .vp-doc .custom-block li {
   font-variant-numeric: tabular-nums;
 }
 
+/* break-word, not anywhere: `anywhere` lets auto table layout shrink a code
+   column to one character, splitting identifiers such as `DUMP SAVE` per letter. */
 .VPDoc .vp-doc td code,
 .VPDoc .vp-doc th code {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* Japanese pages: wider columns read better */

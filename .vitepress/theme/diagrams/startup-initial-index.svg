@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 600" role="img">
+  <title>Where the initial index comes from at startup</title>
+  <defs>
+    <marker id="si-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="si-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="si-w" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="warnt" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <style>
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <rect class="chip" x="380" y="24" width="200" height="40" rx="5"/>
+  <rect class="chip" x="340" y="96" width="280" height="40" rx="5"/>
+
+  <rect class="card" x="90" y="160" width="300" height="56" rx="5"/>
+  <rect class="chip" x="90" y="240" width="300" height="56" rx="5"/>
+  <rect class="alt" x="90" y="320" width="300" height="104" rx="5"/>
+  <path class="rule" d="M106 376 H374"/>
+
+  <rect class="chip" x="570" y="160" width="300" height="40" rx="5"/>
+  <rect class="chip" x="570" y="240" width="300" height="56" rx="5"/>
+  <rect class="alt" x="570" y="336" width="300" height="56" rx="5"/>
+  <rect class="alt" x="570" y="432" width="300" height="56" rx="5"/>
+
+  <rect class="card" x="380" y="520" width="200" height="56" rx="5"/>
+
+  <!-- edges -->
+  <path class="ln" d="M480 64 V95" marker-end="url(#si-a)"/>
+  <path class="ln" d="M340 116 H240 V159" marker-end="url(#si-a)"/>
+  <path class="ln" d="M620 116 H720 V159" marker-end="url(#si-a)"/>
+  <path class="ln" d="M240 216 V239" marker-end="url(#si-a)"/>
+  <path class="ln2" d="M240 296 V319" marker-end="url(#si-b)"/>
+  <path class="ln" d="M720 200 V239" marker-end="url(#si-a)"/>
+  <path class="ln2" d="M720 296 V335" marker-end="url(#si-b)"/>
+  <path class="ln2" d="M720 392 V431" marker-end="url(#si-b)"/>
+  <path class="ln2" d="M870 180 H912 V364 H871" marker-end="url(#si-b)"/>
+  <path class="warn" d="M390 268 H480 V364 H569" marker-end="url(#si-w)"/>
+  <path class="ln" d="M240 424 V548 H379" marker-end="url(#si-a)"/>
+  <path class="ln" d="M720 488 V548 H581" marker-end="url(#si-a)"/>
+
+  <!-- language-neutral text -->
+  <text class="mono" x="480" y="121" text-anchor="middle">dump.load_on_startup: true?</text>
+  <text class="mono" x="106" y="202">dump.dir/default_filename</text>
+  <text class="mono" x="720" y="185" text-anchor="middle">auto_initial_snapshot: true?</text>
+  <text class="mono" x="480" y="564" text-anchor="middle">readiness: ready</text>
+
+  <g data-i18n="en">
+    <text class="h" x="480" y="49" text-anchor="middle">Server starts</text>
+    <text class="s" x="290" y="110" text-anchor="middle">yes</text>
+    <text class="s" x="670" y="110" text-anchor="middle">no</text>
+    <text class="h" x="106" y="182">Restore the dump file</text>
+    <text class="h" x="106" y="262">Valid for this source?</text>
+    <text class="s" x="106" y="282">source UUID, GTID, tables</text>
+    <text class="s" x="250" y="312">yes</text>
+    <text class="h" x="106" y="342">Replay the binlog</text>
+    <text class="s" x="106" y="362">from the GTID saved in the dump</text>
+    <text class="s warnt" x="106" y="396">If it cannot catch up: not_ready,</text>
+    <text class="s warnt" x="106" y="412">restored data is still served</text>
+    <text class="s warnt" x="488" y="316">invalid: fallback</text>
+    <text class="s" x="730" y="224">no</text>
+    <text class="h" x="586" y="262">Start with an empty index</text>
+    <text class="s" x="586" y="282"><tspan class="mono">not_ready</tspan> until SYNC <tspan class="mono">&lt;table&gt;</tspan></text>
+    <text class="s" x="918" y="276">yes</text>
+    <text class="h" x="586" y="358">Initial snapshot from MySQL</text>
+    <text class="s" x="586" y="378">a consistent read of each table</text>
+    <text class="h" x="586" y="454">Follow the binlog</text>
+    <text class="s" x="586" y="474">from the snapshot's GTID</text>
+    <text class="h" x="480" y="544" text-anchor="middle">Serving searches</text>
+  </g>
+
+  <g data-i18n="ja">
+    <text class="h" x="480" y="49" text-anchor="middle">サーバー起動</text>
+    <text class="s" x="290" y="110" text-anchor="middle">はい</text>
+    <text class="s" x="670" y="110" text-anchor="middle">いいえ</text>
+    <text class="h" x="106" y="182">ダンプファイルを復元</text>
+    <text class="h" x="106" y="262">このソースのダンプか</text>
+    <text class="s" x="106" y="282">ソース UUID・GTID・テーブルを検証</text>
+    <text class="s" x="250" y="312">はい</text>
+    <text class="h" x="106" y="342">binlog を再生</text>
+    <text class="s" x="106" y="362">ダンプに保存した GTID から</text>
+    <text class="s warnt" x="106" y="396">追いつけない場合は not_ready、</text>
+    <text class="s warnt" x="106" y="412">復元したデータで応答は続ける</text>
+    <text class="s warnt" x="488" y="316">無効ならフォールバック</text>
+    <text class="s" x="730" y="224">いいえ</text>
+    <text class="h" x="586" y="262">空のインデックスで起動</text>
+    <text class="s" x="586" y="282"><tspan class="mono">SYNC &lt;table&gt;</tspan> を実行するまで <tspan class="mono">not_ready</tspan></text>
+    <text class="s" x="918" y="276">はい</text>
+    <text class="h" x="586" y="358">MySQL から初期スナップショット</text>
+    <text class="s" x="586" y="378">各テーブルを一貫性のある読み取りで取得</text>
+    <text class="h" x="586" y="454">binlog に追従</text>
+    <text class="s" x="586" y="474">スナップショットの GTID から</text>
+    <text class="h" x="480" y="544" text-anchor="middle">検索を提供</text>
+  </g>
+</svg>

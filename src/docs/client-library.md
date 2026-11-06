@@ -1,6 +1,6 @@
 ---
 title: libmygramclient - MygramDB C/C++ Client Library
-description: libmygramclient is the installable C/C++ client SDK bundled with MygramDB. It provides CMake and pkg-config integration, C++17 and C APIs, typed errors, and search-expression helpers.
+description: "libmygramclient, the C/C++ client SDK bundled with MygramDB: CMake and pkg-config integration, C++17 and C APIs, typed errors, and query helpers."
 head:
   - - meta
     - name: keywords
@@ -23,10 +23,10 @@ This library is a thin client for the MygramDB TCP protocol. Query grammar and r
 **RAII** is a C++ pattern where a resource — a connection, memory — is acquired when an object is constructed and released automatically when it is destroyed. It makes cleanup hard to forget, even with exceptions or early returns.
 :::
 
-- Full support for all MygramDB protocol commands
+- Methods for the MygramDB protocol commands: search, count, get, facet, dump, sync, cache, replication and runtime variables
 - Modern C++17 API with RAII and type safety
 - C API for easy integration with other languages
-- Thread-safe connection management
+- Thread-safe connection management: commands on one client are serialized by a mutex
 - Both static and shared library builds
 - Full Unicode support including 4-byte UTF-8 characters (emojis: 😀🎉👍)
 
@@ -235,7 +235,9 @@ if (result) {
 
 ### Administrative authentication
 
-Administrative authentication is required only when the server has a non-empty `api.admin_token`. The C++ `ClientConfig` has no admin-token field, so send `AUTH` on that same `MygramClient` and require the exact `OK AUTHENTICATED` response before `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, or `EnableDebug`/`DisableDebug`. A successful raw send only means a response was received. A manually sent `AUTH` applies to the current connection; authenticate again after reconnecting. Search, count, get, and facet operations do not require authentication.
+Administrative commands need authentication only when the server has a non-empty `api.admin_token`. The C++ `ClientConfig` has no admin-token field, so authenticate by sending `AUTH` on the same `MygramClient`. Require the exact response `OK AUTHENTICATED` before calling `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, the replication commands, or `EnableDebug`/`DisableDebug`.
+
+A successful raw send only means a response was received, not that authentication succeeded. A manually sent `AUTH` applies to the current connection, so authenticate again after reconnecting. Search, count, get, and facet operations do not require authentication.
 
 ```cpp
 #include <cstdlib>
@@ -340,10 +342,10 @@ if (result) {
 | `python OR ruby` | `(python OR ruby)` | Either "python" or "ruby" |
 | `order` | `"order"` | Literal word; reserved clause keywords are quoted |
 | `go or rust` | `(go OR rust)` | `OR` is recognized case-insensitively as a whole word |
-| `owner's draft` | `"owner's draft"` | Apostrophes make the value one quoted wire token |
+| `owner's draft` | `"owner's" AND draft` | A term containing an apostrophe is quoted as one wire token |
 | `"deep learning" tutorial` | `"deep learning" AND tutorial` | Phrase and term |
 | `golang +(tutorial OR guide)` | `golang AND (tutorial OR guide)` | "golang" AND either "tutorial" or "guide" |
-| `(tutorial -video)` | `(tutorial NOT video)` | A minus inside a group becomes `NOT` |
+| `(tutorial -video)` | `((tutorial NOT video))` | A minus inside a group becomes `NOT`; the group gains an extra pair of parentheses |
 | `AI machine -learning` | `AI AND machine AND NOT learning` | Must have "AI" and "machine", exclude "learning" |
 | `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | Full-width space delimiter; values emitted by the SDK are quoted when needed |
 | `😀 tutorial -😢` | `😀 AND tutorial AND NOT 😢` | Emoji search (4-byte UTF-8) |
@@ -431,7 +433,9 @@ cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 
 ### Administrative authentication
 
-Administrative authentication is required only when the server has a non-empty `api.admin_token`. `MygramClientConfig_C` and `MygramClientConfigV2_C` have no admin-token field. In that case, before calling an administrative method, send `AUTH` with `mygramclient_send_command` on the same connected `MygramClient_C` and require the exact `OK AUTHENTICATED` response; a `0` return only means a raw response was received and clears the last error. Use `mygramclient_get_last_error` only when the return value is nonzero. A manually sent `AUTH` applies to the current connection, so send it again after reconnecting. This applies to the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, replication, and `EnableDebug`/`DisableDebug`, but not to search, count, get, or facet operations. Free the response with `mygramclient_free_string` and never log the token or command.
+Administrative commands need authentication only when the server has a non-empty `api.admin_token`. `MygramClientConfig_C` and `MygramClientConfigV2_C` have no admin-token field, so before calling an administrative function, send `AUTH` with `mygramclient_send_command` on the same connected `MygramClient_C`. Require the exact response `OK AUTHENTICATED`.
+
+A `0` return only means a raw response was received, and it clears the last error. Call `mygramclient_get_last_error` only when the return value is nonzero. A manually sent `AUTH` applies to the current connection, so send it again after reconnecting. The requirement covers the C equivalents of `GetConfig`/`CONFIG`, `SetVariable`, `ShowVariables`, `Cache*`, `Optimize`, `Sync*`, `Dump*`, `Save`, `Load`, the replication commands, and `EnableDebug`/`DisableDebug`, but not search, count, get, or facet. Free the response with `mygramclient_free_string`, and never log the token or the command.
 
 The C API uses the same quoting rule for literal search text, AND/NOT terms, filter values, and highlight tags. A failed send after a reset returns a nonzero status; inspect `mygramclient_get_last_error`, reconnect, and then retry.
 
@@ -471,9 +475,17 @@ For new code, use `MygramSearchOptions_C` and `mygramclient_search_with_options`
 
 In `MygramSearchOptions_C`, `sort_desc` values of `0` or greater mean descending, and a negative value means ascending. Zero-initializing the typed structure therefore keeps the default descending order. The older `mygramclient_search_advanced()` function uses a different convention: its `sort_desc` argument is `0` for ascending and non-zero for descending.
 
-`MygramClientConfigV2_C` is the preferred configuration for new C programs. `timeout_ms` is the ordinary operation deadline; `connect_timeout_ms` is the connection deadline and falls back to `timeout_ms` when zero. `max_response_bytes` limits a response frame and defaults to 64 MiB when zero. The dedicated `dump_*_timeout_ms` and `optimize_timeout_ms` fields use the client defaults when zero or unavailable in an older structure. Set `unix_socket_path` to use a Unix socket; it takes precedence over TCP host and port.
+`MygramClientConfigV2_C` is the preferred configuration for new C programs. Its timeout and limit fields behave as follows.
 
-Both `MygramClientConfigV2_C` and `MygramSearchOptions_C` are append-only, size-aware structures within the same shared-library ABI major. Set `struct_size` to the size your caller knows. The library ignores later fields and supplies their defaults. V2 configurations also set `version` to `MYGRAMCLIENT_CONFIG_V2_VERSION`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain available as the legacy API.
+| Field | Behavior |
+|-------|----------|
+| `timeout_ms` | Deadline for ordinary operations |
+| `connect_timeout_ms` | Connection deadline; `0` falls back to `timeout_ms` |
+| `max_response_bytes` | Limit for one response frame; `0` means 64 MiB |
+| `dump_*_timeout_ms`, `optimize_timeout_ms` | Operation-specific deadlines; `0`, or absence in an older structure, uses the client defaults |
+| `unix_socket_path` | Connect through a Unix socket; takes precedence over TCP host and port |
+
+Both `MygramClientConfigV2_C` and `MygramSearchOptions_C` are append-only, size-aware structures within the same shared-library ABI major. Set `struct_size` to the size your caller knows. The library ignores later fields and supplies their defaults. V2 configurations also set `version` to `MYGRAMCLIENT_CONFIG_V2_VERSION`. The legacy `MygramClientConfig_C` and `mygramclient_create()` remain available.
 
 ```c
 MygramFilter_C filters[] = {
@@ -535,7 +547,7 @@ mygramclient_free_string(diagnostic);
 
 ## Node.js Bindings Example
 
-Using node-gyp with the C API:
+This example uses node-gyp with the C API.
 
 ```javascript
 // binding.gyp
@@ -620,14 +632,17 @@ NODE_API_MODULE(mygramdb, Init)
 ### C++ API Classes
 
 #### ClientConfig
-- `host` - Server hostname (default: "127.0.0.1")
-- `port` - Server port (default: 11016)
-- `timeout_ms` - Ordinary operation timeout (default: 5000)
-- `connect_timeout_ms` - Connect timeout; `0` uses `timeout_ms`
-- `recv_buffer_size` - Receive buffer size (default: 65536)
-- `max_response_bytes` - Maximum response frame; `0` uses the 64 MiB default
-- `unix_socket_path` - Unix socket path; when set, it takes precedence over TCP
-- `dump_save_timeout_ms`, `dump_load_timeout_ms`, `dump_verify_timeout_ms`, `optimize_timeout_ms` - Operation-specific deadlines; `0` uses `timeout_ms`
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `host` | `"127.0.0.1"` | Server hostname |
+| `port` | `11016` | Server port |
+| `timeout_ms` | `5000` | Ordinary operation timeout |
+| `connect_timeout_ms` | — | Connect timeout; `0` uses `timeout_ms` |
+| `recv_buffer_size` | `65536` | Receive buffer size |
+| `max_response_bytes` | — | Maximum response frame; `0` uses the 64 MiB default |
+| `unix_socket_path` | — | Unix socket path; when set, it takes precedence over TCP |
+| `dump_save_timeout_ms`, `dump_load_timeout_ms`, `dump_verify_timeout_ms`, `optimize_timeout_ms` | — | Operation-specific deadlines; `0` uses `timeout_ms` |
 
 #### SearchResponse
 - `results` - Vector of SearchResult for the current `LIMIT`/`OFFSET` page

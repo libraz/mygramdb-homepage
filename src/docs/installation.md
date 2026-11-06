@@ -42,21 +42,25 @@ sudo systemctl enable --now mygramdb
 ## Docker
 
 ::: warning Prepare a config file before starting
-For production use under Docker, mount a config file containing the MySQL connection, replication settings, target tables, `network.allow_cidrs`, and `api.admin_token`. The mounted config must set `api.tcp.bind: 0.0.0.0` and, when HTTP is enabled, `api.http.bind: 0.0.0.0` so the published ports can reach the container. Keep the loopback host mappings below and a restrictive CIDR allowlist; expose the service through a reverse proxy only after setting an admin token. Simply starting the image does not complete the initial sync of existing data.
+For production use under Docker, mount a config file that contains the MySQL connection, replication settings, target tables, `network.allow_cidrs`, and `api.admin_token`.
+
+The mounted config must set `api.tcp.bind: 0.0.0.0` and, when HTTP is enabled, `api.http.bind: 0.0.0.0` so the published ports can reach the container. Keep the loopback host mappings below and a restrictive CIDR allowlist. Expose the service through a reverse proxy only after setting an admin token.
+
+Starting the image does not load your existing data. Run `SYNC <table>` for that.
 :::
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.1
+docker pull ghcr.io/libraz/mygram-db:1.12.0
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
-  ghcr.io/libraz/mygram-db:1.11.1
+  ghcr.io/libraz/mygram-db:1.12.0
 ```
 
 Available tags:
-- `ghcr.io/libraz/mygram-db:1.11.1`
+- `ghcr.io/libraz/mygram-db:1.12.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
 Supports both `linux/amd64` and `linux/arm64`.
@@ -112,6 +116,12 @@ brew install cmake mysql-client@8.4 icu4c pkg-config
 git clone https://github.com/libraz/mygram-db.git
 cd mygram-db
 make
+```
+
+The build requires CMake 3.18 or later and fetches its pinned dependencies, including the binlog decoder libmybinlog, from GitHub. For an offline build, point `MYBINLOG_SOURCE_DIR` at a local libmybinlog checkout:
+
+```bash
+make MYBINLOG_SOURCE_DIR=/path/to/libmybinlog
 ```
 
 ### Install System-wide
@@ -182,4 +192,4 @@ MygramDB **refuses to run as root** for security. Always run it as a dedicated n
 
 - [Docker Deployment](/docs/docker-deployment)
 - [Operations Guide](/docs/operations)
-- [Upgrade to v1.11](/docs/upgrade-v1.11)
+- [Upgrade to v1.12](/docs/upgrade-v1.12)

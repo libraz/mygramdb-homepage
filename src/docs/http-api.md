@@ -1,6 +1,6 @@
 ---
 title: MygramDB HTTP API - RESTful JSON Search Endpoints
-description: MygramDB RESTful JSON API reference. Search, count, facet, document GET, /info, Prometheus /metrics, health probes, replication status, CORS, and client examples in curl, JS, and Python.
+description: "MygramDB HTTP JSON API reference: search, count, facet, document GET, /info, Prometheus /metrics, health probes, replication status, CORS, and examples."
 head:
   - - meta
     - name: keywords
@@ -33,14 +33,22 @@ api:
     max_body_bytes: 16777216 # Request-body cap (16 MiB by default)
     trusted_proxies: []   # Numeric reverse-proxy IPs allowed to supply X-Forwarded-For
     enable_cors: false    # Optional: enable only when exposing to browsers
-    cors_allow_origin: "" # Optional origin allowed when CORS is enabled
+    cors_allow_origin: "" # Required when enable_cors is true
 ```
 
 ::: warning
 TCP/HTTP servers bind to loopback by default. If you must expose them publicly, explicitly set `api.tcp.bind`/`api.http.bind`, configure `network.allow_cidrs` to the exact IP ranges that should connect, and keep TLS/API authentication in front of MygramDB (e.g., reverse proxy). CORS is disabled by default and should only be enabled with a trusted origin.
 :::
 
-`api.http.max_connections` caps admitted HTTP sockets, including sockets waiting for an HTTP worker. `api.http.max_body_bytes` rejects oversized POST bodies with `413 Payload Too Large` before routing; the default is 16 MiB. `api.http.trusted_proxies` is an allowlist of numeric proxy IP addresses. Entries are normalized before matching, so an IPv4 entry matches both `a.b.c.d` and its IPv4-mapped IPv6 form `::ffff:a.b.c.d` on a dual-stack listener. MygramDB honors `X-Forwarded-For` only when the direct TCP peer matches that allowlist and ignores forwarding headers from other clients. It normalizes the resulting client identity the same way TCP does, so ACL checks, rate limiting, and logs use the same identity on both surfaces; the rate-limit bucket is shared across protocols.
+| Setting | Behavior |
+|---------|----------|
+| `api.http.max_connections` | Caps admitted HTTP sockets, including sockets waiting for an HTTP worker. |
+| `api.http.max_body_bytes` | Rejects POST bodies above this size with `413 Payload Too Large` before routing. Default: 16 MiB. |
+| `api.http.trusted_proxies` | Allowlist of numeric proxy IP addresses that may supply `X-Forwarded-For`. |
+
+Entries in `trusted_proxies` are normalized before matching, so an IPv4 entry matches both `a.b.c.d` and its IPv4-mapped IPv6 form `::ffff:a.b.c.d` on a dual-stack listener. MygramDB honors `X-Forwarded-For` only when the direct TCP peer is on the list, and ignores forwarding headers from other clients. The resulting client identity is normalized the same way as for TCP, so ACL checks, rate limiting, and logs use the same identity on both surfaces. The rate-limit bucket is shared across protocols.
+
+Starting a second instance with the same HTTP bind address and port fails with `Bind failed (6000)` (`kNetworkBindFailed`).
 
 ::: info What is CORS?
 **CORS** is the browser mechanism that permits a page to call an API on another domain. Server-to-server traffic does not need it. Enable it only when a browser calls MygramDB directly, and restrict it to a trusted origin.
@@ -48,14 +56,26 @@ TCP/HTTP servers bind to loopback by default. If you must expose them publicly, 
 
 ## API Endpoints
 
-For HTTP, `network.allow_cidrs` is checked after request headers are parsed and before the body is read. A denied peer receives `403` without its body being read, but occupies a connection slot until that check. The allowlist is not an HTTP socket-accept filter.
+| Route | Purpose | Admin token (`api.admin_token`) |
+|-------|---------|---------------------------------|
+| `POST /tables/{identity}/search` | Full-text search | Not used |
+| `POST /tables/{identity}/count` | Count matches | Not used |
+| `POST /tables/{identity}/facet` | Facet buckets for a column | Not used |
+| `GET /tables/{identity}/{primary_key}` | Fetch one document | Not used |
+| `POST /optimize` | Compact posting lists | Required |
+| `GET /info` | Statistics as JSON | Not used |
+| `GET /metrics` | Prometheus metrics | Optional; needed for replication metrics |
+| `GET /health`, `GET /health/live` | Load balancer check, liveness probe | Not used |
+| `GET /health/ready` | Readiness probe | Optional; needed for replication error counters |
+| `GET /health/detail` | Detailed monitoring snapshot | Optional; needed for replication details |
+| `GET /config` | Redacted configuration summary | Required |
+| `GET /replication/status` | MySQL replication status | Required |
 
-Handler-generated responses except `/metrics` return JSON with `Content-Type: application/json`; `/metrics` returns Prometheus text. CORS preflight `OPTIONS` requests return `204 No Content` without a body. Table routes use a single
-identity segment `/tables/{identity}`, where `{identity}` is the database-qualified name `` `database.table` ``
-(for example, table `articles` in database `app_db` is addressed as `/tables/app_db.articles`). In a
-single-database deployment (only one distinct database is configured), a bare `table` name also works
-and resolves to that database — for example `/tables/articles`. A qualifier is required only when the
-configuration spans two or more databases; a bare name is then rejected as ambiguous with `404 Not Found` and `error_code: 4007`.
+"Required" and "Optional" apply only when `api.admin_token` is non-empty; without a token these routes are open. Every route is subject to the `network.allow_cidrs` allowlist. For HTTP, that check runs after the request headers are parsed and before the body is read. A denied peer receives `403` without its body being read, but occupies a connection slot until the check. The allowlist is not an HTTP socket-accept filter.
+
+Handler-generated responses return JSON with `Content-Type: application/json`, except `/metrics`, which returns Prometheus text. CORS preflight `OPTIONS` requests return `204 No Content` without a body.
+
+Table routes use a single identity segment, `/tables/{identity}`. `{identity}` is the database-qualified name `` `database.table` ``; for example, table `articles` in database `app_db` is addressed as `/tables/app_db.articles`. When only one database is configured, a bare table name also works and resolves to that database (`/tables/articles`). A qualifier is required only when the configuration spans two or more databases. A bare name is then rejected as ambiguous with `404 Not Found` and `error_code: 4007`.
 
 ::: tip Thinking about identity
 `identity` is the name that uniquely designates the table to search. With one database it is `articles`; with several it is `app_db.articles`.
@@ -99,7 +119,7 @@ Content-Type: application/json
 | `limit` | integer | No | Maximum results to return (default: 100, max: 1000) |
 | `offset` | integer | No | Number of results to skip (default: 0) |
 | `sort` | object | No | Sort configuration (e.g., `{"column": "_score", "order": "DESC"}`) |
-| `highlight` | object | No | Highlight configuration (see below) |
+| `highlight` | object | No | Highlight configuration (see below). Each result then carries a `highlight` snippet string |
 | `fuzzy` | integer | No | Fuzzy search edit distance (`1` or `2`) |
 
 `limit` must be between 1 and 1000. A value above 1000 or more than 64 filter conditions returns `400 Bad Request` with `error_code: 3000`. A non-integer `limit` or a value below 1 returns `error_code: 3008`.
@@ -120,13 +140,15 @@ HTTP treats `q` as literal text by default. For example, `"AND"` and `"LIMIT"` a
 
 **Boolean Query Syntax (`mode: "boolean"`):**
 
-- **Simple search**: `"keyword"`
-- **Quoted phrases**: `"\"breaking news\""` (searches for exact phrase)
-- **AND operator**: `"tech AND AI AND machine learning"`
-- **OR operator**: `"(mysql OR postgresql) AND performance"`
-- **NOT operator**: `"news NOT sports"`
-- **AND NOT form**: `"news AND NOT sports"` (equivalent exclusion)
-- **Combined**: `"tech AND AI NOT old"`
+| Syntax | Example `q` value | Note |
+|--------|-------------------|------|
+| Simple search | `"keyword"` | |
+| Quoted phrase | `"\"breaking news\""` | Searches for the exact phrase |
+| AND | `"tech AND AI AND machine learning"` | |
+| OR | `"(mysql OR postgresql) AND performance"` | |
+| NOT | `"news NOT sports"` | |
+| AND NOT | `"news AND NOT sports"` | Equivalent exclusion |
+| Combined | `"tech AND AI NOT old"` | |
 
 Use JSON fields for `limit`, `offset`, `sort`, `filters`, `highlight`, and `fuzzy`. `q` never accepts those control clauses; in literal mode, text such as `LIMIT` or `SORT` remains part of the search text.
 
@@ -311,7 +333,9 @@ Authorization: Bearer <token>
 {"table":"app_db.articles"}
 ```
 
-`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header; otherwise it returns `401`, sets `WWW-Authenticate: Bearer`, and includes `error_code: 7`. The token comparison is constant-time. The only HTTP routes that use this token as an admission requirement are `GET /config`, `GET /replication/status`, and `POST /optimize`. `GET /health/ready`, `GET /health/detail`, and `GET /metrics` may inspect the same credential to reveal protected replication data, but remain open.
+`Content-Type` must be `application/json`. When `api.admin_token` is non-empty, this endpoint requires an exact `Authorization: Bearer <token>` header. Without it, the endpoint returns `401` with `WWW-Authenticate: Bearer` and `error_code: 7`. The token comparison is constant-time.
+
+Only `GET /config`, `GET /replication/status`, and `POST /optimize` use the token as an admission requirement. `GET /health/ready`, `GET /health/detail`, and `GET /metrics` check the same credential to decide whether to reveal protected replication data, but stay open to everyone.
 
 Successful requests return `200` with `{ "status": "ok", "result": "OPTIMIZED ..." }`. The body accepts only `table`; an unknown field or a non-string table is a `400` request error.
 
@@ -367,7 +391,7 @@ GET /info HTTP/1.1
 ```json
 {
   "server": "MygramDB",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "uptime_seconds": 3600,
   "total_requests": 15000,
   "total_commands_processed": 15000,
@@ -463,12 +487,15 @@ GET /info HTTP/1.1
 | `tables.<name>.memory_human` | Human-readable memory usage for table |
 
 **Memory Health Status:**
-- `HEALTHY`: >20% system memory available
-- `WARNING`: 10-20% system memory available
-- `CRITICAL`: <10% system memory available (OPTIMIZE will be rejected)
-- `UNKNOWN`: Unable to determine status
 
-This endpoint is suitable for integration with monitoring tools that support JSON format.
+| Status | Meaning |
+|--------|---------|
+| `HEALTHY` | More than 20% of system memory is available |
+| `WARNING` | 10-20% of system memory is available |
+| `CRITICAL` | Less than 10% of system memory is available (OPTIMIZE is rejected) |
+| `UNKNOWN` | The status cannot be determined |
+
+Monitoring tools that read JSON can consume this endpoint directly.
 
 ### GET /metrics
 
@@ -489,7 +516,7 @@ GET /metrics HTTP/1.1
 ```text
 # HELP mygramdb_server_info MygramDB server information
 # TYPE mygramdb_server_info gauge
-mygramdb_server_info{version="1.11.1"} 1
+mygramdb_server_info{version="1.12.0"} 1
 
 # HELP mygramdb_server_uptime_seconds Server uptime in seconds
 # TYPE mygramdb_server_uptime_seconds counter
@@ -597,7 +624,13 @@ Liveness probe. Returns `200 OK` while the HTTP server process is running, even 
 
 ### GET /health/ready
 
-Readiness probe for traffic gating. Returns `200 OK` only when initial data is loaded, the server is not loading, no `SYNC` is running, and configured replication is available. Its JSON body includes `data_initialized`, `loading`, and `status` (`"ready"` or `"not_ready"`); it returns `503 Service Unavailable` when these conditions are not met. Table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
+Readiness probe for traffic gating. Returns `200 OK` only when all of these hold:
+
+- Initial data is loaded and the server is not loading.
+- No `SYNC` is running.
+- Configured replication is available.
+
+Otherwise it returns `503 Service Unavailable`. The JSON body includes `data_initialized`, `loading`, and `status` (`"ready"` or `"not_ready"`). Table read routes (`search`, `count`, `facet`, and document `GET`) also return `503` while their table is synchronizing.
 
 `/health`, `/health/live`, and `/health/ready` are not rate limited, so a probe is not answered with `429`. `/health/detail` remains rate limited because it builds a detailed snapshot.
 
@@ -607,7 +640,11 @@ On Kubernetes, wire `/health/live` to the liveness probe and `/health/ready` to 
 
 ### GET /health/detail
 
-Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`; use `/health/ready` rather than this endpoint for load balancer readiness decisions. This route remains open, but when `api.admin_token` is configured it omits `current_gtid`, `processed_events`, `queue_size`, `crc_errors`, and `schema_incompatible` unless the request has a valid `Authorization: Bearer <token>` header. `/health/ready` likewise omits `replication_crc_errors` and `replication_schema_incompatible` without accepted admin credentials. `/health/ready` and `/health/detail` expose a replication error-code description instead of raw MySQL error text. During `SYNC`, the binlog component reports a sync pause separately from a disconnected replication state. Every HTTP route, including `/health`, `/health/live`, and `/health/ready`, is subject to the CIDR allow list.
+Detailed monitoring snapshot. Returns `200 OK` with `"status": "healthy"` or `"status": "degraded"`. Use `/health/ready`, not this endpoint, for load balancer readiness decisions.
+
+The route is open, but when `api.admin_token` is configured it omits `current_gtid`, `processed_events`, `queue_size`, `crc_errors`, and `schema_incompatible` unless the request has a valid `Authorization: Bearer <token>` header. `/health/ready` likewise omits `replication_crc_errors` and `replication_schema_incompatible` without accepted admin credentials.
+
+`/health/ready` and `/health/detail` expose a description of the replication error code instead of raw MySQL error text. During `SYNC`, the binlog component reports a sync pause separately from a disconnected replication state. Every HTTP route, including `/health`, `/health/live`, and `/health/ready`, is subject to the CIDR allowlist.
 
 ### GET /config
 
@@ -620,7 +657,7 @@ GET /config HTTP/1.1
 Authorization: Bearer <token>
 ```
 
-When `api.admin_token` is non-empty, `/config` requires an exact `Authorization: Bearer <token>` header. A missing or invalid token returns `401 Unauthorized`, includes `WWW-Authenticate: Bearer`, and uses `error_code: 7`. If no admin token is configured, the route is open. If no configuration object is loaded, it returns `503 Service Unavailable` with `error_code: 6026`. Starting another instance with the same HTTP bind address and port fails with `Bind failed (6000)` (`kNetworkBindFailed`).
+When `api.admin_token` is non-empty, `/config` requires an exact `Authorization: Bearer <token>` header. A missing or invalid token returns `401 Unauthorized`, includes `WWW-Authenticate: Bearer`, and uses `error_code: 7`. If no admin token is configured, the route is open. If no configuration object is loaded, it returns `503 Service Unavailable` with `error_code: 6026`.
 
 **Response (200 OK):**
 
@@ -693,14 +730,14 @@ When `api.admin_token` is non-empty, `/replication/status` has the same bearer-t
 
 ```json
 {
-  "error": "Replication not configured",
+  "error": "MySQL replication not compiled",
   "error_code": 4
 }
 ```
 
 ## CORS Support
 
-Set `api.http.enable_cors: true` to turn on CORS (Cross-Origin Resource Sharing) headers for browser clients, then specify the trusted origin via `api.http.cors_allow_origin`. If the origin is empty, MygramDB keeps CORS disabled and sends no wildcard origin. Keep CORS disabled when the API is not accessed directly from browsers.
+Set `api.http.enable_cors: true` to turn on CORS (Cross-Origin Resource Sharing) headers for browser clients, then specify the trusted origin via `api.http.cors_allow_origin`. When `enable_cors` is true, `cors_allow_origin` must not be empty: the configuration fails to load and the server does not start. MygramDB never falls back to a wildcard origin. Keep CORS disabled when the API is not accessed directly from browsers.
 
 **CORS Headers:**
 
@@ -830,18 +867,21 @@ Invalid JSON, JSON nesting deeper than 32 levels, and malformed Boolean expressi
 | 403 | Forbidden (source IP is not allowed) |
 | 404 | Not Found (missing document: `error_code: 4004`; unresolved table identity, including a bare name under a multi-database configuration: `4007`) |
 | 413 | Payload Too Large (request body exceeds `api.http.max_body_bytes`) |
+| 415 | Unsupported Media Type (a POST body sent without `Content-Type: application/json`; `error_code: 6007`) |
 | 429 | Too Many Requests (rate limit exceeded) |
 | 500 | Internal Server Error |
 | 503 | Service unavailable (`error_code: 6026` when `GET /config` has no loaded configuration), feature not enabled, replication unavailable in a build without MySQL support (`error_code: 4`), or table synchronization in progress |
 
 ## Monitoring
 
-The HTTP API provides multiple endpoints for monitoring and observability:
+The HTTP API has four endpoints for monitoring:
 
-- **Health Check**: `GET /health` - Simple health check for load balancers
-- **JSON Metrics**: `GET /info` - Detailed statistics in JSON format for general monitoring tools
-- **Prometheus Metrics**: `GET /metrics` - Prometheus-compatible metrics for time-series monitoring and alerting
-- **Replication Status**: `GET /replication/status` - MySQL replication status
+| Purpose | Endpoint | Use it for |
+|---------|----------|------------|
+| Health check | `GET /health` | Simple check for load balancers |
+| JSON statistics | `GET /info` | Detailed statistics for general monitoring tools |
+| Prometheus metrics | `GET /metrics` | Time-series monitoring and alerting |
+| Replication status | `GET /replication/status` | MySQL replication status |
 
 ### Monitoring Stack Integration
 

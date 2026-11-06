@@ -5,17 +5,23 @@ description: "Prepare for v1.11: full binlog row metadata, source and table vali
 
 # Upgrade to v1.11
 
+::: info Upgrading to the current release
+Also follow the [v1.12 upgrade checklist](/docs/upgrade-v1.12): the source must run `log_bin=ON`, and `gtid=,` is no longer accepted as a start position.
+:::
+
 Before replacing a running node, enable full row metadata on the source, check the source and table requirements, rebuild native clients, and update monitoring credentials. If you are upgrading from before v1.10.2, also complete the [earlier upgrade checklist](/docs/upgrade-v1.10).
 
 ## Current patch checklist
 
 Before rollout, review these operational changes:
 
-1. `0.0.0.0/0` and `::/0` each admit IPv4 and IPv6 peers. Narrow `network.allow_cidrs` if an IPv4-only allow list was intended; see [Network Security](/docs/configuration).
-2. Startup refuses a regular file at `api.unix_socket.path` and leaves it in place. Move the file or choose another path; see [API server settings](/docs/configuration).
-3. A custom JSON schema supplied with `--schema` also constrains runtime `SET`; review the active rules in [Operations](/docs/operations).
-4. `DUMP SAVE` returns `6029` until every configured table completes its initial load. Wait for readiness before saving; see [Snapshot and dump recovery](/docs/snapshot) for authenticated CLI automation.
-5. Confirm each configured `primary_key` has an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. Unsupported definitions are refused before the initial snapshot; see [Replication requirements](/docs/replication).
+| Change | Action |
+| --- | --- |
+| `0.0.0.0/0` and `::/0` each admit IPv4 and IPv6 peers. | Narrow `network.allow_cidrs` if an IPv4-only allowlist was intended. See [Network Security](/docs/configuration). |
+| Startup refuses a regular file at `api.unix_socket.path` and leaves it in place. | Move the file or choose another path. See [API server settings](/docs/configuration). |
+| A custom JSON schema supplied with `--schema` also constrains runtime `SET`. | Review the active rules in [Operations](/docs/operations). |
+| `DUMP SAVE` returns `6029` until every configured table completes its initial load. | Wait for readiness before saving. See [Snapshot and dump recovery](/docs/snapshot) for authenticated CLI automation. |
+| Each configured `primary_key` needs an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. Other definitions are refused before the initial snapshot. | Check the key definitions. See [Replication requirements](/docs/replication). |
 
 ## Enable full binlog row metadata
 
@@ -72,7 +78,17 @@ This validates the file; it does not replace the live source and table checks at
 - `memory.hard_limit_mb` and `memory.soft_target_mb` must not exceed `2147483647`, even though these settings remain reserved.
 - Runtime `SET` follows the configuration schema. Invalid values return `1004`, and a multi-assignment request applies all assignments or none.
 
-Snapshot loading, `SYNC`, and replication enforce the same document limits as dumps: primary key 1 MiB, at most 1,000 filters, filter name 1 KiB, string filter value 64 KiB, and normalized and original text 16 MiB each. An oversized row fails loading or `SYNC`; during replication it reports an error without advancing the GTID. Correct the source data or configuration before recovery.
+Snapshot loading, `SYNC`, and replication enforce the same document limits as dumps:
+
+| Item | Limit |
+| --- | --- |
+| Primary key | 1 MiB |
+| Filters per document | 1,000 |
+| Filter name | 1 KiB |
+| String filter value | 64 KiB |
+| Normalized text and original text | 16 MiB each |
+
+An oversized row fails loading or `SYNC`. During replication it reports an error without advancing the GTID. Correct the source data or configuration before recovery.
 
 ## Rebuild C and C++ clients
 
@@ -89,7 +105,14 @@ With `api.admin_token` set, TCP `INFO` omits its `# Replication` section until t
 
 Update monitoring before rollout so missing protected values do not look like a replication outage. The [HTTP API guide](/docs/http-api) covers Prometheus credentials.
 
-HTTP clients should also handle the current responses: an unqualified table name under a multi-database configuration returns `404`/`4007`; a MySQL-enabled build without a replication reader returns `200` with `{"enabled":false,"status":"not_configured"}` for `GET /replication/status`; and `GET /config` without loaded configuration returns `503`/`6026`. Invalid over-limit search parameters use `3000`, matching TCP.
+HTTP clients should also handle these responses:
+
+| Request | Response |
+| --- | --- |
+| Unqualified table name under a multi-database configuration | `404` / `4007` |
+| `GET /replication/status` on a MySQL-enabled build without a replication reader | `200` with `{"enabled":false,"status":"not_configured"}` |
+| `GET /config` without loaded configuration | `503` / `6026` |
+| Search parameter over its limit | `3000`, matching TCP |
 
 ## Verify the rollout
 

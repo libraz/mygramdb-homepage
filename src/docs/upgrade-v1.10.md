@@ -1,6 +1,6 @@
 ---
 title: Upgrade to MygramDB v1.10.2
-description: "Upgrade checklist for MygramDB v1.10.1 and v1.10.2: authentication, fail-closed replication, filters, dumps, cache limits, environment overrides, and shared rate limiting."
+description: "MygramDB v1.10.1 and v1.10.2 upgrade checklist: authentication, fail-closed replication, filters, dumps, cache limits, env overrides, shared rate limits."
 ---
 
 # Upgrade to v1.10.2
@@ -27,13 +27,13 @@ TCP clients must send `AUTH <token>` on the same connection before an administra
 
 ### Validate the network and source configuration
 
-The configuration parser rejects combinations that weaken the network boundary:
+The configuration parser rejects these combinations:
 
-- a public TCP or enabled HTTP listener without `api.admin_token`;
-- a non-loopback listener with an open `0.0.0.0/0` or `::/0` allow list;
-- CORS enabled without `cors_allow_origin`;
-- MySQL TLS with certificate verification enabled but no CA; and
-- a MySQL source without GTID support or with a missing `mysql.user`.
+- a public TCP or enabled HTTP listener without `api.admin_token`
+- a non-loopback listener with an open `0.0.0.0/0` or `::/0` allowlist
+- CORS enabled without `cors_allow_origin`
+- MySQL TLS with certificate verification enabled but no CA
+- a MySQL source without GTID support or with a missing `mysql.user`
 
 Validate the exact production file before rollout:
 
@@ -41,18 +41,20 @@ Validate the exact production file before rollout:
 mygramdb -t /etc/mygramdb/config.yaml
 ```
 
-MygramDB supports MySQL 8.4/9.7/26.x and MariaDB 10.11+/11.x/12.x. Use GTID replication with `binlog_format=ROW` and `binlog_row_image=FULL`.
+MygramDB v1.10.2 supports MySQL 8.4/9.7 and MariaDB 10.11+/11.x/12.x; MySQL 26.x is supported from v1.12. Use GTID replication with `binlog_format=ROW` and `binlog_row_image=FULL`.
 
 ### Check settings that now refuse startup
 
 Update these configurations before restarting:
 
-- `dump.load_on_startup: true` requires `replication.start_from: "snapshot"`. `latest` and `gtid=...` are refused because they could skip binlog changes between the dump GTID and the configured position.
-- `cache.ttl_seconds`, `cache.eviction_batch_size`, `cache.invalidation.batch_size`, and `cache.invalidation.max_delay_ms` must not exceed `2147483647`.
-- `required_filters` values with type `datetime`, `date`, or `timestamp` must not carry a trailing `Z`, numeric offset, or other suffix. Use epoch seconds or an ISO date/time in the offset configured by `mysql.datetime_timezone`.
-- `required_filters` values with type `time` must fit `-838:59:59` through `838:59:59`.
-- `float` is not an accepted filter type. `FLOAT` columns used as a primary key, text source, or filter are refused when replication starts.
-- `OPTIMIZE` now requires roughly 2.1 times the index memory free and refuses admission when that space is unavailable.
+| Setting | Requirement |
+| --- | --- |
+| `dump.load_on_startup: true` | Needs `replication.start_from: "snapshot"`. `latest` and `gtid=...` are refused because they could skip binlog changes between the dump GTID and the configured position. |
+| `cache.ttl_seconds`, `cache.eviction_batch_size`, `cache.invalidation.batch_size`, `cache.invalidation.max_delay_ms` | Must not exceed `2147483647`. |
+| `required_filters` values of type `datetime`, `date`, or `timestamp` | No trailing `Z`, numeric offset, or other suffix. Use epoch seconds, or an ISO date/time in the offset set by `mysql.datetime_timezone`. |
+| `required_filters` values of type `time` | Must fit `-838:59:59` through `838:59:59`. |
+| Filter type `float` | Not accepted. `FLOAT` columns used as a primary key, text source, or filter are refused when replication starts. |
+| `OPTIMIZE` | Needs roughly 2.1 times the index memory free, and refuses to start when that space is unavailable. |
 
 ### Check environment overrides
 
@@ -62,12 +64,14 @@ The startup path applies `MYGRAM_MYSQL_HOST`, `MYGRAM_MYSQL_PORT`, `MYGRAM_MYSQL
 
 The supplied Compose stack publishes the TCP and HTTP ports on `127.0.0.1`. Reaching the container from another host requires an explicit host-side port mapping.
 
-Regenerate `.env` from the current [environment template](https://github.com/libraz/mygram-db/blob/main/.env.example), then review all of these values:
+Regenerate `.env` from the current [environment template](https://github.com/libraz/mygram-db/blob/main/.env.example), then review these values:
 
-- `API_ADMIN_TOKEN` is required and the placeholder value is rejected.
-- `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` must not retain the template placeholder.
-- `API_CONTAINER_BIND` and `API_HTTP_CONTAINER_BIND` control the in-container listeners. Compose does not use `API_BIND` or `API_HTTP_BIND` for them.
-- `NETWORK_ALLOW_CIDRS` must include the Docker bridge address that MygramDB sees, not only the address used by the host-side client.
+| Variable | Requirement |
+| --- | --- |
+| `API_ADMIN_TOKEN` | Required. The placeholder value is rejected. |
+| `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | Must not keep the template placeholder. |
+| `API_CONTAINER_BIND`, `API_HTTP_CONTAINER_BIND` | Set the in-container listeners. Compose does not use `API_BIND` or `API_HTTP_BIND` for them. |
+| `NETWORK_ALLOW_CIDRS` | Must include the Docker bridge address that MygramDB sees, not only the address the host-side client uses. |
 
 Keep host ports on loopback unless remote access is deliberate. The [Docker deployment guide](/docs/docker-deployment) has a complete example.
 
@@ -93,7 +97,7 @@ Replication now stops when it cannot apply or prove harmless a binlog event. Thi
 
 ### Existing dump compatibility
 
-The earlier v1.10.0 guidance that treated old dumps without a source UUID as unusable is corrected. Dumps written by v1.5.4 and later restore. The reader recognizes the zero `header_size` emitted by older writers through v1.5.3, while dumps written by v1.3.2 or earlier remain unreadable because their posting lists use an indistinguishable byte order. A dump with no recorded source UUID is treated as source-unknown; a recorded UUID that differs from the running source is still rejected.
+The v1.10.0 guidance that treated old dumps without a source UUID as unusable was wrong, and v1.10.1 corrects it. Dumps written by v1.5.4 and later restore. The reader also recognizes the zero `header_size` that older writers emitted through v1.5.3. Dumps written by v1.3.2 or earlier remain unreadable, because their posting lists use a byte order that cannot be told apart from the current one. A dump with no recorded source UUID is treated as source-unknown. A recorded UUID that differs from the running source is still rejected.
 
 Dump compatibility checks use the qualified table identity `<database>.<table>`. If multiple databases contain the same table name, inspect the index after upgrading and rebuild with `SYNC` if an older restore selected the wrong table.
 

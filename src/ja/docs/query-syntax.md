@@ -1,29 +1,29 @@
 ---
-title: MygramDB クエリ構文リファレンス - ブール検索文法
-description: MygramDBのクエリ構文完全リファレンス。ブール演算 AND/OR/NOT、括弧、フレーズ検索、FILTER条件、SORT、LIMIT/OFFSET、BM25 _score、HIGHLIGHT、FUZZY、エラーハンドリング。
+title: MygramDB クエリ構文リファレンス - Boolean 検索文法
+description: MygramDB のクエリ構文完全リファレンス。Boolean 演算 AND/OR/NOT、括弧、フレーズ検索、FILTER 条件、SORT、LIMIT/OFFSET、BM25 _score、HIGHLIGHT、FUZZY、エラーハンドリング。
 head:
   - - meta
     - name: keywords
-      content: MygramDB クエリ構文, ブール検索, AND OR NOT, FILTER, SORT, BM25 スコアリング, HIGHLIGHT, あいまい検索, n-gram トークン化
+      content: MygramDB クエリ構文, Boolean 検索, AND OR NOT, FILTER, SORT, BM25 スコアリング, HIGHLIGHT, あいまい検索, n-gram トークン化
 ---
 
 # クエリ構文ガイド
 
-MygramDBは、全文検索に必要なブール演算、フィルタ、ソート、ページネーションを小さな検索構文として提供します。
+クエリは、検索語を `AND`、`OR`、`NOT`、括弧、引用符で囲んだフレーズで組み合わせ、続けて `FILTER`、`SORT`、`LIMIT`、`OFFSET` を必要に応じて指定する形式です。このページはリファレンスです。用途別の例は[クエリガイド](/ja/docs/queries)を参照してください。
 
-::: info SQLではありません
-MygramDBのクエリはSQLではなく、検索用の小さなコマンド言語です。`SEARCH articles mysql FILTER status = 1 LIMIT 10` のように、検索語と検索オプションだけを記述します。
+::: info SQL ではありません
+MygramDB のクエリは SQL ではなく、検索用の小さなコマンド言語です。`SEARCH articles mysql FILTER status = 1 LIMIT 10` のように、検索語と検索オプションだけを記述します。
 :::
 
 ## 目次
 
 - [基本構文](#基本構文)
-- [ブール演算子](#%E3%83%95%E3%82%99%E3%83%BC%E3%83%AB%E6%BC%94%E7%AE%97%E5%AD%90)
-- [複雑なブール演算クエリ](#%E8%A4%87%E9%9B%91%E3%81%AA%E3%83%95%E3%82%99%E3%83%BC%E3%83%AB%E6%BC%94%E7%AE%97%E3%82%AF%E3%82%A8%E3%83%AA)
+- [Boolean 演算子](#boolean-演算子)
+- [複雑な Boolean 演算クエリ](#複雑な-boolean-演算クエリ)
 - [演算子の優先順位](#演算子の優先順位)
 - [引用符によるフレーズ検索](#%E5%BC%95%E7%94%A8%E7%AC%A6%E3%81%AB%E3%82%88%E3%82%8B%E3%83%95%E3%83%AC%E3%83%BC%E3%82%B9%E3%82%99%E6%A4%9C%E7%B4%A2)
 - [フィルタ条件](#フィルタ条件)
-- [ソート (SORT句)](#ソート-sort句)
+- [ソート (SORT 句)](#ソート-sort-句)
 - [ページネーション (LIMIT/OFFSET)](#%E3%83%98%E3%82%9A%E3%83%BC%E3%82%B7%E3%82%99%E3%83%8D%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3-limit-offset)
 - [BM25 関連度スコアリング (SORT _score)](#bm25-%E9%96%A2%E9%80%A3%E5%BA%A6%E3%82%B9%E3%82%B3%E3%82%A2%E3%83%AA%E3%83%B3%E3%82%AF%E3%82%99-sort-score)
 - [ハイライト (HIGHLIGHT)](#ハイライト-highlight)
@@ -43,7 +43,7 @@ COUNT <table> <query_expression> [FILTER ...]
 ```
 
 ::: info テーブル名の指定
-`<table>` は DB 修飾形式 `` `database.table` ``（例: `app_db.articles`）を受け付けます。単一データベース構成（設定されている個別のデータベースが1つだけ）の場合は、`articles` のような修飾なしのテーブル名も動作します。2つ以上のデータベースにまたがる構成の場合にのみ修飾が必要となり、修飾なしの名前は曖昧として拒否されます。
+`<table>` は DB 修飾形式 `` `database.table` ``（例: `app_db.articles`）を受け付けます。単一データベース構成（設定しているデータベースが 1つだけ）では、`articles` のような修飾なしのテーブル名も使えます。修飾が必要になるのは 2つ以上のデータベースを設定している場合だけで、その場合、修飾なしの名前は曖昧として拒否されます。
 :::
 
 ### シンプルな検索
@@ -52,59 +52,59 @@ COUNT <table> <query_expression> [FILTER ...]
 SEARCH <table> <term>
 ```
 
-例：
+例:
 ```mygram
 SEARCH threads golang
 ```
 
-区切り文字以外の句読点は語句に含められます。たとえば `c++`、`e-mail`、`v1.9.0` はそれぞれ1つの語として解析されます。
+区切り文字以外の句読点は語句に含められます。たとえば `c++`、`e-mail`、`v1.9.0` はそれぞれ 1つの語として解析されます。
 
 ### レスポンスフォーマット
 
-**SEARCHレスポンス:**
+**SEARCH レスポンス:**
 ```mygram
 OK RESULTS <total_count> <id1> <id2> <id3> ...
 ```
 
-`total_count` は `LIMIT` と `OFFSET` を適用する前のマッチ総数で、同じ行のIDは現在のページです。サーバーは総数とページを1回のインデックス読み取りから求めるため、同じ結果集合を示します。
+`total_count` は `LIMIT` と `OFFSET` を適用する前のマッチ総数で、同じ行の ID は現在のページです。サーバーは総数とページを 1回のインデックス読み取りから求めるため、同じ結果集合を示します。
 
-例：
+例:
 ```mygram
 OK RESULTS 3 101 205 387
 ```
 
-**COUNTレスポンス:**
+**COUNT レスポンス:**
 ```mygram
 OK COUNT <number>
 ```
 
-例：
+例:
 ```mygram
 OK COUNT 42
 ```
 
 ---
 
-## ブール演算子
+## Boolean 演算子
 
-### AND検索
+### AND 検索
 
-**すべて**の指定された検索語を含むドキュメントを検索します。
+指定した**すべて**の検索語を含むドキュメントを検索します。
+
+::: tip 空白区切りとの違い
+空白は AND ではありません。演算子がない `golang tutorial` は、引用符で囲んだ場合と同じく 1つの連続した文字列として検索されます。両方の語をドキュメント内のどこかに含むものを探すには `golang AND tutorial` と書きます。
+:::
 
 ```mygram
 SEARCH <table> term1 AND term2 AND term3
 ```
 
-例：
+例:
 ```mygram
 SEARCH threads golang AND tutorial
 ```
 
-::: tip 空白区切りとの違い
-単純な `golang tutorial` も実質的には「両方を含む」検索として扱われます。複雑な条件を書く場合は、読みやすさのために `AND` を明示すると安全です。
-:::
-
-### OR検索
+### OR 検索
 
 指定された検索語の**いずれか**を含むドキュメントを検索します。
 
@@ -112,29 +112,29 @@ SEARCH threads golang AND tutorial
 SEARCH <table> term1 OR term2 OR term3
 ```
 
-例：
+例:
 ```mygram
 SEARCH threads golang OR python OR rust
 ```
 
-### NOT検索
+### NOT 検索
 
 特定の検索語を含むドキュメントを除外します。
+
+::: warning NOT の使い方
+`NOT` は結果セットからドキュメントを除外します。先頭に `NOT` を置くクエリは候補が非常に広くなるため、大規模インデックスでは肯定条件と組み合わせてください。
+:::
 
 ```mygram
 SEARCH <table> term1 NOT term2
 ```
 
-例：
+例:
 ```mygram
 SEARCH threads tutorial NOT beginner
 ```
 
-::: warning NOTの使い方
-`NOT` は結果セットからドキュメントを除外します。先頭に `NOT` を置くクエリは候補が広くなりやすいため、大規模インデックスではできるだけ肯定条件と組み合わせてください。
-:::
-
-`AND NOT` も同じ除外条件として受け付けます。追加条件をすべて `AND` の後に出力する式変換器でも使えます。
+`AND NOT` も同じ除外条件として受け付けます。追加条件をすべて `AND` の後ろに付けて出力する式変換器でも使えます。
 
 ```mygram
 SEARCH threads tutorial AND NOT beginner
@@ -142,17 +142,17 @@ SEARCH threads tutorial AND NOT beginner
 
 ---
 
-## 複雑なブール演算クエリ
+## 複雑な Boolean 演算クエリ
 
 ### 優先順位を制御する括弧
 
-括弧を使用して式をグループ化し、演算子の優先順位を制御できます：
+括弧で式をグループ化すると、演算子の優先順位を制御できます。
 
 ```mygram
 SEARCH <table> (term1 OR term2) AND term3
 ```
 
-例：
+例:
 ```mygram
 SEARCH threads (golang OR python) AND tutorial
 ```
@@ -161,36 +161,36 @@ SEARCH threads (golang OR python) AND tutorial
 
 ### ネストした式
 
-複数レベルの括弧をネストできます：
+括弧は何段でもネストできます。
 
 ```mygram
 SEARCH <table> ((term1 OR term2) AND term3) OR term4
 ```
 
-例：
+例:
 ```mygram
 SEARCH threads ((golang OR python) AND web) OR rust
 ```
 
-これは以下を検索します：
+これは次のドキュメントを検索します。
 - 「web」**AND**（「golang」**OR**「python」）を含むドキュメント
 - **または**「rust」を含むドキュメント
 
 ### 複雑なクエリの例
 
-#### GoまたはPythonのチュートリアルを検索し、初心者向けコンテンツを除外
+#### Go または Python のチュートリアルを検索し、初心者向けコンテンツを除外
 
 ```mygram
 SEARCH threads (golang OR python) AND tutorial NOT beginner
 ```
 
-#### MySQLまたはPostgreSQLに関するデータベースコンテンツを検索し、SQLiteを除外
+#### MySQL または PostgreSQL に関するデータベースコンテンツを検索し、SQLite を除外
 
 ```mygram
 SEARCH posts database AND (mysql OR postgresql) NOT sqlite
 ```
 
-#### PythonまたはRで機械学習コンテンツを検索し、TensorFlowを除外
+#### Python または R で機械学習コンテンツを検索し、TensorFlow を除外
 
 ```mygram
 SEARCH articles "machine learning" AND (python OR R) NOT tensorflow
@@ -200,25 +200,22 @@ SEARCH articles "machine learning" AND (python OR R) NOT tensorflow
 
 ## 演算子の優先順位
 
-括弧が使用されていない場合、演算子は以下の優先順位を持ちます（高い順）：
+括弧がない場合、演算子の優先順位は次のとおりです（高い順）。
 
-1. **NOT** （最高）
-2. **AND** （中）
-3. **OR** （最低）
+1. **NOT**（最高）
+2. **AND**（中）
+3. **OR**（最低）
 
 ### 優先順位の例
 
-**クエリ:** `a OR b AND c`
-**解釈:** `a OR (b AND c)`
-
-**クエリ:** `NOT a AND b`
-**解釈:** `(NOT a) AND b`
-
-**クエリ:** `a AND b OR c AND d`
-**解釈:** `(a AND b) OR (c AND d)`
+| クエリ | 解釈 |
+|--------|------|
+| `a OR b AND c` | `a OR (b AND c)` |
+| `NOT a AND b` | `(NOT a) AND b` |
+| `a AND b OR c AND d` | `(a AND b) OR (c AND d)` |
 
 ::: tip 括弧で意図を固定
-厳密には不要な場合でも、複雑な条件では括弧を使うと読み間違いを防げます。
+優先順位どおりで足りる場合は括弧を省略できますが、複雑な条件では括弧を付けると読み間違いを防げます。
 :::
 
 ---
@@ -234,23 +231,25 @@ SEARCH <table> 'machine learning'
 
 ### エスケープシーケンス
 
-引用符で囲まれた文字列内では、次のエスケープシーケンスを使えます。
+引用符で囲んだ文字列では、次のエスケープシーケンスを使えます。
 
-- `\n` - 改行
-- `\t` - タブ
-- `\r` - キャリッジリターン
-- `\\` - バックスラッシュ
-- `\"` - ダブルクォーテーション
-- `\'` - シングルクォーテーション
+| シーケンス | 意味 |
+|------------|------|
+| `\n` | 改行 |
+| `\t` | タブ |
+| `\r` | キャリッジリターン |
+| `\\` | バックスラッシュ |
+| `\"` | ダブルクォーテーション |
+| `\'` | シングルクォーテーション |
 
-例：
+例:
 ```mygram
 SEARCH articles "hello \"world\""
 ```
 
-### 引用符とブール演算子の組み合わせ
+### 引用符と Boolean 演算子の組み合わせ
 
-引用符で囲まれたフレーズはブール演算子と組み合わせることができます：
+引用符で囲んだフレーズは、Boolean 演算子と組み合わせられます。
 
 ```mygram
 SEARCH threads "web framework" AND (golang OR python)
@@ -258,13 +257,13 @@ SEARCH posts "machine learning" NOT "deep learning"
 SEARCH articles required AND 'not'
 ```
 
-引用した句のキーワードはリテラルとして扱われます。最後のクエリは `not` という語を必須にし、引用によって `NOT` 句にはなりません。
+引用符で囲んだキーワードは、演算子ではなく通常の語として扱われます。最後のクエリは `not` という語を必須にし、`NOT` 句にはなりません。
 
 ---
 
 ## フィルタ条件
 
-`FILTER`句を使用して、カラム値で結果をフィルタリングします。
+`FILTER` 句で、カラムの値により結果を絞り込みます。
 
 ### 構文
 
@@ -272,16 +271,18 @@ SEARCH articles required AND 'not'
 SEARCH <table> <query> FILTER <column> <operator> <value> [FILTER <col> <op> <val> ...]
 ```
 
-複数のフィルタを指定できます（すべて一致する必要があります - AND論理）。
+`FILTER` は繰り返し指定でき、すべてに一致したドキュメントだけが残ります（AND 条件）。
 
 ### サポートされる演算子
 
-- `=` または `EQ` - 等しい
-- `!=`、`<>`、または `NE` - 等しくない
-- `>` または `GT` - より大きい
-- `>=` または `GTE` - 以上
-- `<` または `LT` - より小さい
-- `<=` または `LTE` - 以下
+| 演算子 | 別名 | 意味 |
+|--------|------|------|
+| `=` | `EQ` | 等しい |
+| `!=` / `<>` | `NE` | 等しくない |
+| `>` | `GT` | より大きい |
+| `>=` | `GTE` | 以上 |
+| `<` | `LT` | より小さい |
+| `<=` | `LTE` | 以下 |
 
 ### 例
 
@@ -303,35 +304,35 @@ SEARCH articles tech FILTER priority != 0
 SEARCH articles tech FILTER status <> archived
 ```
 
-**ブール演算クエリと組み合わせ:**
+**Boolean 演算クエリと組み合わせ:**
 ```mygram
 SEARCH threads (golang OR python) AND tutorial FILTER status = published
 ```
 
 ### フィルタカラムの型
 
-MygramDBでは、設定ファイルの `filters` または `required_filters` に登録したカラムを `FILTER` で絞り込めます。
+`FILTER` で指定できる値の型は次のとおりです。
 
 - **整数**: `status=1`, `priority=5`
 - **文字列**: `category=tech`, `author=john`
-- **日付/時刻**: クエリ時の `date`、`datetime`、`timestamp` の値はUnixエポック秒の整数です。たとえば `created_at >= 1704067200` は、2024-01-01 00:00:00 UTC 以降の値を選びます。`time` は符号付きの秒数で、`-90000` はマイナス25時間を表します。
+- **日付/時刻**: クエリ時の `date`、`datetime`、`timestamp` の値は Unix エポック秒の整数です。たとえば `created_at >= 1704067200` は、2024-01-01 00:00:00 UTC 以降の値を選びます。`time` は符号付きの秒数で、`-90000` は -25時間を表します。
 
-::: warning FILTERには設定が必要
-`config.yaml` で `filters` と `required_filters` のどちらにも登録していないカラムは `FILTER` で使えません。同じカラムを両方に登録できます。`required_filters` は行のインデックス登録を決め、`FILTER` はリクエストごとに登録済みの行を絞り込みます。
+::: warning FILTER には設定が必要
+`FILTER` で使えるのは、`config.yaml` の `filters` または `required_filters` に登録したカラムだけです。それ以外のカラムは拒否されます。
 :::
 
-`required_filters` は行をインデックス対象に含めるかを決める設定で、構文も別です。ISO 8601 や時刻文字列の値は、クエリの `FILTER` には使いません。
+`required_filters` は行をインデックス対象に含めるかを決める設定で、構文も別です。ISO 8601 や時刻文字列の値は、クエリの `FILTER` には使いません。同じカラムを両方に登録することもできます。`required_filters` は行のインデックス登録を決め、`FILTER` はリクエストごとに登録済みの行を絞り込みます。
 
 ### フィルタのパフォーマンス
 
-- **ビットマップインデックス**: 低カーディナリティカラム（例：status, category）で非常に高速
+- **ビットマップインデックス**: 低カーディナリティカラム（例: status, category）で非常に高速
 - **フィルタリング順序**: フィルタはテキスト検索の積集合の後に適用されます
 
 ---
 
-## ソート (SORT句)
+## ソート (SORT 句)
 
-`SORT`句を使用して検索結果をソートします。
+`SORT` 句を使用して検索結果をソートします。
 
 ### 構文
 
@@ -339,8 +340,8 @@ MygramDBでは、設定ファイルの `filters` または `required_filters` �
 SEARCH <table> <query> SORT [BY] <column> [ASC|DESC]
 ```
 
-::: info SQLのORDER BYではありません
-MygramDBでは `ORDER BY` 構文は使えません。検索結果の並び替えには `SORT` を使ってください。
+::: info SQL の ORDER BY ではありません
+MygramDB では `ORDER BY` 構文は使えません。検索結果の並び替えには `SORT` を使ってください。
 :::
 
 `BY` は省略できます。`SORT BY created_at DESC` と `SORT created_at DESC` は同じです。
@@ -349,14 +350,14 @@ MygramDBでは `ORDER BY` 構文は使えません。検索結果の並び替え
 
 ### デフォルトの動作
 
-`SORT`が指定されていない場合、結果は**プライマリキーの降順**でソートされます（最新が最初）。
+`SORT` が指定されていない場合、結果は**主キーの降順**でソートされます（最新が最初）。
 
 ```mygram
 SEARCH threads golang
 -- 以下と同等: SEARCH threads golang SORT id DESC
 ```
 
-### プライマリキーでソート
+### 主キーでソート
 
 **完全な構文:**
 ```mygram
@@ -367,13 +368,13 @@ SEARCH threads golang SORT BY id DESC
 
 **省略記法（推奨）:**
 ```mygram
-SEARCH threads golang SORT ASC   -- プライマリキー昇順
-SEARCH threads golang SORT DESC  -- プライマリキー降順
+SEARCH threads golang SORT ASC   -- 主キー昇順
+SEARCH threads golang SORT DESC  -- 主キー降順
 ```
 
 ### フィルタカラムでソート
 
-インデックス化された任意のフィルタカラムでソート：
+設定済みの任意のフィルタカラムでソートできます。
 
 ```mygram
 SEARCH threads golang SORT created_at DESC LIMIT 10
@@ -381,7 +382,7 @@ SEARCH threads golang SORT BY created_at DESC LIMIT 10
 SEARCH posts database SORT _score ASC LIMIT 20
 ```
 
-### ブール演算クエリとの組み合わせ
+### Boolean 演算クエリとの組み合わせ
 
 ```mygram
 SEARCH threads (golang OR python) AND tutorial SORT created_at DESC LIMIT 10
@@ -391,22 +392,18 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 ### パフォーマンスの考慮事項
 
 **ソートアルゴリズム:**
-- **小さいLIMITあり**: `LIMIT + OFFSET` が結果件数の半分未満なら `partial_sort` を使います。計算量は O(N × log(K)) です（K = LIMIT + OFFSET）。
-- **それ以外**: 完全ソートを使います。計算量は O(N × log(N)) です。`LIMIT` を省略した場合は `api.default_limit` を使います。実際に使うアルゴリズムは有効なLIMITとOFFSETで決まります。
+- **小さい LIMIT あり**: `LIMIT + OFFSET` が結果件数の半分未満なら `partial_sort` を使います。計算量は O(N × log(K)) です（K = LIMIT + OFFSET）。
+- **それ以外**: 完全ソートを使います。計算量は O(N × log(N)) です。`LIMIT` を省略した場合は `api.default_limit` を使います。実際に使うアルゴリズムは有効な LIMIT と OFFSET で決まります。
 - **メモリ**: 対象件数によっては一時的なソートキー領域を確保するため、インプレース処理とは限りません。
 
-**大規模な結果セット（例：100万件中80万件がヒット）の場合:**
-- `LIMIT + OFFSET` を結果件数より十分小さくすると、partial_sortの対象になります
-- プライマリキーでのソートも一致した結果を比較します。本番に近いデータで列ごとの性能を測定してください
-- 結果はOFFSET/LIMIT適用**前に**ソートされます（正しいページネーション）
-
-**パフォーマンス例:**
-- 80万件の結果でLIMIT 100の場合はpartial_sortの対象になります
-- 大きな結果セットでは一時的なソートキー領域が必要になることがあります
+**大規模な結果セット（例: 100万件中 80万件がヒット）の場合:**
+- `LIMIT + OFFSET` を結果件数より十分小さくすると、partial_sort の対象になります
+- 主キーでのソートも、一致した結果を比較します。本番に近いデータで、ソートするカラムごとの性能を測定してください
+- 結果は OFFSET と LIMIT を適用する**前に**ソートされるため、ページネーションは正しく動作します。たとえば 80万件のマッチに `LIMIT 100` を指定すると、partial_sort の対象になります
 
 ### カラム検証
 
-- **プライマリキー**: 常に有効
+- **主キー**: 常に有効
 - **フィルタカラム**: 設定済みである必要があります
 - **存在しないカラム**: エラーとして拒否されます
 
@@ -414,7 +411,7 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 
 ## ページネーション (LIMIT/OFFSET)
 
-`LIMIT`と`OFFSET`を使用して返される結果の数を制御します。
+`LIMIT` と `OFFSET` を使用して返される結果の数を制御します。
 
 ### LIMIT - 最大結果数
 
@@ -422,15 +419,15 @@ SEARCH posts ((mysql OR postgresql) AND database) NOT sqlite SORT _score ASC
 SEARCH <table> <query> LIMIT <n>
 ```
 
-例：
+例:
 ```mygram
 SEARCH articles tech LIMIT 10
 ```
 
-**デフォルト:** 100（config.yamlの`api.default_limit`で設定可能）
-**範囲:** 1-1000。`api.default_limit` 自体は5〜1000の範囲でしか設定できませんが、クエリで `LIMIT` を明示する場合は1から1000まで指定できます。
+**デフォルト:** 100（config.yaml の `api.default_limit` で設定可能）
+**範囲:** 1-1000。`api.default_limit` 自体は 5〜1000 の範囲でしか設定できませんが、クエリで `LIMIT` を明示する場合は 1 から 1000 まで指定できます。
 
-MySQL形式の `LIMIT <offset>,<count>` も使えます。ただし、`OFFSET` 句と併用するとエラーになります。
+MySQL 形式の `LIMIT <offset>,<count>` も使えます。ただし、`OFFSET` 句と併用するとエラーになります。
 
 ### OFFSET - 結果のスキップ
 
@@ -438,26 +435,26 @@ MySQL形式の `LIMIT <offset>,<count>` も使えます。ただし、`OFFSET` �
 SEARCH <table> <query> OFFSET <n>
 ```
 
-例：
+例:
 ```mygram
 SEARCH articles tech LIMIT 10 OFFSET 20
 ```
 
-これは結果21-30を返します（最初の20件をスキップ）。
+これは結果 21-30 を返します（最初の 20件をスキップ）。
 
 ### ページネーションの例
 
-**ページ1（最初の10件）:**
+**ページ 1（最初の 10件）:**
 ```mygram
 SEARCH articles tech LIMIT 10 OFFSET 0
 ```
 
-**ページ2（結果11-20）:**
+**ページ 2（結果 11-20）:**
 ```mygram
 SEARCH articles tech LIMIT 10 OFFSET 10
 ```
 
-**ページ3（結果21-30）:**
+**ページ 3（結果 21-30）:**
 ```mygram
 SEARCH articles tech LIMIT 10 OFFSET 20
 ```
@@ -470,7 +467,7 @@ MygramDB は、検索語・AND/NOT 条件・FILTER 値を合計したクエリ�
 - **設定:** `api.max_query_length`（`0` で無効化）
 - **エラー例:** `ERROR 3005 Query expression length (...) exceeds ...`
 
-複雑な条件が必要な場合は、`config.yaml` で上限を調整するか、複数のクエリに分割してください。
+式を短く保つか、長い条件が必要な場合は `config.yaml` で上限を引き上げてください。
 
 ### 複数のオプションを組み合わせた例
 
@@ -482,27 +479,26 @@ SEARCH threads (golang OR python) AND tutorial
   OFFSET 20
 ```
 
-このクエリは：
+このクエリは次の順に処理されます。
 1. 「tutorial」**AND**（「golang」**OR**「python」）を含むドキュメントを検索
 2. 公開されたドキュメントのみにフィルタリング
 3. 作成日でソート（最新が最初）
-4. 結果21-30を返す（ページ3、1ページ10件）
+4. 結果 21-30 を返す（ページ 3、1 ページあたり 10件）
 
 ### ページネーションの性能
 
-- **LIMIT最適化**: `LIMIT + OFFSET` が結果件数の半分未満の場合だけpartial_sortを使う
-- **OFFSETコスト**: O(N) ただし N = OFFSET（結果は生成されますが返されません）
-- **ページネーション**: 一貫性のある順序が必要な場合は、`SORT` と `LIMIT` を組み合わせる
-- **深いページネーション**: 大きなOFFSET値（例：10000+）は遅くなる可能性があります
+- **OFFSET コスト**: O(N) ただし N = OFFSET（結果は生成されますが返されません）
+- **推奨**: 一貫した順序でページを送るには、`SORT` と `LIMIT` を組み合わせる
+- **深いページネーション**: 大きな OFFSET 値（例: 10000+）は遅くなる可能性があります
 
 ---
 
 ## BM25 関連度スコアリング (SORT _score)
 
-BM25ランキング関数を使用して、関連度順に結果をソートします。
+BM25 ランキング関数を使用して、関連度順に結果をソートします。
 
 ::: info 用語補足
-**BM25** は、検索語の出現回数、語の珍しさ、文書の長さを使って関連度を計算する代表的なランキング方式です。単純なID順ではなく「検索語により関連していそうな文書」を上に出したい場合に使います。
+**BM25** は、検索語の出現回数、語の珍しさ、ドキュメントの長さを使って関連度を計算する代表的なランキング方式です。単純な ID 順ではなく「検索語により関連していそうなドキュメント」を上に出したい場合に使います。
 :::
 
 ### 構文
@@ -513,12 +509,12 @@ SEARCH <table> <query> SORT _score [ASC|DESC]
 
 ### 動作原理
 
-BM25は以下に基づいて各ドキュメントの関連度スコアを計算します：
+BM25 は、次の 3つから各ドキュメントの関連度スコアを計算します。
 - **TF（語句頻度）**: ドキュメント内での検索語句の出現回数
 - **IDF（逆文書頻度）**: 全ドキュメント中での語句の希少性
 - **ドキュメント長正規化**: マッチする語句を含む短いドキュメントがより高スコア
 
-**パラメータ**（`config.yaml` の `bm25` セクションで変更可能）：
+**パラメータ**（`config.yaml` の `bm25` セクションで変更可能）:
 - `bm25.k1` — 語句頻度の飽和度（デフォルト `1.2`）
 - `bm25.b` — ドキュメント長正規化（デフォルト `0.75`。0 = なし、1 = 完全）
 
@@ -579,24 +575,20 @@ SEARCH <table> <query> HIGHLIGHT [TAG <open> <close>] [SNIPPET_LEN <n>] [MAX_FRA
 
 ### 例
 
-デフォルトのハイライト：
+デフォルトのハイライト:
 ```mygram
 SEARCH articles "機械学習" HIGHLIGHT LIMIT 10
 ```
 
-カスタムタグ：
+カスタムタグ:
 ```mygram
 SEARCH articles "golang" HIGHLIGHT TAG <strong> </strong> LIMIT 10
 ```
 
-長いスニペットとより多くのフラグメント：
+長いスニペットとより多くのフラグメント:
 ```mygram
 SEARCH articles "データベース" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 ```
-
-### 前提条件
-
-ハイライトを使うために、`memory.verify_text` を `"ascii"` または `"all"` に設定する必要はありません。通常のサーバー初期化でスニペットに必要なテキストが保持されます。
 
 ### 他の句との組み合わせ
 
@@ -608,10 +600,10 @@ SEARCH articles "技術" HIGHLIGHT TAG <b> </b> SORT _score DESC FILTER status =
 
 ## あいまい検索 (FUZZY)
 
-レーベンシュタイン編集距離（挿入、削除、置換）内の語句をマッチします。
+レーベンシュタイン編集距離（挿入、削除、置換）の範囲内にある語句にマッチします。
 
 ::: info 用語補足
-**レーベンシュタイン編集距離**は、ある文字列を別の文字列に変えるために必要な挿入・削除・置換の回数です。`FUZZY 1` は1文字の打ち間違い程度、`FUZZY 2` はもう少し広い候補を許容します。
+**レーベンシュタイン編集距離**は、ある文字列を別の文字列に変えるために必要な挿入・削除・置換の回数です。`FUZZY 1` は 1文字の打ち間違い程度、`FUZZY 2` はもう少し広い候補を許容します。
 :::
 
 ### 構文
@@ -623,8 +615,8 @@ SEARCH <table> <query> FUZZY [distance]
 ### パラメータ
 
 - **distance** (オプション): `1`（デフォルト）または `2`
-  - `1`: 1回の編集操作内のマッチ
-  - `2`: 2回の編集操作内のマッチ
+  - `1`: 1回の編集操作以内でマッチ
+  - `2`: 2回の編集操作以内でマッチ
 
 ### 例
 
@@ -635,9 +627,11 @@ SEARCH articles "データベス" FUZZY 2 LIMIT 10
 
 ### パフォーマンス
 
-あいまい検索は、不要な距離計算を避けるため、長さの差で事前に候補を絞り込みます。`FUZZY` は同じクエリから `FUZZY` を外した検索結果をすべて含み、N-gramサイズ未満の短い語やCJK/ASCII混在語も保持します。編集距離に一致する追加結果が加わることがあります。性能を優先する場合は `FUZZY 1`（デフォルト）を使ってください。
+あいまい検索は、不要な距離計算を避けるため、長さの差で事前に候補を絞り込みます。`FUZZY 1`（デフォルト）が最速です。
 
-`FUZZY` に指定できる距離は `1` または `2` だけです。それ以外の値は明示的なクエリエラーになります。
+`FUZZY` は、同じクエリから `FUZZY` を外した検索結果をすべて含みます。N-gram サイズ未満の短い語や CJK/ASCII 混在語も含まれ、編集距離に一致する追加結果が加わることがあります。
+
+`FUZZY` に指定できる距離は `1` または `2` だけです。それ以外の値はクエリエラーになります。
 
 ---
 
@@ -645,43 +639,17 @@ SEARCH articles "データベス" FUZZY 2 LIMIT 10
 
 ### 無効なクエリ
 
-以下のクエリはエラーを返します：
+次のクエリはエラーを返します。構文エラーのコードは `3000` で、Boolean 式として解析できない式は `3010` になります。
 
-**空の括弧:**
-```mygram
-SEARCH threads ()
-ERROR 3000 Invalid query: empty expression in parentheses
-```
+| クエリ | レスポンス |
+|--------|-----------|
+| `SEARCH threads (golang AND python` | `ERROR 3000 Unclosed parenthesis` |
+| `SEARCH threads golang AND python)` | `ERROR 3000 Unmatched closing parenthesis` |
+| `SEARCH threads golang AND` | `ERROR 3000 AND requires a term` |
+| `SEARCH threads golang NOT` | `ERROR 3000 NOT requires a term` |
+| `SEARCH threads "golang tutorial` | `ERROR 3000 Unclosed quote: "` |
 
-**閉じられていない括弧:**
-```mygram
-SEARCH threads (golang AND python
-ERROR 3000 Invalid query: unclosed parentheses
-```
-
-**余分な閉じ括弧:**
-```mygram
-SEARCH threads golang AND python)
-ERROR 3000 Invalid query: unexpected closing parenthesis
-```
-
-**オペランドのない演算子:**
-```mygram
-SEARCH threads AND
-ERROR 3000 Invalid query: operator without operands
-```
-
-**末尾の演算子:**
-```mygram
-SEARCH threads golang AND
-ERROR 3000 Invalid query: trailing operator
-```
-
-**閉じられていない引用符:**
-```mygram
-SEARCH threads "golang tutorial
-ERROR 3000 Invalid query: unclosed quote
-```
+空の括弧や、グループ内で片側の項がない演算子は Boolean 式の解析で失敗し、`Expected term or opening parenthesis '('` などのメッセージが返ります。
 
 ### 無効なフィルタ
 
@@ -705,13 +673,11 @@ SEARCH articles tech SORT nonexistent DESC
 ERROR 3007 Sort column 'nonexistent' not found. Column does not exist as filter column or primary key. Check column name spelling.
 ```
 
-存在しないカラムはエラーとして拒否されます。
-
 ---
 
 ## パフォーマンスのヒント
 
-各`SEARCH`は決まったパイプラインで実行されます。クエリはASTに解析され、N-gram参照で候補ドキュメントが得られ、AND・NOT・FILTERが順に候補集合を絞り込み、最後にSORTとLIMIT/OFFSETが結果ページを確定します。以下の各ヒントはこのパイプラインのどこか一段階に対応しており、DEBUGコマンドも同じ名前の段階ごとに所要時間を報告します。
+各 `SEARCH` は決まったパイプラインで実行されます。クエリは AST に解析され、N-gram 参照で候補ドキュメントが得られ、AND・NOT・FILTER が順に候補集合を絞り込み、最後に SORT と LIMIT/OFFSET が結果ページを確定します。以下の各ヒントはこのパイプラインのどこか一段階に対応しており、DEBUG コマンドも同じ名前の段階ごとに所要時間を報告します。
 
 <DocDiagram name="query-pipeline" alt="クエリはASTに解析され、N-gram参照で候補が得られ、AND積集合・NOT除外・FILTER適用の順に候補集合が絞り込まれます。SORTではLIMITとOFFSETの合計が結果件数の半分未満の場合だけ部分ソートを使い、最後にOFFSETとLIMITが適用されます。" />
 
@@ -735,7 +701,7 @@ SEARCH threads (golang OR python) AND (web OR api)
 SEARCH threads golang OR python AND web OR api
 ```
 
-### 3. 先頭のNOT演算子を避ける
+### 3. 先頭の NOT 演算子を避ける
 
 ```mygram
 -- 良い: 肯定的な検索語を先に
@@ -745,7 +711,7 @@ SEARCH articles tech NOT old
 SEARCH articles NOT old
 ```
 
-先頭のNOTは除外前の候補が非常に広くなります。可能なら、先に肯定条件で候補を絞ってから `NOT` を使ってください。
+先頭の NOT は除外前の候補が非常に広くなります。可能なら、先に肯定条件で候補を絞ってから `NOT` を使ってください。
 
 ### 4. フィルタとテキスト検索を組み合わせる
 
@@ -761,7 +727,7 @@ SEARCH articles tech AND ai AND published
 
 ### 5. ソートするページの範囲を小さくする
 
-マッチ件数の半分より `LIMIT + OFFSET` が小さい場合、サーバーは部分ソートを使います。`LIMIT` を省略すると `api.default_limit` が有効値になります。ページサイズが小さくても、OFFSETが大きいと完全ソートになることがあります。
+マッチ件数の半分より `LIMIT + OFFSET` が小さい場合、サーバーは部分ソートを使います。`LIMIT` を省略すると `api.default_limit` が有効値になります。ページサイズが小さくても、OFFSET が大きいと完全ソートになることがあります。
 
 ```mygram
 -- マッチ件数の半分より小さいページは部分ソートを使える
@@ -783,28 +749,28 @@ SEARCH articles tech LIMIT 10 OFFSET 10000
 
 深い結果にはカーソルベースのページネーションなどの代替戦略を検討してください。
 
-### 7. ブール検索のキャッシュキーを保持する
+### 7. Boolean 検索のキャッシュキーを保持する
 
-ブール検索のキャッシュキーは、解析後のトークン、引用符、括弧の構造を保持します。全角空白、括弧、引用の違いによって別の式になるクエリは別のキャッシュエントリを使い、同じように解析される Unicode 空白は共有されることがあります。
+Boolean 検索のキャッシュキーは、解析後のトークン、引用符、括弧の構造を保持します。全角空白、括弧、引用の違いによって別の式になるクエリは別のキャッシュエントリを使い、同じように解析される Unicode 空白は共有されることがあります。
 
 ---
 
-## COUNTコマンド
+## COUNT コマンド
 
-すべてのブール演算クエリ構文は`COUNT`でも使用できます：
+Boolean 演算クエリの構文はすべて `COUNT` でも使えます。
 
 ```mygram
 COUNT <table> <query_expression> [FILTER ...]
 ```
 
-例：
+例:
 ```mygram
 COUNT threads (golang OR python) AND tutorial
 COUNT articles tech FILTER status = 1 FILTER category = ai
 COUNT posts database AND (mysql OR postgresql) NOT sqlite
 ```
 
-**注意:** COUNTはSORT、LIMIT、OFFSETをサポートしません（カウントには不要）。
+**注意:** COUNT は SORT、LIMIT、OFFSET をサポートしません（カウントには不要）。
 
 ---
 
@@ -812,7 +778,7 @@ COUNT posts database AND (mysql OR postgresql) NOT sqlite
 
 ### 文法（BNF）
 
-クエリは適切な演算子優先順位を持つ抽象構文木（AST）に解析されます：
+クエリは次の文法で抽象構文木（AST）に解析されます。この文法が、上で説明した優先順位を表しています。
 
 ```text
 query     → or_expr
@@ -824,28 +790,28 @@ primary   → TERM | '(' or_expr ')'
 
 ### パフォーマンス特性
 
-- **AND演算**: ソート済みポスティングリストを使用した効率的な積集合
-- **OR演算**: 集合演算を使用した効率的な和集合
-- **NOT演算**: すべてのドキュメントに対する補集合（潜在的に高コスト）
+- **AND 演算**: ソート済みポスティングリストを使用した効率的な積集合
+- **OR 演算**: 集合演算を使用した効率的な和集合
+- **NOT 演算**: すべてのドキュメントに対する補集合（潜在的に高コスト）
 - **括弧**: パフォーマンスのオーバーヘッドなし。解析にのみ影響します
 
-### N-gramトークン化
+### N-gram トークン化
 
-MygramDBはインデックス作成と検索にN-gramトークン化を使用します：
+MygramDB は、インデックス作成と検索に N-gram トークン化を使用します。
 
-- **デフォルトN-gramサイズ**: 2（バイグラム） - テーブルごとに設定可能
-- **CJK漢字**: 漢字に対して個別のN-gramサイズを設定できます。かななど他の文字種には `ngram_size` を使います。
-- **Unicode正規化**: NFKC正規化、幅変換、オプションの小文字化
+- **デフォルト N-gram サイズ**: 2（バイグラム） - テーブルごとに設定可能
+- **CJK 漢字**: 漢字に対して個別の N-gram サイズを設定できます。かななど他の文字種には `ngram_size` を使います。
+- **Unicode 正規化**: NFKC 正規化、幅変換、オプションの小文字化
 
-設定したN-gramサイズより短い検索語は、`NOT` の語句を含め、部分文字列検索のために保存済みの正規化済みテキストを使います。通常のサーバー初期化では `memory.verify_text` とは別にこのテキストが保持されます。フォールバックに必要な正規化済みテキストがない場合、短い `NOT` の語句を無視したり不完全な結果を返したりせず、`ERROR 4000` になります。
+設定した N-gram サイズより短い検索語は、`NOT` の語句を含め、部分文字列検索のために保存済みの正規化済みテキストを使います。通常のサーバー初期化では `memory.verify_text` とは別にこのテキストが保持されます。フォールバックに必要な正規化済みテキストがない場合、短い `NOT` の語句を無視したり不完全な結果を返したりせず、`ERROR 4000` になります。
 
 ---
 
 ## スナップショット同期コマンド
 
-### SYNCコマンド
+### SYNC コマンド
 
-MySQLからMygramDBへのスナップショット同期を手動で開始します。
+MySQL から MygramDB へのスナップショット同期を手動で開始します。
 
 **構文:**
 ```mygram
@@ -862,9 +828,9 @@ SYNC articles
 OK SYNC STARTED table=articles
 ```
 
-詳しい使い方は [SYNCコマンドガイド](/ja/docs/sync-command) を参照してください。
+詳しい使い方は [SYNC コマンドガイド](/ja/docs/sync-command) を参照してください。
 
-### SYNC STATUSコマンド
+### SYNC STATUS コマンド
 
 `SYNC` 操作の進捗と状態を確認します。
 
@@ -875,19 +841,30 @@ SYNC STATUS
 
 **レスポンス例:**
 ```mygram
+OK SYNC_STATUS
 table=articles status=IN_PROGRESS progress=10000/25000 rows (40.0%) rate=5000 rows/s
+```
+
+```mygram
+OK SYNC_STATUS
 table=articles status=COMPLETED rows=25000 time=5.2s gtid=uuid:123 replication=STARTED
+```
+
+同期を一度も実行していない場合は、次のように返ります。
+
+```mygram
+OK SYNC_STATUS
 status=IDLE message="No sync operation performed"
 ```
 
-各フィールドの詳しい説明は [SYNCコマンドガイド](/ja/docs/sync-command) を参照してください。
+各フィールドの詳しい説明は [SYNC コマンドガイド](/ja/docs/sync-command) を参照してください。
 
 ---
 
 ## 関連情報
 
 - [クエリガイド](/ja/docs/queries) - 実践的な検索例
-- [SYNCコマンドガイド](/ja/docs/sync-command) - 手動スナップショット同期
+- [SYNC コマンドガイド](/ja/docs/sync-command) - 手動スナップショット同期
 - [プロトコルリファレンス](/ja/docs/protocol) - すべてのコマンドとプロトコルの詳細
-- [設定ガイド](/ja/docs/configuration) - フィルタ、N-gramサイズ、制限の設定
+- [設定ガイド](/ja/docs/configuration) - フィルタ、N-gram サイズ、制限の設定
 - [パフォーマンスチューニング](/ja/docs/performance) - 高度な最適化手法

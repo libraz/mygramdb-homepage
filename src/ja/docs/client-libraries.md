@@ -1,6 +1,6 @@
 ---
 title: Node.js / Python / Go クライアントライブラリ
-description: MygramDB公式クライアントライブラリの使い方。Node.js、Python、Goと同梱C/C++ SDKのインストール、検索、Raw Boolean検索、FACET、HIGHLIGHT、SYNC、複数DB対応。
+description: MygramDB 公式クライアントライブラリの使い方。Node.js、Python、Go と同梱 C/C++ SDK のインストール、検索、Raw Boolean 検索、FACET、HIGHLIGHT、SYNC、複数 DB 対応。
 head:
   - - meta
     - name: keywords
@@ -9,23 +9,29 @@ head:
 
 # Node.js / Python / Go クライアントライブラリ
 
-MygramDBには、TCPプロトコルを直接扱う公式クライアントライブラリがあります。アプリケーションから検索・カウント・ドキュメント取得・FACET・同期操作を呼び出す場合は、HTTP APIを自前で組むより各言語のクライアントを使うと実装を小さくできます。
+MygramDB には、アプリケーションコードから使える公式の TCP クライアントライブラリがあります。型付きの検索、カウント、ドキュメント取得、FACET、ランタイム変数、オンデマンド同期を、TCP プロトコルを自前で実装せずに呼び出せます。
 
 ::: info このページで扱うライブラリ
-このページはアプリケーション向けの Node.js / Python / Go クライアントと、同梱C/C++ SDKの位置付けを扱います。C/C++ API、CMakeパッケージ、pkg-configの使い方は [libmygramclient](/ja/docs/client-library) を参照してください。
+このページはアプリケーション向けの Node.js / Python / Go クライアントと、同梱 C/C++ SDK の位置付けを扱います。C/C++ API、CMake パッケージ、pkg-config の使い方は [libmygramclient](/ja/docs/client-library) を参照してください。
 :::
 
 ## 対応状況
 
 | 言語 | パッケージ | 要件 | 特徴 |
 |------|------------|------|------|
-| Node.js | `mygramdb-client` | Node.js 22+ | TypeScript型定義、純JavaScript実装、任意のネイティブバインディング |
-| Python | `mygramdb-client` | Python 3.11+ | asyncio、外部依存なし、dataclass型 |
+| Node.js | `mygramdb-client` | Node.js 22+ | TypeScript 型定義、純 JavaScript 実装、任意のネイティブバインディング |
+| Python | `mygramdb-client` | Python 3.11+ | asyncio、外部依存なし、dataclass 型 |
 | Go | `github.com/libraz/go-mygram-client` | Go 1.26+ | 標準ライブラリのみ、`context.Context` 対応、並行利用可能 |
-| C / C++ | 同梱の `libmygramclient` | C11 / C++17 | CとC++ API、`MygramDB::client_static` / `MygramDB::client_shared`、`mygramclient.pc` を含むインストール済みSDK |
+| C / C++ | 同梱の `libmygramclient` | C11 / C++17 | C と C++ API、インストール可能な SDK |
+
+C/C++ SDK は、CMake ターゲットの `MygramDB::client_static` と `MygramDB::client_shared`、および pkg-config 用の `mygramclient.pc` をインストールします。
+
+::: tip MygramDB v1.12 向けのリリース
+v1.11 と v1.12 のサーバーには、`mygramdb-client` 1.7.0（Node.js）、`mygramdb-client` 1.6.0（Python）、`go-mygram-client` v0.7.0（Go）以降を使ってください。これらのリリースは応答をコマンドごとに区切って読むので、`FACET`、`CONFIG HELP <path>`、`SYNC STATUS`、失敗した `HIGHLIGHT` / `DEBUG` 付き検索の応答を正しい終端まで読み取ります。引用符付けもサーバーと同じく Unicode の `White_Space` に従い、設定変数のエラー `1008` と `1009` にも名前が付きました。
+:::
 
 ::: warning 検索対象データは先に同期してください
-クライアントライブラリはMygramDBサーバーへコマンドを送るための薄いラッパーです。既存データがまだ読み込まれていない場合は、先に `SYNC <table>` を実行してください。詳しくは [SYNCコマンド](/ja/docs/sync-command) を参照してください。
+クライアントライブラリは MygramDB サーバーへコマンドを送るための薄いラッパーです。既存データがまだ読み込まれていない場合は、先に `SYNC <table>` を実行してください。詳しくは [SYNC コマンド](/ja/docs/sync-command) を参照してください。
 :::
 
 ::: warning C/C++ プログラムの再ビルド
@@ -34,39 +40,59 @@ MygramDBには、TCPプロトコルを直接扱う公式クライアントライ
 
 ## 共通の考え方
 
-- テーブル名には、単一DB構成では `articles`、複数DB構成では `app_db.articles` のようなDB修飾名を使います。
-- 通常の `search()` / `Search()` は、単純な検索語やAND/NOT中心の検索に向いています。
-- `OR` や括弧を含むブール式は、検索式パーサーで変換して `searchRaw()` / `SearchRaw()` / `search_raw()` に渡します。
-- Web構文の変換関数は、単独の `or` を `OR` として認識し、`order` のようなリテラル語やアポストロフィを含む語を引用し、グループ内のマイナスを `NOT` に変換します。フレーズとOR/グループは1回だけ変換されるため、結果をそのままRaw検索メソッドへ渡してください。
-- 検索レスポンスには、`limit`/`offset` 適用前のマッチ総数と現在のページの結果が含まれます。FACET もページ分けされます。各値の `count` はその値を持つドキュメント数、`totalCount` / `total_count` / `TotalCount` はページネーション前の異なる値の総数です。件数が同じ値もページ間で安定した順序を保ちます。
-- BM25関連度ソート、ハイライト、ファジー検索、FACETはサーバー側の設定にも依存します。
-- `SET`、`SHOW VARIABLES`、`SYNC` などの管理系操作はTCP経由で実行されます。
+::: info 用語補足
+**Raw Boolean 検索**は、`AND` / `OR` / `NOT` / 括弧を含む検索式を、サーバーのクエリパーサーにそのまま渡す検索方法です。`search()` が組み立てる単純検索では表現できない `python OR (ruby AND rails)` のような条件に使います。
+:::
+
+- テーブル名には、単一 DB 構成では `articles`、複数 DB 構成では `app_db.articles` のような DB 修飾名を使います。
+- `search()` / `Search()` は、単純な検索語や AND/NOT 中心の検索に向いています。
+- `OR` や括弧を含む検索式は、変換してから `searchRaw()` / `SearchRaw()` / `search_raw()` に渡します。
+- Web 構文の変換関数は、単独の `or` を `OR` として扱います。`order` のようなリテラル語やアポストロフィを含む語は引用符で囲み、グループ内のマイナスは `NOT` に変換します。フレーズと OR グループは 1 回だけ出力されるので、結果はそのまま Raw 検索メソッドに渡してください。
+- 変換関数は、サーバーと同じ規則で式をグループ化します。暗黙の AND は `OR` より強く結合するので、`a OR b c` は括弧付きの形と同じ `(a OR b c)` に変換されます。否定したグループはグループ全体を除外し、`x +(a -(b OR c))` は `x AND (a NOT (b OR c))` になります。`OR-tools` のように `OR` で始まるだけの語は検索語のままです。括弧の外の `OR` の直前や直後に `+` / `-` を付けた式（`+a OR b`）は、オペランド不足としてエラーになります。
+- 検索レスポンスには、現在のページの結果と、`limit` / `offset` 適用前のマッチ総数が含まれます。
+- FACET もページ分割されます。各値の `count` はその値を持つドキュメント数で、`totalCount` / `total_count` / `TotalCount` はページ分割前の異なる値の総数です。件数が同じ値は、ページをまたいでも順序が変わりません。
+- BM25 関連度ソート、ハイライト、あいまい検索、FACET は、サーバー側のテーブル設定にも依存します。
+- ランタイム変数と `SYNC` は TCP コマンドで、クライアントライブラリから呼び出せます。
 
 ::: warning 管理系コマンドには認証が必要です
-`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` に認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。`adminToken`（Node.js）、`admin_token`（Python）、`AdminToken`（Go）を設定すると、クライアントは接続時と再接続時に `AUTH` を送ります。`sendCommand()` や `send_command()` で手動送信した `AUTH` はその接続にだけ適用されます。再接続後も管理操作を続ける場合は、SDKの設定項目を使ってください。`search`、`count`、`get`、`facet`、`INFO` は認証なしで利用できます。ただし `api.admin_token` を設定した場合、`INFO` は接続が `AUTH` を完了するまでレプリケーションのセクションを省略します。
+`CONFIG`、`SET` / `SHOW VARIABLES`、`DUMP`、`REPLICATION`、`SYNC`、`OPTIMIZE`、`DEBUG`、`CACHE` に認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。`search`、`count`、`get`、`facet`、`INFO` は認証なしで使えます。ただし `api.admin_token` を設定している場合、`INFO` は接続が `AUTH` を完了するまでレプリケーションのセクションを省略します。
+
+クライアントが新しい接続ごとに `AUTH` を送るようにするには、`adminToken`（Node.js）、`admin_token`（Python）、`AdminToken`（Go）を設定します。自動再接続のときも `AUTH` を送ります。`sendCommand()` や `send_command()` で手動送信した `AUTH` はその接続にだけ有効です。再接続後も管理操作を続けたい場合は、SDK の設定項目を使ってください。
 :::
 
-::: info 用語補足
-**Raw Boolean検索**は、`AND` / `OR` / `NOT` / 括弧を含む検索式を、サーバーのクエリパーサーにそのまま渡す検索方法です。`search()` が組み立てる単純検索では表現しにくい `python OR (ruby AND rails)` のような条件に使います。
-:::
+## インストール
 
-## Node.js / TypeScript
+使う言語のパッケージをインストールします。
 
-### インストール
+::: code-group
 
-```bash
+```bash [Node.js (npm)]
 npm install mygramdb-client
 ```
 
-```bash
+```bash [Node.js (yarn, pnpm, bun)]
 yarn add mygramdb-client
 pnpm add mygramdb-client
 bun add mygramdb-client
 ```
 
-### 基本検索
+```bash [Python]
+pip install mygramdb-client
+```
 
-```ts
+```bash [Go]
+go get github.com/libraz/go-mygram-client
+```
+
+:::
+
+## 基本検索
+
+接続して `created_at` 順に検索し、続けて件数のカウントと主キーによるドキュメント取得を行う例です。
+
+::: code-group
+
+```ts [Node.js]
 import { createMygramClient } from 'mygramdb-client'
 
 const client = createMygramClient({
@@ -90,88 +116,7 @@ const doc = await client.get('articles', '12345')
 client.disconnect()
 ```
 
-### 複数DBとRaw Boolean検索
-
-```ts
-import {
-  convertSearchExpression,
-  qualifyTableIdentity,
-  parseTableIdentity
-} from 'mygramdb-client'
-
-const table = qualifyTableIdentity('articles', 'app_db') // app_db.articles
-console.log(parseTableIdentity(table)) // { database: 'app_db', table: 'articles' }
-
-const raw = convertSearchExpression('python OR (ruby AND rails)')
-const res = await client.searchRaw(table, raw, { limit: 50 })
-```
-
-### BM25 / HIGHLIGHT / FUZZY / FACET
-
-```ts
-const ranked = await client.search('articles', 'machine learning', {
-  sortColumn: '_score',
-  sortDesc: true,
-  limit: 10
-})
-
-const highlighted = await client.search('articles', 'golang', {
-  highlight: {
-    openTag: '<strong>',
-    closeTag: '</strong>',
-    snippetLen: 200,
-    maxFragments: 3
-  },
-  sortColumn: '_score',
-  sortDesc: true,
-  limit: 10
-})
-
-const fuzzy = await client.search('articles', 'machne', {
-  fuzzy: 1,
-  limit: 10
-})
-
-const facets = await client.facet('articles', 'category', {
-  query: 'machine learning',
-  filters: { status: '1' },
-  limit: 10
-})
-```
-
-### ランタイム変数とSYNC
-
-```ts
-const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
-const adminClient = createMygramClient({
-  host: 'localhost',
-  port: 11016,
-  ...(adminToken ? { adminToken } : {})
-})
-await adminClient.connect()
-
-await adminClient.setVariable('logging.level', 'info')
-console.log(await adminClient.showVariables('logging%'))
-
-await adminClient.sync('app_db.articles')
-console.log(await adminClient.syncStatus())
-await adminClient.syncStop('app_db.articles')
-adminClient.disconnect()
-```
-
-サーバーに `api.admin_token` を設定した場合は `MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。クライアントは接続時と再接続時に認証します。
-
-## Python
-
-### インストール
-
-```bash
-pip install mygramdb-client
-```
-
-### 基本検索
-
-```python
+```python [Python]
 import asyncio
 from mygramdb_client import MygramClient, ClientConfig, SearchOptions
 
@@ -190,9 +135,60 @@ async def main():
 asyncio.run(main())
 ```
 
-### 複数DBとRaw Boolean検索
+```go [Go]
+package main
 
-```python
+import (
+	"fmt"
+	"log"
+
+	mygram "github.com/libraz/go-mygram-client"
+)
+
+func main() {
+	client := mygram.NewClient("localhost:11016")
+	defer client.Close()
+
+	if err := client.Connect(); err != nil {
+		log.Fatal(err)
+	}
+
+	resp, err := client.Search("articles", "hello", mygram.SearchOptions{
+		Limit:      100,
+		SortColumn: "created_at",
+		SortDesc:   true,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Found %d results\n", resp.TotalCount)
+}
+```
+
+:::
+
+## 複数 DB と Raw Boolean 検索
+
+DB 修飾テーブル名の生成と分解、Web 構文の検索式の変換、変換結果を使った Raw Boolean 検索の例です。
+
+::: code-group
+
+```ts [Node.js]
+import {
+  convertSearchExpression,
+  qualifyTableIdentity,
+  parseTableIdentity
+} from 'mygramdb-client'
+
+const table = qualifyTableIdentity('articles', 'app_db') // app_db.articles
+console.log(parseTableIdentity(table)) // { database: 'app_db', table: 'articles' }
+
+const raw = convertSearchExpression('python OR (ruby AND rails)')
+const res = await client.searchRaw(table, raw, { limit: 50 })
+```
+
+```python [Python]
 import asyncio
 from mygramdb_client import (
     ClientConfig,
@@ -225,7 +221,87 @@ async def main():
 asyncio.run(main())
 ```
 
-### HIGHLIGHT / FACET / SYNC
+```go [Go]
+table, _ := mygram.QualifyTableIdentity("articles", "app_db")
+db, name, _ := mygram.ParseTableIdentity(table)
+fmt.Println(db, name) // app_db articles
+
+raw, _ := mygram.ConvertSearchExpression("python OR (ruby AND rails)")
+resp, _ := client.SearchRaw(table, raw, mygram.SearchRawOptions{Limit: 50})
+fmt.Println(resp.TotalCount)
+
+resp, _ = client.SearchRawWithHighlights(
+	table,
+	raw,
+	mygram.SearchRawOptions{Limit: 10},
+)
+fmt.Println(resp.Results)
+```
+
+:::
+
+::: warning 解析済み検索式の形が変わりました
+`parseSearchExpression()` / `parse_search_expression()` / `ParseSearchExpression()` が返す `SearchExpression` から、`optionalTerms` / `optional_terms` / `OptionalTerms` が削除されました。このフィールドは常に空でした。代わりに `requiredIsGroup` と `excludedIsGroup`（`required_is_group` / `excluded_is_group`、`RequiredIsGroup` / `ExcludedIsGroup`）が必須語・除外語の配列と同じ並びで、`(...)` グループの要素に印を付けます。そのため `"(a OR b)"` のようにグループに見える引用フレーズは、リテラルのフレーズとして扱われます。削除されたフィールドを読んでいるコードは修正してください。
+:::
+
+## 高度な検索と管理操作
+
+以下の例では、BM25 ソート、HIGHLIGHT、FACET、ランタイム変数、`SYNC` を扱います。Node.js と Go の例では FUZZY も扱い、Python の例ではすべてを 1 つのプログラムにまとめています。
+
+### Node.js / TypeScript
+
+```ts
+const ranked = await client.search('articles', 'machine learning', {
+  sortColumn: '_score',
+  sortDesc: true,
+  limit: 10
+})
+
+const highlighted = await client.search('articles', 'golang', {
+  highlight: {
+    openTag: '<strong>',
+    closeTag: '</strong>',
+    snippetLen: 200,
+    maxFragments: 3
+  },
+  sortColumn: '_score',
+  sortDesc: true,
+  limit: 10
+})
+
+const fuzzy = await client.search('articles', 'machne', {
+  fuzzy: 1,
+  limit: 10
+})
+
+const facets = await client.facet('articles', 'category', {
+  query: 'machine learning',
+  filters: { status: '1' },
+  limit: 10
+})
+```
+
+```ts
+const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
+const adminClient = createMygramClient({
+  host: 'localhost',
+  port: 11016,
+  ...(adminToken ? { adminToken } : {})
+})
+await adminClient.connect()
+
+await adminClient.setVariable('logging.level', 'info')
+console.log(await adminClient.showVariables('logging%'))
+
+await adminClient.sync('app_db.articles')
+console.log(await adminClient.syncStatus())
+await adminClient.syncStop('app_db.articles')
+adminClient.disconnect()
+```
+
+サーバーに `api.admin_token` を設定した場合は、`MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。クライアントは `connect()` の際と再接続時に認証します。
+
+### Python
 
 ```python
 import asyncio
@@ -256,69 +332,9 @@ async def main():
 asyncio.run(main())
 ```
 
-サーバーに `api.admin_token` を設定した場合は `MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。`ClientConfig` に指定すると、クライアントは接続時と自動再接続時に認証します。
+サーバーに `api.admin_token` を設定した場合は、`MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。`ClientConfig` に指定すると、クライアントは接続時と自動再接続時に認証します。
 
-## Go
-
-### インストール
-
-```bash
-go get github.com/libraz/go-mygram-client
-```
-
-### 基本検索
-
-```go
-package main
-
-import (
-	"fmt"
-	"log"
-
-	mygram "github.com/libraz/go-mygram-client"
-)
-
-func main() {
-	client := mygram.NewClient("localhost:11016")
-	defer client.Close()
-
-	if err := client.Connect(); err != nil {
-		log.Fatal(err)
-	}
-
-	resp, err := client.Search("articles", "hello", mygram.SearchOptions{
-		Limit:      100,
-		SortColumn: "created_at",
-		SortDesc:   true,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Found %d results\n", resp.TotalCount)
-}
-```
-
-### 複数DBとRaw Boolean検索
-
-```go
-table, _ := mygram.QualifyTableIdentity("articles", "app_db")
-db, name, _ := mygram.ParseTableIdentity(table)
-fmt.Println(db, name) // app_db articles
-
-raw, _ := mygram.ConvertSearchExpression("python OR (ruby AND rails)")
-resp, _ := client.SearchRaw(table, raw, mygram.SearchRawOptions{Limit: 50})
-fmt.Println(resp.TotalCount)
-
-resp, _ = client.SearchRawWithHighlights(
-	table,
-	raw,
-	mygram.SearchRawOptions{Limit: 10},
-)
-fmt.Println(resp.Results)
-```
-
-### BM25 / HIGHLIGHT / FUZZY / FACET
+### Go
 
 ```go
 ranked, _ := client.Search("articles", "machine learning", mygram.SearchOptions{
@@ -356,8 +372,6 @@ facets, _ := client.Facet("articles", "category", mygram.FacetOptions{
 })
 fmt.Println(facets.Results)
 ```
-
-### ランタイム変数とSYNC
 
 ```go
 package main
@@ -405,10 +419,10 @@ func main() {
 }
 ```
 
-サーバーに `api.admin_token` を設定した場合は `MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。`ClientConfig.AdminToken` は再接続時にも各接続で認証します。
+サーバーに `api.admin_token` を設定した場合は、`MYGRAM_API_ADMIN_TOKEN` に同じ値を設定してください。`ClientConfig.AdminToken` は、再接続を含む各接続で送信されます。
 
-::: tip Goクライアントの並行利用
-Goクライアントは並行利用を想定した実装です。リクエスト単位のキャンセルやタイムアウトが必要な場合は、`SearchContext`、`SearchRawContext`、`SyncContext` などの `context.Context` 付きメソッドを使ってください。
+::: tip Go クライアントの並行利用
+Go クライアントは並行利用を想定した実装です。リクエスト単位のキャンセルやタイムアウトが必要な場合は、`SearchContext`、`SearchRawContext`、`SyncContext` などの `context.Context` 付きメソッドを使ってください。
 :::
 
 ## 機能別の参照先
@@ -418,9 +432,9 @@ Goクライアントは並行利用を想定した実装です。リクエスト
 | 検索構文、`AND` / `OR` / `NOT` | [クエリ構文](/ja/docs/query-syntax) |
 | BM25 `_score` | [クエリガイド - 関連度ソート](/ja/docs/queries#%E9%96%A2%E9%80%A3%E5%BA%A6%E3%82%BD%E3%83%BC%E3%83%88-bm25) |
 | HIGHLIGHT | [クエリガイド - ハイライト](/ja/docs/queries#ハイライト) |
-| FUZZY | [クエリガイド - ファジー検索](/ja/docs/queries#%E3%83%95%E3%82%A1%E3%82%B7%E3%82%99%E3%83%BC%E6%A4%9C%E7%B4%A2) |
-| FACET | [クエリガイド - FACET集計](/ja/docs/queries#facet集計) |
-| `SYNC` | [SYNCコマンド](/ja/docs/sync-command) |
+| FUZZY | [クエリガイド - あいまい検索](/ja/docs/queries#あいまい検索) |
+| FACET | [クエリガイド - FACET 集計](/ja/docs/queries#facet-集計) |
+| `SYNC` | [SYNC コマンド](/ja/docs/sync-command) |
 | ランタイム変数 | [運用ガイド](/ja/docs/operations) |
 
 ## リポジトリ

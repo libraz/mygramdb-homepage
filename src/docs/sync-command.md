@@ -1,6 +1,6 @@
 ---
 title: MygramDB SYNC Command - Manual Snapshot Synchronization
-description: Use the SYNC command to manually control snapshot synchronization from MySQL to MygramDB. SYNC and SYNC STATUS usage, status fields, command conflicts, scenarios, and graceful shutdown.
+description: "Use SYNC to snapshot MySQL tables into MygramDB on demand: SYNC and SYNC STATUS, status fields, command conflicts, scenarios, and graceful shutdown."
 head:
   - - meta
     - name: keywords
@@ -12,7 +12,7 @@ head:
 ## Overview
 
 ::: info What is snapshot synchronization?
-**Snapshot synchronization** reads the target MySQL/MariaDB table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication normally resumes from the drained pre-SYNC GTID; the `2017` recovery path uses the snapshot marker to pass the undecodable interval. MySQL captures a conservative GTID lower bound before the snapshot opens; MariaDB converts the snapshot's own binlog file and position to a GTID.
+**Snapshot synchronization** reads the target MySQL/MariaDB table with `SELECT` and builds the MygramDB search index from its contents at that moment. When it finishes, binlog replication normally resumes from the drained pre-SYNC GTID. The `2017` recovery path instead uses the snapshot marker to pass the undecodable interval. MySQL captures a conservative GTID lower bound before the snapshot opens; MariaDB converts the snapshot's own binlog file and position to a GTID.
 :::
 
 The `SYNC` command allows manual control over snapshot synchronization from MySQL to MygramDB. This lets operators choose when the initial table read adds load to the MySQL source.
@@ -102,11 +102,7 @@ SYNC STOP [<table_name>]
 
 Cancellation is asynchronous. Continue checking `SYNC STATUS` after it reports `CANCELLING` until the operation reaches `CANCELLED` or another terminal state.
 
-The initial load observes the cancellation request while connecting, reading,
-and building the snapshot, so `SYNC STOP` cancels a running load promptly. A
-shutdown signal requests the same cancellation; if the loader is waiting for
-an in-flight MySQL operation, completion remains bounded by the configured
-`read_timeout_ms`.
+The initial load observes the cancellation request while connecting, reading, and building the snapshot, so `SYNC STOP` cancels a running load promptly. A shutdown signal requests the same cancellation. If the loader is waiting for an in-flight MySQL operation, completion remains bounded by the configured `read_timeout_ms`.
 
 ### SYNC STATUS - Check Synchronization Progress
 
@@ -185,13 +181,13 @@ The diagram below traces a SYNC through its full lifecycle: the initial memory-h
 |---------|----------|--------|
 | `DUMP SAVE` / `DUMP LOAD` | **Blocked** | Long-running maintenance operations are mutually exclusive |
 | `OPTIMIZE` | **Blocked** | Long-running maintenance operations are mutually exclusive |
-| Automatic snapshot | **Blocked** | Long-running maintenance operations are mutually exclusive |
+| Scheduled dump (`dump.interval_sec`) | **Blocked** | Long-running maintenance operations are mutually exclusive |
 | `REPLICATION START` | **Blocked** | SYNC automatically starts replication when complete |
 | `SYNC` (same table) | **Blocked** | SYNC already in progress for this table |
 
 ### Operations That Block Starting SYNC
 
-`SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and automatic snapshots share one operation slot. A new `SYNC` request is rejected while any of those operations is in progress; retry after it completes.
+`SYNC`, `DUMP SAVE`, `DUMP LOAD`, `OPTIMIZE`, and scheduled dumps share one operation slot. A new `SYNC` request is rejected while any of those operations is in progress; retry after it completes.
 
 ### Command Behavior During SYNC
 
@@ -215,7 +211,7 @@ TCP/CLI and HTTP table reads (`search`, `count`, `facet`, and document `GET`) ar
 ./mygramdb --config config.yaml
 ```
 
-The server starts without building a snapshot (log: `Skipping automatic snapshot build for table: articles (auto_initial_snapshot=false)`). Start the sync once the TCP listener accepts connections; readiness stays `not_ready` until every configured table has completed its initial load. Use one authenticated CLI connection to start and monitor the sync:
+The server starts without building a snapshot. At debug log level it records `action=skip_auto_snapshot` (`reason=auto_initial_snapshot=false`) followed by `action=manual_sync_required`. Start the sync once the TCP listener accepts connections; readiness stays `not_ready` until every configured table has completed its initial load. Use one authenticated CLI connection to start and monitor the sync:
 
 ```text
 $ mygram-cli
@@ -309,8 +305,7 @@ The server waits up to 30 seconds for active long-running operations to drain. I
 
 **Solution:**
 - Check available system memory
-- Reduce process RSS or provision more memory; `memory.hard_limit_mb` is
-  reserved and does not enforce a process memory limit today
+- Reduce process RSS or provision more memory; `memory.hard_limit_mb` is reserved and does not enforce a process memory limit today
 - Reduce batch size in build configuration
 
 ### SYNC Fails During Execution
@@ -337,16 +332,11 @@ The server waits up to 30 seconds for active long-running operations to drain. I
 
 XA prepare events, MariaDB event-level compressed query/row events, MySQL `TRANSACTION_PAYLOAD_EVENT` events (transaction compression), and `PARTIAL_UPDATE_ROWS_EVENT` events (partial JSON row updates) can remain in the binlog after the server setting that produced them has changed. Repeating a normal restart from the old position replays the same event and stops replication again.
 
-When replication stops with error code `2017`, run `SYNC` for the table that matters first. MygramDB rebuilds that table and restarts the shared stream from its snapshot marker, past the undecodable interval. Then run `SYNC` for every other replicated table, one at a time. The first recovery moves the shared stream forward; a table not rebuilt retains whatever writes in the skipped interval would have changed.
+When replication stops with error code `2017`, run `SYNC` for the most important table first. MygramDB rebuilds that table and restarts the shared stream from its snapshot marker, past the undecodable interval. Then run `SYNC` for every other replicated table, one at a time. The first recovery moves the shared stream forward, so a table you do not rebuild misses any writes made in the skipped interval.
 
 A monitored table's `TABLE_MAP` without full row metadata, with malformed optional metadata, or with an unsizeable column type stops with `2017`. Ensure the source runs `binlog_row_metadata=FULL` before rebuilding; changing that setting does not repair older binlog events.
 
-MariaDB event-level compression from `log_bin_compress` remains unsupported and
-is one of the `2017` recovery cases. A `COMPRESSED` `VARCHAR`/`TEXT` column in
-an ordinary MariaDB row event is different: MygramDB inflates it before
-indexing. An unknown or corrupt compressed-column payload is reported as row
-decode error `2008` and follows normal reconnect handling; use the `2017`
-sequence only for an undecodable event.
+MariaDB event-level compression from `log_bin_compress` remains unsupported and is one of the `2017` recovery cases. A `COMPRESSED` `VARCHAR`/`TEXT` column in an ordinary MariaDB row event is different: MygramDB inflates it before indexing. An unknown or corrupt compressed-column payload is reported as row decode error `2008` and follows normal reconnect handling. Use the `2017` sequence only for an undecodable event.
 
 When `api.admin_token` is configured, keep the entire recovery sequence in one authenticated CLI connection: authentication is per connection and does not carry across separate `mygram-cli` processes. Wait for `SYNC STATUS` to report `COMPLETED` and `replication=STARTED` before issuing the next table's `SYNC`.
 

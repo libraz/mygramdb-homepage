@@ -17,7 +17,7 @@ MygramDB now validates every configured primary-key, text-source, and filter col
 - `VARBINARY`
 - `BLOB`
 
-Character columns must use an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. For example, a configured `latin1_swedish_ci` column now causes startup to fail instead of accepting data that cannot be represented consistently by the initial loader and binlog reader.
+Character columns must use a `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation. For example, a configured `latin1_swedish_ci` column now causes startup to fail instead of accepting data that cannot be represented consistently by the initial loader and binlog reader.
 
 Inspect the columns referenced by your configuration, convert unsupported columns, or remove them from the table definition before upgrading.
 
@@ -66,14 +66,16 @@ The current template also exposes BM25, cache, rate-limit, and TLS settings. A b
 
 ## Behavior Changes to Check
 
-- `CONFIG VERIFY relative.yaml` resolves relative to the active configuration file, not the service working directory. Use absolute paths in automation when that distinction matters.
-- `SHOW VARIABLES LIKE` accepts exactly one pattern. Existing calls such as `SHOW VARIABLES LIKE 'cache%'` continue to work.
-- HTTP search and facet requests use literal `q` text by default. Send deliberate expressions with `"mode": "boolean"`.
-- Boolean search terms now keep punctuation such as `c++`, `e-mail`, and version strings together. Test any parser-dependent query normalization in your application.
+| Area | Change |
+| --- | --- |
+| `CONFIG VERIFY relative.yaml` | A relative path resolves against the active configuration file, not the service working directory. Use absolute paths in automation when that distinction matters. |
+| `SHOW VARIABLES LIKE` | Accepts exactly one pattern. Existing calls such as `SHOW VARIABLES LIKE 'cache%'` keep working. |
+| HTTP search and facet `q` | Treated as literal text by default. Send deliberate expressions with `"mode": "boolean"`. |
+| Boolean search terms | Punctuation such as `c++`, `e-mail`, and version strings stays inside one term. Test any query normalization in your application that depends on the old parser. |
 
 ## New Configuration Surface
 
-v1.9 makes TCP idle reaping and pending-frame limits configurable. The defaults are suitable for most deployments; set them only when connection behavior needs tuning:
+v1.9 makes TCP idle reaping and pending-frame limits configurable. The defaults suit most deployments, so set these only when you need to tune connection behavior:
 
 ```yaml
 api:

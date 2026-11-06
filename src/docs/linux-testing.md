@@ -25,7 +25,7 @@ When developing on macOS, certain issues only appear in Linux environments:
 - **Library version differences**
 - **Path handling differences**
 
-These issues often only get detected in CI, leading to failed builds after pushing.
+You usually find these only when CI fails after a push.
 
 ## Solution
 
@@ -111,7 +111,7 @@ The Makefile provides these Linux development targets:
 
 Use a separate checkout for Docker. The targets mount the repository and configure `build/`; a macOS CMake cache cannot be reused in Linux. Do not run native and container builds, or two Docker build targets, concurrently in the same checkout.
 
-A local clone includes committed changes only. Commit the changes you intend to check before creating it, or copy those changes into the separate checkout:
+**Option 1: Full check before a push.** A local clone includes committed changes only, so commit the changes you intend to check first, or copy them into the separate checkout:
 
 ```bash
 git clone --no-hardlinks . ../mygram-db-linux
@@ -147,8 +147,6 @@ Match the failing CI job's options when reproducing it; the defaults above are t
 ## Performance Tips
 
 ### 1. Image Caching
-
-The Docker image is cached after the first build. Subsequent runs are much faster:
 
 The first run installs dependencies and compiles the project. Later runs reuse the image and build cache; duration depends on the host and the files changed.
 

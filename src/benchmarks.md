@@ -18,8 +18,11 @@ Run the benchmark in a clone of the [repository](https://github.com/libraz/mygra
 # Requires Docker Compose and Rye.
 make bench-up
 
-# Wait for "Seed Data Load Complete" and MygramDB's "server_ready" log entry.
+# Wait for "Seed Data Load Complete" in the MySQL logs.
 make bench-logs
+
+# MygramDB logs "server_ready" when it is ready.
+docker compose -f docker-compose.bench.yml logs mygramdb
 
 make bench-run
 make bench-down

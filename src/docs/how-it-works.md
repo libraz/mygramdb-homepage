@@ -1,6 +1,6 @@
 ---
 title: How MygramDB Works - N-gram Indexing and Search Pipeline
-description: Technical overview of MygramDB internals. N-gram tokenization, posting list compression with Roaring bitmaps, search pipeline, verify_text post-filter, and n-gram-level cache invalidation.
+description: "How MygramDB searches: N-gram tokenization, Roaring bitmap posting lists, the search pipeline, the verify_text post-filter, and n-gram cache invalidation."
 head:
   - - meta
     - name: keywords
@@ -39,7 +39,7 @@ Each n-gram maps to a **posting list** -- a sorted list of document IDs containi
 
 <DocDiagram name="ngram-index" alt="The term “search” is split into the bi-grams se, ea, ar, rc and ch, each mapping to a sorted posting list of DocIDs; documents 1 and 42 appear in every list and survive the intersection." />
 
-Document IDs are `uint32_t`, supporting up to 4 billion documents per table.
+Document IDs (DocIDs) are `uint32_t`, supporting up to 4 billion documents per table.
 
 ## Posting List Compression
 
@@ -82,7 +82,7 @@ A search query flows through a series of stages:
 
 7. **Sort and paginate** -- Results are sorted by the requested column and sliced to the requested OFFSET/LIMIT.
 
-The pipeline avoids repeating work where the same term appears in several boolean branches. One deduplicated term-information lookup is shared by boolean evaluation, NOT filtering, synonym expansion, and verification. Ordinary `NOT` clauses subtract matches from the candidate set; only an expression that needs the complement of a set enumerates all document IDs. Under `memory.verify_text`, excluded terms are checked against stored text before a document is removed.
+A term that appears in several boolean branches is looked up once. Boolean evaluation, NOT filtering, synonym expansion, and verification share that one deduplicated lookup. Ordinary `NOT` clauses subtract matches from the candidate set; only an expression that needs the complement of a set enumerates all DocIDs. Under `memory.verify_text`, excluded terms are checked against stored text before a document is removed.
 
 Text-heavy stages also have a fixed memory boundary. Candidate text is copied from the DocumentStore in bounded chunks, then the store lock is released before BM25 scoring, term-frequency counting, and text post-filters run. A large candidate set therefore does not require copying a large fraction of the corpus or holding the store lock throughout scoring.
 
@@ -103,7 +103,7 @@ A **false positive** is a document that survived the n-gram intersection but doe
 
 Without verification, the query `"quantum"` returns approximately 58,000 candidates on 1.1M Wikipedia articles. With `verify_text: all`, the normalized query is checked as a substring of each candidate's normalized text, leaving 1,961 matches. MySQL FULLTEXT returned the same count for this tested query; `verify_text` does not promise MySQL FULLTEXT semantics for all queries.
 
-**How it works:** MygramDB retains normalized text in memory for features such as highlighting. When `verify_text` applies to a query, each candidate's stored text is checked for an actual substring match after the posting list intersection. False positives are discarded.
+MygramDB retains normalized text in memory for features such as highlighting. When `verify_text` applies to a query, each candidate's stored text is checked for an actual substring match after the posting list intersection. False positives are discarded.
 
 The [published benchmark](/benchmarks) measured about 1.78 GB for the document and text stores together on 1.1M articles. `verify_text` controls candidate checking, not whether this text is stored. Three modes are available:
 
@@ -133,8 +133,8 @@ Before caching a query result, MygramDB rechecks its pending invalidation regist
 
 <DocDiagram name="cache-invalidation" alt="A changed row is tokenized into the n-grams qu, ua and an; the reverse index maps them to the cached “quantum” query, which is evicted, while the “algorithm” and “database” entries are kept." />
 
-- 🔴 `quantum` — overlapping n-grams, invalidated
-- 🟢 `algorithm`, `database` — unaffected, cache retained
+- `quantum`: overlapping n-grams, so the entry is invalidated
+- `algorithm`, `database`: unaffected, so the entries stay cached
 
 The number of invalidated entries depends on the changed text, filters, and cached queries. A common term or a text-sensitive query can affect many entries; the invalidation manager targets matching dependencies instead of flushing the whole cache.
 

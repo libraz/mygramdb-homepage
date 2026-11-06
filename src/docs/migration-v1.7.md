@@ -1,6 +1,6 @@
 ---
 title: Upgrade to MygramDB v1.7
-description: "Move a MygramDB deployment to v1.7: database-qualified table identities, the new /tables/{identity} HTTP routes, multi-database indexing, and consistent snapshots."
+description: "Move a MygramDB deployment to v1.7: database-qualified table identities, /tables/{identity} HTTP routes, multi-database indexing, consistent snapshots."
 ---
 
 # Upgrade to v1.7
@@ -9,7 +9,7 @@ description: "Move a MygramDB deployment to v1.7: database-qualified table ident
 v1.7.0 changes the HTTP table routes. A TCP/CLI-centric deployment is barely affected, but an application that searches over HTTP will not work until its endpoints are updated.
 :::
 
-MygramDB v1.7.0 adds database-qualified table identities, multi-database indexing, HTTP/TCP feature parity for core search APIs, and multi-table consistent snapshots. Most single-database TCP/CLI users can upgrade without changing commands, but HTTP clients must update table routes.
+MygramDB v1.7.0 adds database-qualified table identities, multi-database indexing, HTTP/TCP feature parity for the core search APIs, and consistent snapshots across multiple tables. Single-database TCP/CLI users can mostly upgrade without changing commands. HTTP clients must update their table routes.
 
 ## What Changed
 
@@ -105,9 +105,9 @@ HTTP `/search` supports sort, fuzzy search, and highlighting through dedicated J
 Creating a `DUMP SAVE` on the new version means later restores preserve multi-database table identities correctly. Keep the old version's dumps until you are past the point of rolling back.
 :::
 
-v1.7.0 preserves per-table database names in dump metadata. After upgrading, keep old dump files for rollback, then create a fresh dump so restored metadata contains qualified table identities.
+v1.7.0 stores each table's database name in the dump metadata.
 
-For multi-table configurations with replication enabled, initial snapshots use one consistent MySQL snapshot across all tables and capture a shared GTID. Concurrent dump/snapshot operations coordinate on the drained GTID so the dump can resume replication from a precise position.
+With replication enabled and multiple tables configured, the initial snapshot reads all tables from one consistent MySQL snapshot and captures a shared GTID. When a dump runs at the same time as a snapshot, the two coordinate on the drained GTID, so the dump can resume replication from an exact position.
 
 ## Upgrade Checklist
 

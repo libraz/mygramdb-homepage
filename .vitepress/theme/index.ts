@@ -5,26 +5,25 @@ import BenchChart from './components/BenchChart.vue'
 import BenchmarkResults from './components/BenchmarkResults.vue'
 import DocDiagram from './components/DocDiagram.vue'
 import HeroPanel from './components/HeroPanel.vue'
-import benchmark from '../../src/data/benchmark-v1.10.0.json'
 import './custom.css'
 
 /** Locale-aware copy for the hero kicker + meta line. */
-function heroCopy(isJa: boolean) {
+function heroCopy(isJa: boolean, version: string) {
   return isJa
     ? {
         kicker: 'インメモリ検索エンジン',
-        meta: ['MITライセンス', '単一バイナリ', 'MySQL & MariaDB', `v${benchmark.run.mygramdbVersion}`],
+        meta: ['MITライセンス', '単一バイナリ', 'MySQL & MariaDB', `v${version}`],
       }
     : {
         kicker: 'In-memory search engine',
-        meta: ['MIT licensed', 'Single binary', 'MySQL & MariaDB', `v${benchmark.run.mygramdbVersion}`],
+        meta: ['MIT licensed', 'Single binary', 'MySQL & MariaDB', `v${version}`],
       }
 }
 
 const Layout = () => {
-  const { lang } = useData()
+  const { lang, theme } = useData()
   const isJa = lang.value.startsWith('ja')
-  const copy = heroCopy(isJa)
+  const copy = heroCopy(isJa, theme.value.latestVersion)
 
   return h(DefaultTheme.Layout, null, {
     'home-hero-info-before': () =>

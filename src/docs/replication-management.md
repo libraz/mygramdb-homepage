@@ -11,14 +11,16 @@ This page describes MygramDB's own replication lifecycle. It does not manage MyS
 
 ## Coordination around maintenance
 
-`DUMP SAVE`, `DUMP LOAD`, scheduled snapshots, and `SYNC` coordinate with the single binlog reader. Where a dump operation needs a consistent position, it pauses and drains a running reader, then attempts to restart that reader when the operation ends. A reader that was already manually stopped remains stopped. A successful dump restore whose reader cannot restart leaves replication stopped and readiness false. A pause during a long dump can increase lag behind MySQL.
+`DUMP SAVE`, `DUMP LOAD`, scheduled dumps, and `SYNC` coordinate with the single binlog reader. Where a dump operation needs a consistent position, it pauses and drains a running reader, then attempts to restart that reader when the operation ends. A reader that was already manually stopped remains stopped. A successful dump restore whose reader cannot restart leaves replication stopped and readiness false. A pause during a long dump can increase lag behind MySQL.
 
 | Operation | Replication behavior | Reader impact |
 | --- | --- | --- |
-| `DUMP SAVE` | Refuses with `6029` until every configured table completes its initial load. Otherwise, it pauses a running reader for a consistent saved GTID, then resumes it when the operation ends. A reader already stopped stays stopped. | Search remains available; lag can grow while saving. |
-| `DUMP LOAD` | Pauses a running reader before replacing state; on success it uses the dump GTID before attempting to restore that reader. A reader already stopped stays stopped. | Restored data is installed atomically; readiness also requires replication to be available. |
-| `SYNC` | Drains the shared reader, builds one table off to the side, then restarts. | A single reader serves every configured table, so normal restarts use the drained position. |
-| `OPTIMIZE` | Holds the shared maintenance slot. | Run it separately from dumps and SYNC. |
+| `DUMP SAVE` | Pauses the reader for a consistent GTID, then resumes it | Search stays available; lag can grow while saving |
+| `DUMP LOAD` | Pauses the reader, replaces the state, then resumes from the dump's GTID | Restored data is swapped in atomically |
+| `SYNC` | Drains the shared reader, builds one table aside, then restarts | Restarts from the drained position |
+| `OPTIMIZE` | Holds the shared maintenance slot | Run it apart from dumps and `SYNC` |
+
+In every case a reader that was already stopped by hand stays stopped. `DUMP SAVE` is refused with `6029` until every configured table has completed its initial load. After `DUMP LOAD`, readiness also requires replication to be available. One reader serves every configured table, which is why `SYNC` restarts from the position it drained to.
 
 The long-running operations share one slot. A new request while another is active fails as busy; wait for the active operation to reach a terminal status.
 

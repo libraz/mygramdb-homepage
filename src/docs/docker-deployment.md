@@ -1,6 +1,6 @@
 ---
 title: MygramDB Docker Deployment - Compose Setup and Production
-description: Deploy MygramDB with Docker and Docker Compose. Environment variables, custom config mounting, production tuning, resource limits, backup/restore, scaling, and security best practices.
+description: "Run MygramDB with Docker and Docker Compose: environment variables, config mounts, production tuning, resource limits, backup and restore, and security."
 head:
   - - meta
     - name: keywords
@@ -13,7 +13,7 @@ head:
 The quick-start settings are for evaluation. Before production, revisit the MySQL password, `REPLICATION_SERVER_ID`, the source CIDRs, the Docker memory limit, and the persistent volume for dumps.
 :::
 
-This guide explains how to deploy MygramDB using Docker and Docker Compose.
+This guide covers deploying MygramDB with Docker and Docker Compose.
 
 ## Quick Start
 
@@ -101,7 +101,7 @@ TABLE_NAME=articles                 # Table to index
 TABLE_PRIMARY_KEY=id                # Primary key column
 TABLE_TEXT_COLUMN=content           # Text column to index
 TABLE_NGRAM_SIZE=2                  # N-gram size for kana, ASCII, and other non-ideograph scripts
-TABLE_KANJI_NGRAM_SIZE=1            # N-gram size for CJK ideographs
+TABLE_KANJI_NGRAM_SIZE=0            # N-gram size for CJK ideographs (0 = use TABLE_NGRAM_SIZE)
 ```
 
 #### Replication Configuration
@@ -127,6 +127,10 @@ MEMORY_NORMALIZE_WIDTH=narrow       # Width normalization
 MEMORY_VERIFY_TEXT=off              # off, ascii, or all
 ```
 
+::: warning Set a Docker memory limit
+MygramDB's own memory settings do not forcibly cap process usage. When running in containers, set `mem_limit` in Compose or the equivalent limit on your orchestration platform.
+:::
+
 #### Dumps, Ranking, and Cache
 
 ```bash
@@ -145,10 +149,6 @@ CACHE_TTL_SECONDS=3600
 Use `DUMP_*`, not the removed `SNAPSHOT_*` variables.
 
 #### MySQL TLS
-
-::: warning Set a Docker memory limit
-MygramDB's own memory settings do not forcibly cap process usage. When running in containers, set `mem_limit` in Compose or the equivalent limit on your orchestration platform.
-:::
 
 ```bash
 MYSQL_DATETIME_TIMEZONE=+00:00
@@ -225,7 +225,11 @@ services:
     command: ["mygramdb", "-c", "/etc/mygramdb/config.yaml"]
 ```
 
-With `SKIP_CONFIG_GEN=true`, the entrypoint does not copy Compose's `MYSQL_*` and `API_ADMIN_TOKEN` values into the mounted file. The `MYGRAM_*` mappings above apply the server's supported overrides directly. In `my-config.yaml`, set `api.tcp.bind: "0.0.0.0"` and, if HTTP is enabled, `api.http.bind: "0.0.0.0"` so the mapped ports can reach the server. Set `network.allow_cidrs` to include the Docker bridge and intended clients; Compose's `API_CONTAINER_BIND`, `API_HTTP_CONTAINER_BIND`, and `NETWORK_ALLOW_CIDRS` no longer change these file settings. Put other settings in `my-config.yaml`. Set a private `MYSQL_ROOT_PASSWORD` in `.env` as well, because the MySQL service still uses it.
+With `SKIP_CONFIG_GEN=true`, the entrypoint does not copy Compose's `MYSQL_*` and `API_ADMIN_TOKEN` values into the mounted file. The `MYGRAM_*` mappings above apply the server's supported overrides directly.
+
+In `my-config.yaml`, set `api.tcp.bind: "0.0.0.0"` and, if HTTP is enabled, `api.http.bind: "0.0.0.0"` so the mapped ports can reach the server. Set `network.allow_cidrs` to include the Docker bridge and intended clients. Compose's `API_CONTAINER_BIND`, `API_HTTP_CONTAINER_BIND`, and `NETWORK_ALLOW_CIDRS` no longer change these file settings. Put all other settings in `my-config.yaml` as well.
+
+Set a private `MYSQL_ROOT_PASSWORD` in `.env` too, because the MySQL service still uses it.
 
 For a standalone container, copy the minimal configuration and edit it before starting. Set `mysql.host` to an address reachable **from the container** (its `127.0.0.1` means the container itself), fill in the MySQL credentials, set `api.tcp.bind: "0.0.0.0"`, and add the Docker bridge gateway's CIDR to `network.allow_cidrs`. A non-loopback listener also requires an admin token. Keep the published host port on loopback unless remote access is intended.
 
@@ -240,7 +244,7 @@ docker run -d --name mygramdb-standalone \
   -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
   -e MYGRAM_API_ADMIN_TOKEN \
-  ghcr.io/libraz/mygram-db:1.11.1 \
+  ghcr.io/libraz/mygram-db:1.12.0 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -258,7 +262,7 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
 # Or specify the released version manually
-docker build --build-arg MYGRAMDB_VERSION=1.11.1 -t mygramdb:1.11.1 .
+docker build --build-arg MYGRAMDB_VERSION=1.12.0 -t mygramdb:1.12.0 .
 
 # Tag as latest
 docker tag mygramdb:$VERSION mygramdb:latest
@@ -271,8 +275,8 @@ docker tag mygramdb:$VERSION mygramdb:latest
 The repository ships `docker-compose.yml`; it has no separate production Compose file. To use the published image instead of building locally, give it the tag expected by that file:
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.1
-docker tag ghcr.io/libraz/mygram-db:1.11.1 mygramdb:1.11.1
+docker pull ghcr.io/libraz/mygram-db:1.12.0
+docker tag ghcr.io/libraz/mygram-db:1.12.0 mygramdb:1.12.0
 ```
 
 ### Environment Setup
@@ -311,9 +315,9 @@ LOG_FORMAT=json
 
 3. Start with production configuration. The first command uses the published image tagged above; the second builds the image from this checkout instead:
 ```bash
-MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --no-build
+MYGRAMDB_VERSION=1.12.0 docker compose --env-file .env.prod up -d --no-build
 # Or build locally:
-MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --build
+MYGRAMDB_VERSION=1.12.0 docker compose --env-file .env.prod up -d --build
 ```
 
 ### Resource Limits
@@ -326,19 +330,12 @@ services:
     mem_limit: 16g
 ```
 
-Size the limit from measured RSS and leave headroom for `OPTIMIZE`, which may need roughly another full copy of the index. The following are starting points to measure, not limits supplied by Compose:
+Size the limit from measured RSS and leave headroom for `OPTIMIZE`, which may need roughly another full copy of the index. The following are starting points to measure, not limits supplied by Compose. Adjust them for your workload and host capacity.
 
-**MySQL:**
-
-- CPU: 2-4 cores
-- Memory: 2-4 GB
-
-**MygramDB:**
-
-- CPU: 4-8 cores
-- Memory: 10-20 GB
-
-Adjust them for your workload and host capacity.
+| Service | CPU | Memory |
+| --- | --- | --- |
+| MySQL | 2-4 cores | 2-4 GB |
+| MygramDB | 4-8 cores | 10-20 GB |
 
 ## Database Initialization
 
@@ -400,7 +397,11 @@ curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
 
 ### Backup
 
-Wait until the initial `SYNC` has completed for every configured table. In a MySQL-enabled build with replication enabled, `DUMP SAVE` also requires a GTID position; otherwise it returns error 6029. The dump stores the index, source identity, and replication position. It is not a backup of MySQL data. Back up MySQL data and retain the required binlogs separately; these operations do not create an atomic recovery point. On recovery, use a source state compatible with the recorded identity and position, or run `SYNC` to rebuild the index. This example assumes the default `dump.dir`, `/var/lib/mygramdb/dumps`; adjust the copy path if your configuration uses another directory.
+Wait until the initial `SYNC` has completed for every configured table. In a MySQL-enabled build with replication enabled, `DUMP SAVE` also requires a GTID position; otherwise it returns error 6029.
+
+The dump file stores the index, source identity, and replication position. It is not a backup of MySQL data. Back up MySQL data and retain the required binlogs separately; these operations do not create an atomic recovery point. On recovery, use a source state compatible with the recorded identity and position, or run `SYNC` to rebuild the index.
+
+This example assumes the default `dump.dir`, `/var/lib/mygramdb/dumps`; adjust the copy path if your configuration uses another directory.
 
 ```bash
 # Backup MySQL data
@@ -409,7 +410,7 @@ docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -
 # Wait until the server is ready
 docker compose exec -T mygramdb mygram-cli --wait-ready INFO
 
-# Save and verify a named snapshot (the CLI waits for DUMP SAVE to finish)
+# Save and verify a named dump file (the CLI waits for DUMP SAVE to finish)
 docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP SAVE manual-backup.dmp\nDUMP VERIFY manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 
 # Copy the exact file created above to the host
@@ -445,10 +446,10 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 
 
 ```bash
 # Check version
-docker run --rm mygramdb:1.11.1 --version
+docker run --rm mygramdb:1.12.0 --version
 
 # Show help
-docker run --rm mygramdb:1.11.1 --help
+docker run --rm mygramdb:1.12.0 --help
 
 # Test the running container's configuration
 docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml
@@ -504,7 +505,7 @@ Port 11016 speaks MygramDB's TCP protocol; an HTTP proxy cannot use it as an ups
 3. **Limit host exposure** - Publish MySQL's host port on `127.0.0.1`; keep the container listener reachable from MygramDB over the Compose bridge
 4. **Enable TLS** - Use TLS for MySQL connections
 5. **Regular updates** - Keep Docker images up to date
-6. **Backup regularly** - Automate backups of MySQL and MygramDB snapshots
+6. **Backup regularly** - Automate backups of MySQL and MygramDB dump files
 
 ## References
 

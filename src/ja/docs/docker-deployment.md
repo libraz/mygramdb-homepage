@@ -1,6 +1,6 @@
 ---
-title: MygramDB Dockerデプロイ - Compose構成と本番運用
-description: DockerとDocker ComposeでMygramDBをデプロイ。環境変数、カスタム設定のマウント、本番チューニング、リソース制限、バックアップ/リストア、スケーリング、セキュリティの推奨事項。
+title: MygramDB Docker デプロイ - Compose 構成と本番運用
+description: Docker と Docker Compose で MygramDB をデプロイ。環境変数、カスタム設定のマウント、本番チューニング、リソース制限、バックアップ/リストア、スケーリング、セキュリティの推奨事項。
 head:
   - - meta
     - name: keywords
@@ -9,11 +9,11 @@ head:
 
 # Docker デプロイメントガイド
 
-このガイドでは、Docker と Docker Compose を使用して MygramDB をデプロイする方法を説明します。
-
 ::: warning 本番公開前の確認
-クイックスタートの設定は動作確認用です。本番環境ではMySQLパスワード、`REPLICATION_SERVER_ID`、接続元CIDR、Dockerのメモリ制限、ダンプ保存先の永続ボリュームを必ず見直してください。
+クイックスタートの設定は動作確認用です。本番環境では MySQL パスワード、`REPLICATION_SERVER_ID`、接続元 CIDR、Docker のメモリ制限、ダンプ保存先の永続ボリュームを必ず見直してください。
 :::
+
+Docker と Docker Compose で MygramDB をデプロイする方法を説明します。
 
 ## クイックスタート
 
@@ -33,12 +33,12 @@ nano .env
 ```
 
 ::: warning デフォルト値を変更
-`.env` 内の以下のデフォルト値を変更してください：
+`.env` 内の以下のデフォルト値を変更してください。
 
 - `MYSQL_ROOT_PASSWORD` - MySQL root パスワード。`.env.example` のプレースホルダーを残すと起動を拒否します
-- `MYSQL_PASSWORD` - MySQL レプリケーションユーザーのパスワード。Composeでは必須で、設定を生成する場合はコンテナのentrypointでも必須です
-- `API_ADMIN_TOKEN` - 管理操作用の十分に長いランダムなシークレット。Composeは未設定値を、entrypointはサンプルのプレースホルダーを拒否します
-- `REPLICATION_SERVER_ID` - この MygramDB インスタンスの一意なサーバーID
+- `MYSQL_PASSWORD` - MySQL レプリケーションユーザーのパスワード。Compose では必須で、設定を生成する場合はコンテナの entrypoint でも必須です
+- `API_ADMIN_TOKEN` - 管理操作用の十分に長いランダムなシークレット。Compose は未設定値を、entrypoint はサンプルのプレースホルダーを拒否します
+- `REPLICATION_SERVER_ID` - この MygramDB インスタンスの一意なサーバー ID
 :::
 
 ### 3. サービスの起動（開発環境）
@@ -54,7 +54,7 @@ docker compose logs -f
 docker compose ps
 ```
 
-同梱の Compose ファイルは、MySQLソースを `--binlog-row-metadata=FULL` 付きで起動します。別の MySQL / MariaDB ソースへ接続する場合は、ソースサーバー側でこの設定を行ってください。MygramDBの環境変数ではありません。
+同梱の Compose ファイルは、MySQL ソースを `--binlog-row-metadata=FULL` 付きで起動します。別の MySQL / MariaDB ソースへ接続する場合は、ソースサーバー側でこの設定を行ってください。MygramDB の環境変数ではありません。
 
 ### 4. サービスの停止
 
@@ -73,7 +73,7 @@ docker compose down -v
 `.env` は単一テーブルのクイックスタート用イメージを設定します。対応する環境変数の全一覧は最新の [`.env.example`](https://github.com/libraz/mygram-db/blob/main/.env.example) を参照してください。複数テーブルや詳細設定には設定ファイルをマウントします。
 
 ::: info 環境変数と設定ファイル
-環境変数は単一テーブルの基本構成をすばやく起動するための入口です。複数テーブル、複数DB、フィルタ、シノニム、詳細なHTTP設定が必要な場合は、後述のカスタム設定ファイルをマウントしてください。
+環境変数は単一テーブルの基本構成をすばやく起動するための入口です。複数テーブル、複数 DB、フィルタ、同義語、詳細な HTTP 設定が必要な場合は、後述のカスタム設定ファイルをマウントしてください。
 :::
 
 ::: tip 本番では設定ファイルがおすすめ
@@ -92,19 +92,23 @@ MYSQL_DATABASE=mydb                 # データベース名
 MYSQL_USE_GTID=true                 # GTID ベースのレプリケーションを使用
 ```
 
-`MYSQL_PORT` はComposeネットワーク内からMygramDBがMySQLへ接続するポートです。`MYSQL_HOST_PORT` はホスト側に公開するポートだけを変更し、Composeサービス間の接続先には影響しません。
+`MYSQL_PORT` は Compose ネットワーク内から MygramDB が MySQL へ接続するポートです。`MYSQL_HOST_PORT` はホスト側に公開するポートだけを変更し、Compose サービス間の接続先には影響しません。
 
 #### テーブル設定
 
 ```bash
 TABLE_NAME=articles                 # インデックス対象のテーブル
-TABLE_PRIMARY_KEY=id                # プライマリキーカラム
+TABLE_PRIMARY_KEY=id                # 主キーカラム
 TABLE_TEXT_COLUMN=content           # インデックス対象のテキストカラム
 TABLE_NGRAM_SIZE=2                  # かな、ASCII など漢字以外の N-gram サイズ
-TABLE_KANJI_NGRAM_SIZE=1            # CJK の漢字用の N-gram サイズ
+TABLE_KANJI_NGRAM_SIZE=0            # CJK の漢字用の N-gram サイズ（0 なら TABLE_NGRAM_SIZE を使う）
 ```
 
 #### レプリケーション設定
+
+::: info 用語補足
+**server_id** は MySQL レプリケーション接続を識別する番号です。同じ MySQL へ接続する MygramDB や MySQL レプリカ間で重複しない値を設定してください。
+:::
 
 ```bash
 REPLICATION_ENABLE=true             # レプリケーションを有効化
@@ -112,10 +116,6 @@ REPLICATION_SERVER_ID=12345         # 1〜4294967295の0以外の値
 REPLICATION_START_FROM=snapshot     # snapshot、latest、MySQL GTIDセット、MariaDB GTIDリスト
 REPLICATION_AUTO_INITIAL_SNAPSHOT=true # 初期スナップショットを自動作成
 ```
-
-::: info 用語補足
-**server_id** はMySQLレプリケーション接続を識別する番号です。同じMySQLへ接続するMygramDBやMySQLレプリカ間で重複しない値を設定してください。
-:::
 
 #### メモリ管理
 
@@ -126,6 +126,10 @@ MEMORY_NORMALIZE_NFKC=true          # NFKC正規化
 MEMORY_NORMALIZE_WIDTH=narrow       # 幅の正規化
 MEMORY_VERIFY_TEXT=off              # off、ascii、all
 ```
+
+::: warning Docker のメモリ制限
+MygramDB のメモリ設定だけでは、プロセスの使用量を強制的に止めません。コンテナで運用する場合は、Compose の `mem_limit` や実行基盤側のメモリ制限も設定してください。
+:::
 
 #### ダンプ、ランキング、キャッシュ
 
@@ -155,14 +159,10 @@ MYSQL_SSL_KEY=
 MYSQL_SSL_VERIFY_SERVER_CERT=true
 ```
 
-::: warning Dockerのメモリ制限
-MygramDBのメモリ設定だけでは、プロセスの使用量を強制的に止めません。コンテナで運用する場合は、Composeの `mem_limit` や実行基盤側のメモリ制限も設定してください。
-:::
+#### API サーバー
 
-#### APIサーバー
-
-::: info ホスト側のbindとコンテナ側のbindは別です
-ComposeはTCPとHTTPのポートをホストの `127.0.0.1` に公開します。一方、コンテナは自身のネットワークインターフェースで待ち受ける必要があるため、`API_CONTAINER_BIND` と `API_HTTP_CONTAINER_BIND`（どちらもデフォルトは `0.0.0.0`）を使います。リバースプロキシやファイアウォールを設計に含めない限り、ホスト側のループバック公開を全インターフェース公開へ変更しないでください。
+::: info ホスト側の bind とコンテナ側の bind は別です
+Compose は TCP と HTTP のポートをホストの `127.0.0.1` に公開します。一方、コンテナは自身のネットワークインターフェースで待ち受ける必要があるため、`API_CONTAINER_BIND` と `API_HTTP_CONTAINER_BIND`（どちらもデフォルトは `0.0.0.0`）を使います。リバースプロキシやファイアウォールを設計に含めない限り、ホスト側のループバック公開を全インターフェース公開へ変更しないでください。
 :::
 
 ```bash
@@ -192,7 +192,7 @@ NETWORK_ALLOW_CIDRS=127.0.0.1/32,172.16.0.0/12
 ```
 
 ::: warning
-Composeでは `NETWORK_ALLOW_CIDRS` が必須です。非ループバックのAPI bindと `0.0.0.0/0` または `::/0` を組み合わせると、MygramDBは起動時に設定を拒否します。独自のコンテナネットワークでは、アクセスが必要なアプリケーションと運用ネットワークのCIDRだけを指定してください。
+Compose では `NETWORK_ALLOW_CIDRS` が必須です。非ループバックの API bind と `0.0.0.0/0` または `::/0` を組み合わせると、MygramDB は起動時に設定を拒否します。独自のコンテナネットワークでは、アクセスが必要なアプリケーションと運用ネットワークの CIDR だけを指定してください。
 :::
 
 #### ロギング
@@ -204,7 +204,7 @@ LOG_FORMAT=json                     # ログ形式: json または text
 
 ### カスタム設定ファイル
 
-より高度な設定（フィルタ、複数テーブルなど）が必要な場合は、カスタム設定ファイルをマウントできます：
+より高度な設定（フィルタ、複数テーブルなど）が必要な場合は、カスタム設定ファイルをマウントできます。
 
 ```yaml
 # docker-compose.override.yml
@@ -225,7 +225,11 @@ services:
     command: ["mygramdb", "-c", "/etc/mygramdb/config.yaml"]
 ```
 
-`SKIP_CONFIG_GEN=true` の場合、entrypoint は Compose の `MYSQL_*` と `API_ADMIN_TOKEN` をマウント済みファイルへ書き込みません。上記の `MYGRAM_*` はサーバーが直接読む上書き設定です。公開ポートから到達できるよう、`my-config.yaml` に `api.tcp.bind: "0.0.0.0"`、HTTP を有効にする場合は `api.http.bind: "0.0.0.0"` を設定します。`network.allow_cidrs` には Docker ブリッジと接続を許可するクライアントの CIDR を含めてください。Compose の `API_CONTAINER_BIND`、`API_HTTP_CONTAINER_BIND`、`NETWORK_ALLOW_CIDRS` は、この構成ではファイル内の設定を変更しません。それ以外の設定も `my-config.yaml` に記載してください。MySQL サービスは引き続き `.env` の `MYSQL_ROOT_PASSWORD` を使うため、こちらも独自の値を設定します。
+`SKIP_CONFIG_GEN=true` の場合、entrypoint は Compose の `MYSQL_*` と `API_ADMIN_TOKEN` をマウント済みファイルへ書き込みません。上記の `MYGRAM_*` はサーバーが直接読む上書き設定です。
+
+公開ポートから到達できるよう、`my-config.yaml` に `api.tcp.bind: "0.0.0.0"` を設定します。HTTP を有効にする場合は `api.http.bind: "0.0.0.0"` も設定します。`network.allow_cidrs` には、Docker ブリッジと接続を許可するクライアントの CIDR を含めてください。Compose の `API_CONTAINER_BIND`、`API_HTTP_CONTAINER_BIND`、`NETWORK_ALLOW_CIDRS` は、この構成ではファイル内の設定を変更しません。それ以外の設定も `my-config.yaml` に記載してください。
+
+MySQL サービスは引き続き `.env` の `MYSQL_ROOT_PASSWORD` を使うため、こちらにも独自の値を設定します。
 
 単独コンテナで実行する場合は、最小設定をコピーしてから編集します。`mysql.host` は**コンテナから到達できる**アドレスに変更してください（`127.0.0.1` はコンテナ自身を指します）。MySQL の認証情報を入力し、`api.tcp.bind: "0.0.0.0"` を設定して、Docker ブリッジのゲートウェイを含む CIDR を `network.allow_cidrs` に追加します。非ループバックのリスナーには管理トークンも必要です。ホスト側の公開ポートは、外部からの接続が必要な場合を除きループバックに限定します。
 
@@ -240,7 +244,7 @@ docker run -d --name mygramdb-standalone \
   -v "$PWD/my-config.yaml:/etc/mygramdb/config.yaml:ro" \
   -e SKIP_CONFIG_GEN=true \
   -e MYGRAM_API_ADMIN_TOKEN \
-  ghcr.io/libraz/mygram-db:1.11.1 \
+  ghcr.io/libraz/mygram-db:1.12.0 \
   mygramdb -c /etc/mygramdb/config.yaml
 ```
 
@@ -248,7 +252,7 @@ docker run -d --name mygramdb-standalone \
 
 ### Docker イメージのビルド
 
-適切なバージョンタグを付けてDockerイメージをビルドする方法：
+適切なバージョンタグを付けて Docker イメージをビルドするには、次のようにします。
 
 ```bash
 # git タグから現在のバージョンを取得
@@ -258,32 +262,32 @@ VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
 docker build --build-arg MYGRAMDB_VERSION=$VERSION -t mygramdb:$VERSION .
 
 # または、リリース済みバージョンを手動で指定
-docker build --build-arg MYGRAMDB_VERSION=1.11.1 -t mygramdb:1.11.1 .
+docker build --build-arg MYGRAMDB_VERSION=1.12.0 -t mygramdb:1.12.0 .
 
 # latest タグを付与
 docker tag mygramdb:$VERSION mygramdb:latest
 ```
 
-**注意:** `MYGRAMDB_VERSION` ビルド引数が指定されない場合、ビルドはバージョン0.0.0を使用するか、ビルドコンテキストに `.git` ディレクトリが存在する場合は git タグから読み取りを試みます。
+**注意:** `MYGRAMDB_VERSION` ビルド引数が指定されない場合、ビルドはバージョン 0.0.0 を使用するか、ビルドコンテキストに `.git` ディレクトリが存在する場合は git タグから読み取りを試みます。
 
 ### ビルド済みイメージの使用
 
 リポジトリにあるのは `docker-compose.yml` で、本番専用の Compose ファイルはありません。ローカルビルドの代わりに公開イメージを使う場合は、このファイルが参照するタグを付けます。
 
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.1
-docker tag ghcr.io/libraz/mygram-db:1.11.1 mygramdb:1.11.1
+docker pull ghcr.io/libraz/mygram-db:1.12.0
+docker tag ghcr.io/libraz/mygram-db:1.12.0 mygramdb:1.12.0
 ```
 
 ### 環境設定
 
-1. 本番用 `.env` ファイルを作成：
+1. 本番用 `.env` ファイルを作成します。
 ```bash
 cp .env.example .env.prod
 nano .env.prod
 ```
 
-2. 本番用の値を設定：
+2. 本番用の値を設定します。
 ```bash
 # 本番 MySQL 設定
 MYSQL_HOST=production-mysql-host
@@ -311,14 +315,14 @@ LOG_FORMAT=json
 
 3. 本番設定で起動します。1 行目は上でタグを付けた公開イメージを使い、2 行目はこのチェックアウトからビルドします。
 ```bash
-MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --no-build
+MYGRAMDB_VERSION=1.12.0 docker compose --env-file .env.prod up -d --no-build
 # またはローカルでビルド
-MYGRAMDB_VERSION=1.11.1 docker compose --env-file .env.prod up -d --build
+MYGRAMDB_VERSION=1.12.0 docker compose --env-file .env.prod up -d --build
 ```
 
 ### リソース制限
 
-リポジトリの Compose ファイルには CPU・メモリ制限がありません。本番運用ではローカルの `docker-compose.override.yml` に追加してください。例:
+リポジトリの Compose ファイルには CPU・メモリ制限がありません。本番運用ではローカルの `docker-compose.override.yml` に追加してください。例を示します。
 
 ```yaml
 services:
@@ -326,31 +330,20 @@ services:
     mem_limit: 16g
 ```
 
-実測した RSS を基に余裕を確保してください。`OPTIMIZE` はインデックスをほぼもう一式作るだけの空きメモリが必要になる場合があります。以下は Compose に設定済みの制限値ではなく、計測を始める際の参考値です。
+実測した RSS を基に余裕を確保してください。`OPTIMIZE` はインデックスをほぼもう一式作るだけの空きメモリが必要になる場合があります。以下は Compose に設定済みの制限値ではなく、計測を始める際の参考値です。ワークロードとホストの容量に合わせて調整してください。
 
-**MySQL:**
-
-- CPU: 2-4 コア
-- メモリ: 2-4 GB
-
-**MygramDB:**
-
-- CPU: 4-8 コア
-- メモリ: 10-20 GB
-
-ワークロードとホストの容量に合わせて調整してください。
-
-::: info メモリ見積もり
-MygramDBはインメモリ検索エンジンです。`verify_text: all` の場合は100万ドキュメントあたり約3.1GBを目安にし、OS・キャッシュ・ダンプ処理の余裕分も確保してください。
-:::
+| サービス | CPU | メモリ |
+| --- | --- | --- |
+| MySQL | 2-4 コア | 2-4 GB |
+| MygramDB | 4-8 コア | 10-20 GB |
 
 ## データベースの初期化
 
-MySQL コンテナは `support/docker/mysql/init/` 内のスクリプトを自動実行します：
+MySQL コンテナは `support/docker/mysql/init/` 内のスクリプトを自動実行します。
 
 - `01-create-tables.sql` - サンプルテーブルを作成
 
-独自の初期化スクリプトを追加する場合：
+独自の初期化スクリプトを追加するには、次のようにします。
 
 ```bash
 # SQL スクリプトを作成
@@ -394,7 +387,7 @@ docker compose exec mygramdb curl -fsS http://127.0.0.1:8080/health/live
 
 ### メトリクス
 
-MygramDB はHTTP APIポート（デフォルトは8080）でメトリクスを公開します。エンドポイントは公開のままですが、`API_ADMIN_TOKEN` が設定されている場合、Bearerトークンのないリクエストには `mygramdb_replication_` で始まるメトリクスを含めません。
+MygramDB は HTTP API ポート（デフォルトは 8080）でメトリクスを公開します。エンドポイントは公開のままですが、`API_ADMIN_TOKEN` が設定されている場合、Bearer トークンのないリクエストには `mygramdb_replication_` で始まるメトリクスを含めません。
 
 ```bash
 curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
@@ -404,7 +397,11 @@ curl -H "Authorization: Bearer $API_ADMIN_TOKEN" http://localhost:8080/metrics
 
 ### バックアップ
 
-設定済みの全テーブルで初回`SYNC`を完了させてください。MySQL対応ビルドでレプリケーションを有効にしている場合、`DUMP SAVE`にはGTID位置も必要です。条件を満たさない場合はエラー6029を返します。ダンプにはインデックス、ソース識別子、レプリケーション位置が含まれますが、MySQLデータのバックアップではありません。MySQLデータは別途バックアップし、必要なbinlogも保管してください。これらの操作は同一時点の原子的なバックアップにはなりません。復旧時は記録された識別子と位置に適合するソースを使うか、`SYNC`でインデックスを再構築してください。この例はデフォルトの`dump.dir`（`/var/lib/mygramdb/dumps`）を使います。設定で別の保存先を指定した場合は、コピー元のパスを変更してください。
+設定済みの全テーブルで初回 `SYNC` を完了させてください。MySQL 対応ビルドでレプリケーションを有効にしている場合、`DUMP SAVE` には GTID 位置も必要です。条件を満たさない場合はエラー 6029 を返します。
+
+ダンプファイルにはインデックス、ソース識別子、レプリケーション位置が含まれますが、MySQL データのバックアップではありません。MySQL データは別途バックアップし、必要な binlog も保管してください。これらの操作は同一時点の原子的なバックアップにはなりません。復旧時は、記録された識別子と位置に適合するソースを使うか、`SYNC` でインデックスを再構築してください。
+
+この例はデフォルトの `dump.dir`（`/var/lib/mygramdb/dumps`）を使います。設定で別の保存先を指定した場合は、コピー元のパスを変更してください。
 
 ```bash
 # MySQL データのバックアップ
@@ -413,7 +410,7 @@ docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -
 # サーバーの準備完了を待つ
 docker compose exec -T mygramdb mygram-cli --wait-ready INFO
 
-# 名前を指定して保存し、検証する（CLIはDUMP SAVEの完了を待つ）
+# 名前を指定してダンプファイルを保存し、検証する（CLIはDUMP SAVEの完了を待つ）
 docker compose exec -T mygramdb sh -c 'printf "AUTH %s\nDUMP SAVE manual-backup.dmp\nDUMP VERIFY manual-backup.dmp\n" "$API_ADMIN_TOKEN" | mygram-cli'
 
 # 作成したファイルを指定してホストへコピー
@@ -449,10 +446,10 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 
 
 ```bash
 # バージョンを確認
-docker run --rm mygramdb:1.11.1 --version
+docker run --rm mygramdb:1.12.0 --version
 
 # ヘルプを表示
-docker run --rm mygramdb:1.11.1 --help
+docker run --rm mygramdb:1.12.0 --help
 
 # 実行中のコンテナの設定を検証
 docker compose exec mygramdb mygramdb -t /etc/mygramdb/config.yaml
@@ -465,7 +462,7 @@ docker compose exec mygramdb cat /etc/mygramdb/config.yaml
 
 ### パフォーマンスの問題
 
-1. リソース使用状況を確認：
+1. リソース使用状況を確認します。
 ```bash
 docker stats
 ```
@@ -476,13 +473,13 @@ docker stats
 
 ### 複数の MygramDB インスタンス
 
-読み取り容量や可用性を高めるには、ホストごとに同じ MySQL ソースを読むフルレプリカを配置し、それぞれ異なる `REPLICATION_SERVER_ID` を設定します。ready なインスタンスだけにトラフィックを送ってください。各レプリカはインデックス全体を持つため、1ノードあたりのメモリは減りません。
+読み取り容量や可用性を高めるには、ホストごとに同じ MySQL ソースを読むフルレプリカを配置し、それぞれ異なる `REPLICATION_SERVER_ID` を設定します。ready なインスタンスだけにトラフィックを送ってください。各レプリカはインデックス全体を持つため、1 ノードあたりのメモリは減りません。
 
-同じホストで同梱 Compose スタックを複数起動する場合は、MySQL、TCP、HTTP の公開ポートをスタックごとに変え、`REPLICATION_SERVER_ID` と認証情報も適切に設定してください。`-p` のプロジェクト名はコンテナ名とボリューム名を分けるだけで、公開ポートは変えません。アプリには `API_PORT` と `API_HTTP_PORT` を設定します。`MYSQL_HOST_PORT` でホスト側のMySQLポートを変え、`MYSQL_PORT` はコンテナ内ポート（通常3306）のままにしてください。異なるテーブルを分担させる場合は、アプリ側でクエリの送信先を選びます。
+同じホストで同梱 Compose スタックを複数起動する場合は、MySQL、TCP、HTTP の公開ポートをスタックごとに変え、`REPLICATION_SERVER_ID` と認証情報も適切に設定してください。`-p` のプロジェクト名はコンテナ名とボリューム名を分けるだけで、公開ポートは変えません。アプリには `API_PORT` と `API_HTTP_PORT` を設定します。`MYSQL_HOST_PORT` でホスト側の MySQL ポートを変え、`MYSQL_PORT` はコンテナ内ポート（通常 3306）のままにしてください。異なるテーブルを分担させる場合は、アプリ側でクエリの送信先を選びます。
 
 ### ロードバランシング
 
-同じデータを持つフルレプリカなら、HTTP リバースプロキシから各ノードの HTTP API ポート（既定 8080）へ振り分けられます。
+同じデータを持つフルレプリカなら、HTTP リバースプロキシから各ノードの HTTP API ポート（デフォルトは 8080）へ振り分けられます。
 
 ```nginx
 upstream mygramdb_backend {
@@ -499,7 +496,7 @@ server {
 }
 ```
 
-11016番は MygramDB の TCP プロトコルです。HTTP プロキシの upstream には使えません。このポートには nginx の `stream` ブロックまたは TCP ロードバランサーを使い、どちらの経路も `/health/ready` を基に送信先を選んでください。
+ポート 11016 は MygramDB の TCP プロトコルです。HTTP プロキシの upstream には使えません。このポートには nginx の `stream` ブロックまたは TCP ロードバランサーを使い、どちらの経路も `/health/ready` を基に送信先を選んでください。
 
 ## セキュリティの推奨事項
 
@@ -508,7 +505,7 @@ server {
 3. **ホスト側の公開を制限** - MySQL のホスト側ポートを `127.0.0.1` に公開し、コンテナ側リスナーは Compose ブリッジ経由で MygramDB から接続できるようにする
 4. **TLS を有効化** - MySQL 接続に TLS を使用
 5. **定期的な更新** - Docker イメージを最新に保つ
-6. **定期的なバックアップ** - MySQL と MygramDB スナップショットの自動バックアップ
+6. **定期的なバックアップ** - MySQL と MygramDB ダンプファイルの自動バックアップ
 
 ## 参考資料
 

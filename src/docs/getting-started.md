@@ -101,7 +101,7 @@ table=articles status=IN_PROGRESS progress=<done>/<total> rows (<percent>%) rate
 END
 ```
 
-Run `SYNC STATUS` until the table reports `status=COMPLETED`, then search it:
+`SYNC` runs the initial snapshot: it reads the table's existing rows from MySQL and builds the index. Afterward, binlog replication keeps the index current. Run `SYNC STATUS` until the table reports `status=COMPLETED`, then search it:
 
 ```mygram
 127.0.0.1:11016> SEARCH articles hello world

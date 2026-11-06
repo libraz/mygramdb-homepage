@@ -1,6 +1,6 @@
 ---
 title: MygramDB 設定リファレンス - config.yaml の全項目
-description: MygramDBの設定リファレンス。MySQL接続、テーブルとフィルタの定義、N-gram、シノニム、レプリケーション、メモリ、APIサーバー、レート制限、BM25、クエリキャッシュ、ダンプ、ネットワークACL、ログを説明します。
+description: MygramDB の設定リファレンス。MySQL 接続、テーブルとフィルタの定義、N-gram、同義語、レプリケーション、メモリ、API サーバー、レート制限、BM25、クエリキャッシュ、ダンプ、ネットワーク ACL、ログを説明します。
 head:
   - - meta
     - name: keywords
@@ -12,7 +12,7 @@ head:
 MygramDB は YAML または JSON の設定ファイルを読み込みます。起動時に組み込み JSON Schema で検証されるため、未知のキー、型違い、必須項目不足、無効な enum 値は起動前に検出されます。
 
 ::: info このページの読み方
-最初は「MySQL接続」「tables」「replication.server_id」「network.allow_cidrs」だけ理解すれば動かせます。その他の項目は、検索精度、メモリ使用量、運用方法を調整したくなった段階で読めば十分です。
+最初は「MySQL 接続」「tables」「replication.server_id」「network.allow_cidrs」だけ理解すれば動かせます。その他の項目は、検索精度、メモリ使用量、運用方法を調整したくなった段階で読めば十分です。
 :::
 
 ## 最小設定例
@@ -37,19 +37,21 @@ network:
     - "127.0.0.1/32"
 ```
 
-`mysql.user`、`mysql.database`、1つ以上のテーブルは、環境変数の上書きを適用した後に必須です。`MYGRAM_MYSQL_USER` と `MYGRAM_MYSQL_DATABASE` で必須値を指定する場合は、`mysql` ブロックを省略できます。レプリケーションはデフォルトで有効です。有効な場合、`replication.server_id` には `1` から `4294967295` までの0以外の値を指定し、MySQLレプリカやMygramDBインスタンス間で重複させないでください。
+`mysql.user`、`mysql.database`、1 つ以上のテーブルは、環境変数による上書きを適用した後に必須です。`MYGRAM_MYSQL_USER` と `MYGRAM_MYSQL_DATABASE` で値を指定する場合は、`mysql` ブロックを省略できます。
+
+レプリケーションはデフォルトで有効で、その場合は `replication.server_id` が必須です。`1` から `4294967295` までの 0 以外の値を指定し、MySQL レプリカや他の MygramDB インスタンスと重複させないでください。
 
 ::: tip 最小設定の次に行うこと
 設定ファイルを書いただけでは既存データは読み込まれません。起動後に `SYNC articles` のように対象テーブルを同期し、`SYNC STATUS` で完了を確認してください。
 :::
 
 ::: info 用語補足
-**server_id** はMySQLレプリケーションで使う識別番号です。同じMySQLにつながるMySQLレプリカやMygramDBで重複しない値にしてください。重複すると、MySQL側が別のレプリカと区別できなくなります。
+**server_id** は、MySQL レプリケーションの接続を識別する番号です。同じ MySQL に接続する他の MySQL レプリカや MygramDB と重複させないでください。重複すると、MySQL 側が両者を区別できなくなります。
 :::
 
 ## MySQL / MariaDB 接続
 
-MygramDB は MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応します。同じ `mysql` セクションを使い、機能プローブでサーバー種別を判定して適切なGTID形式を選びます。
+MygramDB は MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応します。どちらも同じ `mysql` セクションを使います。MygramDB は機能プローブでサーバーの種類を判定し、適切な GTID 形式を選びます。
 
 ```yaml
 mysql:
@@ -74,21 +76,45 @@ mysql:
   ignored_ddl_prefixes: []
 ```
 
-`datetime_timezone` は MySQL の `DATETIME` と `DATE` の値、および日時型の `required_filters` のリテラルを解釈する基準です。`TIME` は秒数で表す期間なので、このオフセットを使いません。`TIMESTAMP` は常にUTCとして扱われます。
+`datetime_timezone` は、MySQL の `DATETIME` と `DATE` の値、および日時型の `required_filters` のリテラルを解釈するときの基準です。`TIME` は秒数で表す期間なので、このオフセットを使いません。`TIMESTAMP` は常に UTC として扱います。
 
-`connect_timeout_ms`、`read_timeout_ms`、`write_timeout_ms` の単位はミリ秒、`session_timeout_sec` は秒です。TLSはデフォルトで無効です。この例ではTLSを有効にしています。CAとクライアント証明書のパスは、サーバー上にあるファイルへ置き換えてください。TLSを有効にしてサーバー証明書を検証する場合、`mysql.ssl_ca` に署名元CA証明書のパスが必要です。`mysql.ssl_cert` と `mysql.ssl_key` はソース側でクライアント証明書認証が必要な場合だけ使います。不要なら例からこの2行を削除してください。TLSを使わない場合は `ssl_enable: false` にして証明書パスを削除してください。検証付きTLSでは `ssl_verify_server_cert: true` を維持してください。
+`connect_timeout_ms`、`read_timeout_ms`、`write_timeout_ms` の単位はミリ秒、`session_timeout_sec` の単位は秒です。
 
-::: tip DATETIMEとTIMESTAMPの違い
-MySQLの `DATETIME` はタイムゾーン情報を持たない日時です。MygramDBは `datetime_timezone` を使って「このDATETIMEはどのタイムゾーンの時刻か」を解釈します。`TIMESTAMP` はMySQL側でUTC基準に変換されるため、この設定の影響を受けません。
+TLS はデフォルトで無効です。上の例では有効にしているため、証明書のパスはサーバー上にあるファイルへ置き換えてください。TLS を使わないソースに接続する場合は、`ssl_enable: false` にして証明書のパスを削除します。
+
+| キー | 役割 |
+|-----|------|
+| `ssl_enable` | TLS を有効にする（デフォルトは `false`） |
+| `ssl_verify_server_cert` | サーバー証明書を検証する。検証付き TLS では `true` のままにする |
+| `ssl_ca` | 検証を有効にする場合は必須。サーバー証明書に署名した CA 証明書のパス |
+| `ssl_cert`、`ssl_key` | ソースがクライアント証明書認証を求める場合だけ必要。不要なら削除する |
+
+次の `mysql` キーは環境変数で上書きできます。`mysql` ブロックがなくても環境変数は適用されます。
+
+| キー | 環境変数 |
+|-----|----------|
+| `mysql.host` | `MYGRAM_MYSQL_HOST` |
+| `mysql.port` | `MYGRAM_MYSQL_PORT` |
+| `mysql.user` | `MYGRAM_MYSQL_USER` |
+| `mysql.password` | `MYGRAM_MYSQL_PASSWORD` |
+| `mysql.database` | `MYGRAM_MYSQL_DATABASE` |
+
+`MYGRAM_MYSQL_PORT` は `1` から `65535` までの整数でなければならず、無効な値の場合は起動に失敗します。
+
+`mysql.ignored_ddl_prefixes` は、デフォルトが空の起動時専用リストです。分類されていない単独の DDL `QUERY_EVENT` を確認し、安全にスキップできると分かった場合だけ、そのプレフィックスを追加します。各エントリは次の条件を満たす必要があります。
+
+- 空でなく、セミコロンを含まない。
+- `ALTER`、`ANALYZE`、`CHECK`、`CREATE`、`DROP`、`OPTIMIZE`、`RENAME`、`REPAIR`、`TRUNCATE` のいずれかで始まる（大文字小文字は区別しません）。DML のプレフィックスは拒否されます。
+
+このリストは、設定済みテーブルとデータベースの安全確認を上書きしません。設定済みデータベースに対する `DROP DATABASE` や `DROP SCHEMA` は、`DROP` を指定していてもレプリケーションを停止します。変更は再起動後に反映されます。
+
+::: tip DATETIME と TIMESTAMP の違い
+MySQL の `DATETIME` は、タイムゾーン情報を持たない日時です。MygramDB は `datetime_timezone` を使って、その値がどのタイムゾーンの時刻かを判断します。`TIMESTAMP` は MySQL が UTC に変換して保持するため、この設定の影響を受けません。
 :::
 
-`mysql.host`、`mysql.port`、`mysql.user`、`mysql.password`、`mysql.database` は、それぞれ `MYGRAM_MYSQL_HOST`、`MYGRAM_MYSQL_PORT`、`MYGRAM_MYSQL_USER`、`MYGRAM_MYSQL_PASSWORD`、`MYGRAM_MYSQL_DATABASE` で上書きできます。`mysql` ブロックがなくても環境変数は適用されます。`MYGRAM_MYSQL_PORT` は `1` から `65535` までの整数でなければならず、無効な値の場合は起動に失敗します。
+`mysql.binlog_format` と `mysql.binlog_row_image` は、ソースサーバーの値が期待どおりかを検証する項目で、MySQL や MariaDB の設定は変更しません。ソースでは `binlog_row_metadata=FULL` も設定してください。これはサーバー側の設定で、MygramDB の設定キーではありません。ソースとテーブルの要件、および拒否される条件は [MySQL レプリケーション](/ja/docs/replication#%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%A8%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E3%81%AE%E6%A4%9C%E8%A8%BC)を参照してください。
 
-`mysql.ignored_ddl_prefixes` はデフォルトが空の起動時専用リストです。分類されていない単独の DDL `QUERY_EVENT` を安全にスキップできると確認した場合だけ、レビュー済みの単一ステートメントのプレフィックスを追加します。各エントリは空でなく、セミコロンを含まず、`ALTER`、`ANALYZE`、`CHECK`、`CREATE`、`DROP`、`OPTIMIZE`、`RENAME`、`REPAIR`、`TRUNCATE` のいずれかで始めます（大文字小文字は区別しません）。DML のプレフィックスは拒否されます。設定済みテーブルまたはデータベースの安全性は上書きされないため、設定済みデータベースに対する `DROP DATABASE` または `DROP SCHEMA` は `DROP` を指定していてもレプリケーションを停止します。変更は再起動後に反映されます。
-
-`mysql.binlog_format` と `mysql.binlog_row_image` はソースサーバーの値を検証する項目で、MySQLやMariaDBの設定を変更しません。ソースでは `binlog_row_metadata=FULL` も設定してください。これはサーバー側の設定で、MygramDBの設定キーではありません。必要なソース・テーブル要件と拒否理由は[MySQLレプリケーション](/ja/docs/replication#%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%A8%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E3%81%AE%E6%A4%9C%E8%A8%BC)を参照してください。
-
-### 必須のMySQL設定
+### 必須の MySQL 設定
 
 ```ini
 binlog_format = ROW
@@ -97,16 +123,20 @@ binlog_row_metadata = FULL
 binlog_checksum = CRC32
 ```
 
-これらはMySQLまたはMariaDBのソース側に設定します。MygramDBは起動時と再接続時に値を検証します。YAMLの `mysql` セクションからソースサーバーの設定は変更できません。ソースは圧縮されていないbinlogイベントを書き込む必要があります。MySQLでは `binlog_transaction_compression=OFF`、MariaDBでは `log_bin_compress=OFF` にします。MySQLの `binlog_row_value_options` に `PARTIAL_JSON` を含めないでください。
+これらは MySQL または MariaDB のソース側に設定します。MygramDB は起動時と再接続時に値を検証します。YAML の `mysql` セクションからは、ソースサーバーの設定を変更できません。
 
-MySQLではGTIDを有効にします。
+ソースは、圧縮されていない binlog イベントを書き込む必要があります。MySQL では `binlog_transaction_compression=OFF`、MariaDB では `log_bin_compress=OFF` にします。MySQL の `binlog_row_value_options` に `PARTIAL_JSON` を含めないでください。
+
+MySQL では GTID を有効にします。
 
 ```ini
 gtid_mode = ON
 enforce_gtid_consistency = ON
 ```
 
-MariaDBではネイティブの `domain-server-sequence` 形式のGTIDを使用します。`server_id` を設定し、ROW形式のbinlogを有効にして、`binlog_storage_engine` は未設定にします。ソース自体がレプリカの場合、MySQLでは `log_replica_updates`、MariaDBでは `log_slave_updates` も有効にし、複製した変更をbinlogへ書き込みます。
+MariaDB では、ネイティブの `domain-server-sequence` 形式の GTID を使います。`server_id` を設定し、ROW 形式の binlog を有効にして、`binlog_storage_engine` は未設定のままにします。
+
+ソース自体がレプリカの場合は、複製した変更を binlog に書き込むため、MySQL では `log_replica_updates`、MariaDB では `log_slave_updates` も有効にします。
 
 ### 必須権限
 
@@ -116,14 +146,14 @@ FLUSH PRIVILEGES;
 ```
 
 ::: warning 権限を絞る場合
-本番では `SELECT ON *.*` ではなく、検索対象DBだけに絞る運用もできます。ただし、初期 `SYNC` では対象テーブルの読み取りが必要で、binlog追従には `REPLICATION SLAVE` と `REPLICATION CLIENT` が必要です。
+本番では、`SELECT` を `*.*` ではなく検索対象の DB だけに絞れます。ただし、初期 `SYNC` には対象テーブルの読み取り権限が必要で、binlog への追従には `REPLICATION SLAVE` と `REPLICATION CLIENT` が必要です。
 :::
 
 ## テーブル設定
 
 各テーブルは `<database>.<table>` のテーブル識別子を持ちます。`tables[*].database` を省略した場合、`mysql.database` が使われます。
 
-レプリケーションを始める前に、MygramDBはソース要件、主キーの一意性、外部キーの更新・削除動作、カラム定義を検証します。拒否条件とエラーコードは[MySQLレプリケーション](/ja/docs/replication#%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%A8%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E3%81%AE%E6%A4%9C%E8%A8%BC)を参照してください。
+MygramDB は、レプリケーションを始める前に、ソースの要件、主キーの一意性、外部キーの更新・削除動作、カラム定義を検証します。拒否される条件とエラーコードは [MySQL レプリケーション](/ja/docs/replication#%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%A8%E3%83%86%E3%83%BC%E3%83%95%E3%82%99%E3%83%AB%E3%81%AE%E6%A4%9C%E8%A8%BC)を参照してください。
 
 ```yaml
 mysql:
@@ -146,50 +176,59 @@ tables:
       delimiter: " "
 ```
 
-単一DB構成では `SEARCH articles hello` のような修飾なしのテーブル参照も使えます。設定が2つ以上のDBにまたがる場合、TCP、CLI、C/C++、HTTP のすべてで `<database>.<table>` の指定が必要です。
+単一 DB 構成では `SEARCH articles hello` のような修飾なしのテーブル参照も使えます。設定が 2つ以上の DB にまたがる場合、TCP、CLI、C/C++、HTTP のすべてで `<database>.<table>` の指定が必要です。
 
 ::: info 用語補足
-**テーブル識別子**は、MygramDBがどのテーブルを検索対象にするかを表す名前です。単一DBなら `articles` だけで足りますが、複数DBでは `app_db.articles` のようにDB名も含める必要があります。
+**テーブル識別子**は、MygramDB が検索対象のテーブルを指すときの名前です。単一 DB なら `articles` だけで足りますが、複数 DB では `app_db.articles` のように DB 名も含めます。
 :::
 
-`text_source` は次のどちらかを指定します。
+`text_source` では、`column` か `concat` のどちらかを指定します。
 
 | 項目 | 意味 |
 |------|------|
-| `column` | 1つのテキストカラムをインデックス化 |
-| `concat` | 2つ以上のカラムを連結してインデックス化 |
+| `column` | 1 つのテキストカラムをインデックス化 |
+| `concat` | 2 つ以上のカラムを連結してインデックス化 |
 | `delimiter` | `concat` で使う区切り文字（デフォルトは空白） |
 
 ::: warning 設定済みカラムの検証
 
-テーブル名、データベース名、主キー、フィルタ名、テキストソース名は空でなく、NULバイトを含まない SQL 識別子でなければなりません。ASCIIに限らず、空白、`$`、Unicode、バッククォートを含む名前も安全にクォートして扱えます。テーブル識別子は `(database, table)` の組であり、同じ組は重複として拒否されます。設定済みの主キー、テキストソース、フィルタカラムには `FLOAT`、`JSON`、`GEOMETRY` とそのサブタイプ、`VECTOR`、`ZEROFILL`、`BINARY`、`VARBINARY`、`BLOB` 系の型、またはこのビルドが行イメージからデコードできない型を使えません。文字列カラムには `utf8mb4`、`utf8`/`utf8mb3`、`ascii` のいずれかの照合順序が必要です。初期ロードと binlog 読み取りで同じ値を扱えるよう、MygramDB はレプリケーション開始前にこれらを検証します。
+初期ロードと binlog の読み取りで同じ値を扱えるよう、MygramDB はレプリケーションを始める前に次の規則を検証します。
+
+- テーブル名、データベース名、主キー、フィルタ名、テキストソース名は、空でなく、NUL バイトを含まない SQL 識別子でなければなりません。ASCII に限らず、空白、`$`、Unicode、バッククォートを含む名前も、安全にクォートして扱えます。
+- テーブル識別子は `(database, table)` の組です。同じ組は重複として拒否されます。
+- 設定済みの主キー、テキストソース、フィルタカラムには、`FLOAT`、`JSON`、`GEOMETRY` とそのサブタイプ、`VECTOR`、`ZEROFILL`、`BINARY`、`VARBINARY`、`BLOB` 系の型、およびこのビルドが行イメージからデコードできない型を使えません。
+- 文字列カラムには、`utf8mb4`、`utf8`/`utf8mb3`、`ascii` のいずれかの照合順序が必要です。
 :::
 
 ## 識別子と取り込み上限
 
-プロトコルでテーブルを指定するとき、単一DB構成ではテーブル名だけを使えます。複数DB構成では `<database>.<table>` を指定してください。raw TCP では、空白を含む識別子全体を引用して1つのトークンとして指定します。ネイティブ C/C++ SDK の型付きメソッドは、コマンドを組み立てる前に名前の空白を拒否します。raw コマンドの送信メソッドでは TCP の文法を使えます。HTTP では、URL 内のテーブル識別子をパーセントエンコードしてください。
+プロトコルでテーブルを指定するとき、単一 DB 構成ではテーブル名だけを使えます。複数 DB 構成では `<database>.<table>` を指定してください。
+
+- raw TCP: 空白を含む識別子は、全体を引用して 1 つのトークンにします。
+- ネイティブ C/C++ SDK: 型付きメソッドは、コマンドを組み立てる前に名前の空白を拒否します。raw コマンドの送信メソッドでは TCP の文法を使えます。
+- HTTP: URL 内のテーブル識別子をパーセントエンコードします。
 
 次の上限は値またはドキュメント単位です。特記がなければサイズの単位はバイトです。
 
 | 項目 | 上限 |
 |------|------|
 | 保存する主キー値 | 1 MiB |
-| 1ドキュメントあたりのフィルタ数 | 1,000 |
+| 1 ドキュメントあたりのフィルタ数 | 1,000 |
 | フィルタ名 | 1 KiB |
 | 文字列型フィルタ値 | 64 KiB |
-| 元テキストと正規化テキスト | 各16 MiB |
+| 元テキストと正規化テキスト | 各 16 MiB |
 
-初回 `SYNC` では上限を超える候補スナップショットを拒否します。binlog取り込み中に値が上限を超えるとエラーになり、そのイベントを越えて適用GTIDを進めません。
+初回の `SYNC` は、上限を超える候補スナップショットを拒否します。binlog の取り込み中に値が上限を超えるとエラーになり、そのイベントを越えて適用済み GTID を進めません。
 
 ## フィルタ
 
 `required_filters` はインデックス対象行を決めます。条件に一致しない行はインデックス化されません。レプリケーション中、条件から外れた行は削除され、条件に入った行は追加されます。
 
-<DocDiagram name="filter-indexing" alt="required_filters はMySQLの行をインデックスに入れるかを決め、検索時の filters はインデックス済みの行をクエリ時に絞り込むことを示す図" />
-
 ::: warning `required_filters` と `filters` の違い
-`required_filters` は「そもそもインデックスに入れるか」を決めます。`filters` は「検索時に絞り込める列」を登録します。たとえば論理削除済みレコードを最初から検索対象外にしたい場合は `required_filters`、検索画面でステータス別に絞りたい場合は `filters` を使います。
+`required_filters` は、行をそもそもインデックスに入れるかを決めます。`filters` は、検索時に絞り込めるカラムを登録します。論理削除済みの行を最初から検索対象外にしたい場合は `required_filters`、検索画面でステータス別に絞り込みたい場合は `filters` を使います。
 :::
+
+<DocDiagram name="filter-indexing" alt="required_filters はMySQLの行をインデックスに入れるかを決め、検索時の filters はインデックス済みの行をクエリ時に絞り込むことを示す図" />
 
 ```yaml
 tables:
@@ -222,12 +261,25 @@ tables:
         type: "datetime"
 ```
 
-フィルタ型は `mediumint` と `mediumint_unsigned` を含む符号あり/なし整数、`double`、`boolean`、`string`、`varchar`、`text`、`datetime`、`date`、`timestamp`、`time` に対応します。`float`、`enum`、`set` はフィルタ型として設定できません。`FLOAT` カラムを主キーまたはテキストソースに指定した場合も、初期ロードの結果と binlog 行イメージで値を同じように保持できないため拒否されます。`boolean` はMySQLの符号付き `TINYINT(1)` に対応します。検索時の `FILTER` 値は小文字の `true`/`false` または `1`/`0` を指定してください。`required_filters` の boolean 値は大文字小文字を区別せず、`=`、`!=`、`IS NULL`、`IS NOT NULL` を使えます。
+対応するフィルタ型は次のとおりです。
 
-型が `datetime`、`date`、`timestamp` の `required_filters` では、エポック秒または `mysql.datetime_timezone` で指定したオフセットの ISO 日時を使います。小数秒は使えますが、末尾の `Z`、数値オフセット、その他の接尾辞は拒否されます。`time` は符号付きの経過秒数または `HH:MM:SS` などの MySQL `TIME` 形式で指定でき、小数秒にも対応します。値は `-838:59:59` から `838:59:59` の範囲に収めてください。検索時の `FILTER` では `datetime`、`date`、`timestamp` にエポック秒、`time` に符号付きの経過秒数を使います。
+- `mediumint` と `mediumint_unsigned` を含む、すべてのサイズの符号あり/なし整数
+- `double`、`boolean`、`string`、`varchar`、`text`
+- `datetime`、`date`、`timestamp`、`time`
+
+`float`、`enum`、`set` はフィルタ型として設定できません。`FLOAT` カラムは、初期ロードの結果と binlog の行イメージで同じ値を保持できないため、主キーやテキストソースに指定した場合も拒否されます。
+
+`boolean` は MySQL の符号付き `TINYINT(1)` に対応します。検索時の `FILTER` でも `required_filters` でも、boolean の値は `true`/`false` または `1`/`0` で、大文字小文字は区別しません。`boolean` の `required_filters` では `=`、`!=`、`IS NULL`、`IS NOT NULL` を使えます。
+
+日時のフィルタでは、`required_filters` と検索時の `FILTER` で値の形式が異なります。
+
+| フィルタ型 | `required_filters` の値 | 検索時の `FILTER` の値 |
+|-----------|-------------------------|------------------------|
+| `datetime`、`date`、`timestamp` | エポック秒、または `mysql.datetime_timezone` のオフセットで書いた ISO 日時。小数秒は使えるが、末尾の `Z`、数値オフセット、その他の接尾辞は拒否される | エポック秒 |
+| `time` | 符号付きの経過秒数、または `HH:MM:SS` などの MySQL `TIME` 形式（小数秒も可）。範囲は `-838:59:59` から `838:59:59` | 符号付きの経過秒数 |
 
 ::: warning 予約済みのフィルタキー
-`bitmap_index`、`dict_compress`、`bucket` はスキーマ上受け付けられ、ダンプにも保存されますが、まだ挙動には影響しません。指定してもインデックス構築やクエリ性能は変わりません。
+`bitmap_index`、`dict_compress`、`bucket` はスキーマ上受け付けられ、ダンプにも保存されますが、まだ動作には影響しません。指定しても、インデックスの構築やクエリの性能は変わりません。
 :::
 
 ## N-gram とポスティングリスト
@@ -244,24 +296,24 @@ tables:
       use_roaring: "auto"
 ```
 
-`ngram_size` は、かな、ASCII/英数字など CJK の漢字以外の文字種に適用されます。省略時のデフォルトは `2` です。ユニグラムの挙動が必要な場合だけ `ngram_size: 1` を明示してください。`kanji_ngram_size` は CJK の漢字だけに適用され、`0` の場合は `ngram_size` を使います。`cross_boundary_ngrams` は `字A` のような文字種境界をまたぐ N-gram を生成するかを制御します。
+`ngram_size` は、かな、ASCII/英数字など、CJK の漢字以外の文字種に適用されます。省略時のデフォルトは `2` です。ユニグラムの動作が必要な場合だけ、`ngram_size: 1` を明示してください。`kanji_ngram_size` は CJK の漢字だけに適用され、`0` の場合は `ngram_size` を使います。`cross_boundary_ngrams` は、`字A` のように文字種の境界をまたぐ N-gram を生成するかどうかを制御します。
 
 ::: info 用語補足
-**N-gram** は文字列を小さな断片に分けたものです。日本語のように単語の区切りが空白で分からない言語でも、文字単位・2文字単位で分けることで辞書なしに検索できます。
+**N-gram** は、文字列を短い断片に分けたものです。単語ではなく文字単位で分けるため、日本語のように空白で単語を区切らない言語でも、辞書なしで検索できます。
 :::
 
 ::: warning 予約済みの posting キー
-`posting` ブロック全体（`block_size`、`freq_bits`、`use_roaring`）は検証されダンプにも保存されますが、まだ挙動には反映されません。デルタ符号化からRoaring Bitmapへの変換は `use_roaring` ではなく `memory.roaring_threshold` と `OPTIMIZE` が制御します。
+`posting` ブロック全体（`block_size`、`freq_bits`、`use_roaring`）は検証され、ダンプにも保存されますが、まだ動作には反映されません。デルタ符号化から Roaring Bitmap への変換を制御するのは、`use_roaring` ではなく `memory.roaring_threshold` と `OPTIMIZE` です。
 :::
 
-BM25スコアリングやハイライトは保存された正規化テキストを使用します。`memory.verify_text` は N-gram候補を検証するかどうかを制御するだけで、テキスト保存を無効にせず、`freq_bits` にも影響しません。
+BM25 スコアリングとハイライトは、保存された正規化テキストを使います。`memory.verify_text` が制御するのは N-gram 候補の検証だけです。テキストの保存を無効にすることはなく、`freq_bits` にも影響しません。
 
-## テーブル単位のシノニム
+## テーブル単位の同義語
 
-シノニム展開はグローバルではなく、テーブルごとに設定します。
+同義語展開はグローバルではなく、テーブルごとに設定します。
 
-::: tip シノニム設定の単位
-同じ単語でも、テーブルによって意味が違うことがあります。たとえば商品検索と記事検索では同義語の扱いが変わるため、MygramDBでは `tables[*].synonyms` としてテーブルごとに設定します。
+::: tip 同義語設定の単位
+同じ単語でも、テーブルによって意味が違うことがあります。商品カタログで役立つ同義語が、記事アーカイブでは不適切な場合もあります。そのため MygramDB では、グローバルではなく `tables[*].synonyms` でテーブルごとに設定します。
 :::
 
 ```yaml
@@ -274,7 +326,7 @@ tables:
       file: "/etc/mygramdb/articles-synonyms.tsv"
 ```
 
-TSV形式で、1行が1グループです。
+TSV 形式で、1 行が 1 グループです。
 
 ```tsv
 car	automobile	vehicle
@@ -282,7 +334,7 @@ fast	quick	rapid	speedy
 # コメント行は無視されます
 ```
 
-グループ内のどの語で検索しても、同じグループ内の語へ展開されます。語句はインデックスと同じ正規化設定で処理されます。
+グループ内のどの語で検索しても、同じグループの他の語へ展開されます。語句は、インデックスと同じ正規化設定で処理されます。
 
 ## レプリケーション
 
@@ -295,17 +347,21 @@ replication:
   queue_size: 10000
 ```
 
-`auto_initial_snapshot` のデフォルトは `false` です。初回ロードは、読み込みたい各テーブルに対して `SYNC <table>` を明示的に実行します。起動時に大きなテーブルを意図せず読み込むことを避けるためです。起動時ロードが必要な場合のみ `true` にしてください。`auto_initial_snapshot: true` は、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` を必要とします。`dump.load_on_startup: true` も同じ条件を必要とします。復元したダンプのGTIDからレプリケーションを再開し、変更を飛ばさないためです。
+`auto_initial_snapshot` のデフォルトは `false` です。初回ロードは、読み込みたいテーブルごとに `SYNC <table>` を明示的に実行します。起動時に大きなテーブルを意図せず読み込むことを避けるためです。起動時のロードが必要な場合だけ `true` にしてください。
 
-`start_from` は次を指定できます。
+`auto_initial_snapshot: true` には、単一テーブル構成でも複数テーブル構成でも `start_from: "snapshot"` が必要です。`dump.load_on_startup: true` にも同じ条件があります。復元したダンプに保存された GTID からレプリケーションを再開し、変更を取りこぼさないためです。
+
+`start_from` には次の値を指定できます。
 
 | 値 | 挙動 |
 |----|------|
-| `snapshot` | スナップショット/ダンプが取得したGTIDから再開 |
-| `latest` | ソースの現在のGTIDから開始し、過去変更は無視 |
-| `gtid=<position>` | MySQL GTIDセット（`UUID:txn[-txn]`、カンマ区切り）またはMariaDB GTIDリスト（`domain-server-seq`、カンマ区切り）から開始 |
+| `snapshot` | 初期スナップショットまたはダンプが記録した GTID から再開 |
+| `latest` | ソースの現在の GTID から開始し、過去の変更は無視 |
+| `gtid=<position>` | MySQL GTID セット（`UUID[:tag]:txn[-txn]`、カンマ区切り）または MariaDB GTID リスト（`domain-server-seq`、カンマ区切り）から開始 |
 
-MySQL GTIDのトランザクション番号は `2^63−1` 未満でなければなりません。MariaDBは別形式の `domain-server-seq` を使います。単一のMySQL `UUID:txn` は、そのトランザクションまでを意味します。`gtid=...` がどちらの形式にも合わない場合は設定検証で拒否します。ソースが `binlog_row_metadata=FULL` を有効にする前の TABLE_MAP イベントを再生する可能性がある場合は、ソース設定を変えた後、レプリケーション対象の全テーブルで `SYNC` を実行してください。
+MySQL GTID のトランザクション番号は `2^63−1` 未満でなければなりません。MariaDB は別形式の `domain-server-seq` を使います。MySQL で `UUID:txn` や `UUID:tag:txn` と書いた位置は、そのトランザクションまでを意味します。`gtid=...` の値がどちらの形式にも合わない場合は、`gtid=,` のように区切り文字しかない値も含めて、設定検証で拒否されます。
+
+ソースが `binlog_row_metadata=FULL` を有効にする前に書かれた TABLE_MAP イベントを再生する可能性がある場合は、ソース設定を変えた後、レプリケーション対象の全テーブルで `SYNC` を実行してください。
 
 ## メモリ
 
@@ -321,25 +377,33 @@ memory:
   verify_text: "off"
 ```
 
-`hard_limit_mb` と `soft_target_mb` は予約項目で、プロセスのメモリ使用量を制限しません。ただし設定値には範囲があります。`hard_limit_mb` は `256` から `2147483647`、`soft_target_mb` は `128` から `2147483647` までです。`arena_chunk_mb` と `minute_epoch` も予約項目です。インデックス全体と保存する正規化テキストがRAMに収まるようにホストを用意してください。
+`hard_limit_mb` と `soft_target_mb` は予約項目で、プロセスのメモリ使用量を制限しません。ただし、設定できる値には範囲があります。`hard_limit_mb` は `256` から `2147483647`、`soft_target_mb` は `128` から `2147483647` までです。`arena_chunk_mb` と `minute_epoch` も予約項目です。インデックス全体と保存する正規化テキストが RAM に収まるようにホストを用意してください。
 
-`memory.normalize.nfkc` はUnicode NFKC正規化、`width` は文字幅の扱い（`keep`、`narrow`、`wide`）、`lower` は小文字化の有無を指定します。デフォルトはそれぞれ `true`、`narrow`、`false` です。設定はインデックス対象テキストと検索語の両方に適用されます。ダンプの復元時は、実行中の設定と同じ正規化設定が必要です。
+`memory.normalize` のキーでテキストの正規化を指定します。
+
+| キー | 値 | デフォルト |
+|-----|-----|-----------|
+| `nfkc` | `true` / `false`。Unicode NFKC 正規化 | `true` |
+| `width` | `keep`、`narrow`、`wide`。文字幅の扱い | `narrow` |
+| `lower` | `true` / `false`。小文字化 | `false` |
+
+これらの設定は、インデックス対象のテキストと検索語の両方に適用されます。ダンプを復元するときは、実行中の設定と同じ正規化設定が必要です。
 
 ::: warning メモリ上限について
-`hard_limit_mb` は現在、OSレベルのメモリ使用を強制的に止める仕組みではありません。実運用では、データ件数・保存テキスト・`verify_text`・キャッシュ量を見積もり、十分なRAMを確保してください。
+`hard_limit_mb` は現在、OS レベルでメモリ使用を止める仕組みではありません。本番では、データ件数、保存するテキスト、`verify_text`、キャッシュ量から必要量を見積もり、十分な RAM を確保してください。
 :::
 
-`verify_text` は N-gram候補を検証するかどうかを制御します。
+`verify_text` は N-gram 候補を検証するかどうかを制御します。
 
 | 値 | 挙動 |
 |----|------|
-| `off` | 最速。候補検証なし。N-gram由来の偽陽性があり得る |
-| `ascii` | ASCIIのみのクエリを検証 |
-| `all` | すべてのクエリを検証。正確性が必要な場合に推奨 |
+| `off` | 最速。候補を検証しない。N-gram 由来の偽陽性があり得る |
+| `ascii` | ASCII のみのクエリを検証 |
+| `all` | すべてのクエリを検証。結果の正確さが必要な場合に推奨 |
 
-通常の起動では `verify_text` の値にかかわらず正規化テキストを保存するため、`verify_text: "off"` でも `HIGHLIGHT` を使えます。BM25 `_score` ソートも語頻度計算に保存テキストを使います。
+通常の起動では、`verify_text` の値にかかわらず正規化テキストを保存します。そのため、`verify_text: "off"` でも `HIGHLIGHT` を使えます。BM25 の `_score` ソートも、語の出現頻度の計算に保存テキストを使います。
 
-## APIサーバー
+## API サーバー
 
 ```yaml
 api:
@@ -379,26 +443,49 @@ api:
   admin_token: "replace-with-a-high-entropy-secret"
 ```
 
-TCPとHTTPはデフォルトでループバックにバインドします。`worker_threads: 0` はワーカー数の自動設定です。`idle_timeout_sec: 0` でTCPアイドル接続の回収を無効にします。保留フレーム上限はワーカー待ちの完了済みリクエストを制限します。`max_pending_frame_bytes` のデフォルトは4 MiBで、接続ごとの独立したバイト上限です。`max_query_length` はUnicode文字数を数えます。どちらかの保留フレーム上限の75%で読み取りを止め、キューが減ると再開します。`api.default_limit` のデフォルトは100件です。`max_query_length` のデフォルトは128文字で、`0` なら上限なしです。`api.http.max_connections` はワーカー待ちのソケットを含め、受け付けるHTTP接続数を制限します。HTTPでCORSを有効にする場合、`cors_allow_origin` に応答で返すOrigin値を指定します。リストではありません。`api.http.trusted_proxies` には、ACLとレート制限で `X-Forwarded-For` をクライアントIPとして扱ってよい数値形式のリバースプロキシIPを指定します。プロキシを経由しない場合は空のままにしてください。`api.default_limit` と `api.max_query_length` は `SET` で実行時変更できます。ネットワークバインド、HTTPボディサイズ上限、多くの接続設定は再起動が必要です。
+TCP と HTTP は、デフォルトでループバックにバインドします。個別の設定は次のとおりです。
 
-Unix socketを使う場合は `api.unix_socket.path` を設定し、`mygram-cli -s /path/to/mygramdb.sock` で接続します。起動時に既存のsocketを削除するのは、接続確認で古いsocketと判断できた場合だけです。通常ファイル、使用中のsocket、状態を確認できないパスは置き換えず、エラー6015で起動を拒否します。
+| 設定 | 動作 |
+|------|------|
+| `tcp.worker_threads` | `0` でワーカー数を自動設定する |
+| `tcp.idle_timeout_sec` | `0` で TCP のアイドル接続の回収を無効にする |
+| `tcp.max_pending_frames` | ワーカー待ちの完了済みリクエストの数を制限する |
+| `tcp.max_pending_frame_bytes` | 接続ごとの保留フレームのバイト上限。デフォルトは 4 MiB |
+| `max_query_length` | Unicode 文字数で数える。デフォルトは 128 で、`0` なら上限なし |
+| `default_limit` | 結果件数のデフォルト。デフォルトは 100 |
+| `http.max_connections` | ワーカー待ちのソケットを含め、受け付ける HTTP 接続数を制限する |
+| `http.cors_allow_origin` | CORS を有効にする場合に応答で返す Origin 値を 1 つ指定する。リストではない |
+| `http.trusted_proxies` | ACL とレート制限で、`X-Forwarded-For` をクライアントの識別に使ってよいリバースプロキシの数値 IP アドレス。プロキシを経由しない場合は空にする |
 
-::: info TCPとHTTPの役割
-TCP APIは検索に加えて `SYNC`、`DUMP`、`SET` などの管理コマンドも扱います。HTTP APIは検索、カウント、ファセット、ドキュメント取得、ヘルスチェック、メトリクス、`POST /optimize`を扱います。
+どちらかの保留フレーム上限の 75% に達すると読み取りを止め、キューが減ると再開します。
+
+`api.default_limit` と `api.max_query_length` は、`SET` で実行時に変更できます。ネットワークのバインド、HTTP のボディサイズ上限、多くの接続設定は、再起動が必要です。
+
+Unix socket を使う場合は、`api.unix_socket.path` を設定し、`mygram-cli -s /path/to/mygramdb.sock` で接続します。起動時に既存の socket を削除するのは、接続確認で古い socket と判断できた場合だけです。通常のファイル、使用中の socket、状態を確認できないパスは置き換えず、エラー 6015 で起動を拒否します。
+
+::: info TCP と HTTP の役割
+TCP API は検索に加えて `SYNC`、`DUMP`、`SET` などの管理コマンドも扱います。HTTP API は検索、カウント、ファセット、ドキュメント取得、ヘルスチェック、メトリクス、`POST /optimize` を扱います。
 :::
 
 ### 管理操作の認証
 
-`api.admin_token` は管理コマンド用の共有シークレットです。設定ファイルまたは `MYGRAM_API_ADMIN_TOKEN` で設定し、十分に長いランダム値を使ってリポジトリには保存しないでください。`api` ブロックがなくても環境変数は適用されます。TCPをUnix socketなしで非ループバックアドレスにバインドする場合、またはHTTPを有効にして非ループバックアドレスにバインドする場合はトークンが必須です。Unix socketで除外されるのはTCPリスナーだけで、HTTPには適用されません。設定しないとMygramDBは起動を拒否します。
+`api.admin_token` は、管理コマンド用の共有シークレットです。設定ファイルまたは `MYGRAM_API_ADMIN_TOKEN` で設定します。十分に長いランダムな値を使い、ソース管理には含めないでください。`api` ブロックがなくても環境変数は適用されます。
 
-管理コマンドの前にTCP接続を認証します。
+次のどちらかの場合は、トークンが必須です。トークンがないと、MygramDB は起動を拒否します。
+
+- TCP を Unix socket なしで、非ループバックアドレスにバインドする
+- HTTP を有効にして、非ループバックアドレスにバインドする
+
+Unix socket で必須でなくなるのは TCP リスナーだけで、HTTP には当てはまりません。
+
+管理コマンドの前に TCP 接続を認証します。
 
 ```mygram
 AUTH replace-with-a-high-entropy-secret
 SYNC articles
 ```
 
-`POST /optimize` には同じトークンをHTTP Bearer認証で渡します。
+`POST /optimize` には同じトークンを HTTP Bearer 認証で渡します。
 
 ```bash
 curl -X POST http://127.0.0.1:8080/optimize \
@@ -418,9 +505,9 @@ api:
     max_clients: 10000
 ```
 
-TCPとHTTPは同じレートリミッタとクライアント単位のトークンバケットを共有します。そのため、同じクライアントがプロトコルを分散しても制限を2倍にはできません。以前のプロトコル別バースト量を維持する場合は、`capacity` と `refill_rate` を増やしてください。
+TCP と HTTP は、同じレートリミッタとクライアント単位のトークンバケットを共有します。そのため、クライアントがリクエストを 2 つのプロトコルに分けても、割り当てを 2 倍にはできません。プロトコル別のバースト量を前提に運用していた場合は、合計のレートを保てるよう `capacity` と `refill_rate` を増やしてください。
 
-`capacity` はリクエスト数で表す最大バースト量、`refill_rate` はクライアントごとに1秒あたり補充するトークン数です。デフォルトはそれぞれ `100` と `10` です。`enable`、`capacity`、`refill_rate` は `SET` で実行時に変更できます。`max_clients` は起動時専用で、追跡するクライアントのバケット数を制限します。接続を許可するクライアント数の上限ではありません。
+`capacity` はリクエスト数で表す最大バースト量、`refill_rate` はクライアントごとに 1 秒あたり補充するトークン数です。デフォルトはそれぞれ `100` と `10` です。`enable`、`capacity`、`refill_rate` は `SET` で実行時に変更できます。`max_clients` は起動時専用で、追跡するクライアントのバケット数を制限します。接続を許可するクライアント数の上限ではありません。
 
 ## 関連度スコアリング（BM25）
 
@@ -431,9 +518,9 @@ bm25:
   b: 0.75
 ```
 
-BM25はデフォルトで無効です。`enable` を `true` にするまで `SORT _score` は `SORT _score requires BM25 to be enabled in configuration` で失敗します。通常の起動では `memory.verify_text` の値にかかわらず、語句頻度の計算に必要な正規化テキストを保存します。
+BM25 はデフォルトで無効です。`enable` を `true` にするまで、`SORT _score` は `SORT _score requires BM25 to be enabled in configuration` で失敗します。通常の起動では、`memory.verify_text` の値にかかわらず、語の出現頻度の計算に必要な正規化テキストを保存します。
 
-`k1` は語句頻度の飽和度を制御します（値を大きくすると、同じ語が繰り返されるほどスコアが伸び続けます）。`b` はドキュメント長の正規化度合いで、`0.0`（無効）から `1.0`（完全）の範囲で指定します。
+`k1` は、語の出現頻度の飽和度を制御します。値を大きくすると、同じ語が繰り返されるほどスコアが伸び続けます。`b` はドキュメント長の正規化の度合いで、`0.0`（無効）から `1.0`（完全）の範囲で指定します。
 
 ## クエリキャッシュ
 
@@ -452,11 +539,22 @@ cache:
     max_queue_size: 100000
 ```
 
-`max_memory_mb` はキャッシュ結果、コンテナ、インデックス、無効化メタデータ、遅延無効化キューを含む共有上限です。起動時に `1` 未満、`1048576` MBを超える値、キャッシュ有効時に物理メモリの50%を超える値を拒否します。物理メモリを取得できない場合は比率の検査を警告付きで省略します。`ttl_seconds` は `0` から `2147483647`、`eviction_batch_size` と `invalidation.batch_size` は `1` から `2147483647`、`invalidation.max_delay_ms` は `0` から `2147483647` の範囲です。`invalidation.max_queue_size` は `1` 以上にします。`ttl_seconds: 0` で有効期限を無効にします。実行時に変更する `min_query_cost_ms` は有限値でなければなりません。
+`max_memory_mb` は、キャッシュ結果、コンテナ、インデックス、無効化メタデータ、遅延無効化キューを合わせた共有上限です。次の範囲外の値は、起動時に拒否されます。
 
-キャッシュ対象は `min_query_cost_ms` より遅いクエリだけです。安価な検索でキャッシュを埋めて有用なエントリを追い出さないための仕組みです。`invalidation_strategy: "ngram"` は変更行と語が重なるエントリだけを無効化します。`"table"` は判定は軽い代わりに、そのテーブルの全エントリを破棄します。
+| 設定 | 指定できる範囲 |
+|------|----------------|
+| `max_memory_mb` | `1` から `1048576`。キャッシュが有効な場合は、検出した物理メモリの 50% 以下 |
+| `ttl_seconds` | `0` から `2147483647`。`0` で有効期限を無効にする |
+| `eviction_batch_size` | `1` から `2147483647` |
+| `invalidation.batch_size` | `1` から `2147483647` |
+| `invalidation.max_delay_ms` | `0` から `2147483647` |
+| `invalidation.max_queue_size` | `1` 以上 |
 
-`cache.enabled`、`cache.min_query_cost_ms`、`cache.ttl_seconds` は `SET` で実行時に変更できます。`max_memory_mb` とその他の起動時専用キャッシュ上限を変える場合は再起動が必要です。`CACHE STATS` / `CACHE CLEAR` コマンドは[運用ガイド](/ja/docs/operations)を参照してください。
+物理メモリを検出できない場合は、50% の検査を警告を出して省略します。実行時に `min_query_cost_ms` を変更するときは、有限の値を指定してください。
+
+キャッシュ対象は、`min_query_cost_ms` より遅いクエリだけです。軽い検索で有用なエントリが追い出されないようにするためです。`invalidation_strategy: "ngram"` は、変更された行と語が重なるエントリだけを無効化します。`"table"` は判定の計算が軽い代わりに、そのテーブルのエントリをすべて破棄するため、影響がはるかに大きくなります。
+
+`cache.enabled`、`cache.min_query_cost_ms`、`cache.ttl_seconds` は、`SET` で実行時に変更できます。`max_memory_mb` とその他の起動時専用のキャッシュ上限を変えるには、再起動が必要です。`CACHE STATS` / `CACHE CLEAR` コマンドは[運用ガイド](/ja/docs/operations)を参照してください。
 
 ## インデックス構築
 
@@ -466,10 +564,10 @@ build:
   batch_size: 5000
 ```
 
-`batch_size` は `SYNC` による初期ロードで1回に取得する行数です。`mode` は現在 `select_snapshot` のみ指定できます。
+`batch_size` は、`SYNC` による初期ロードで 1 回に取得する行数です。`mode` は現在 `select_snapshot` のみ指定できます。
 
 ::: warning 予約済みの build キー
-`parallelism` と `throttle_ms` は検証されますが、まだ挙動には反映されません。初期ロードはシングルスレッドで、スロットリングも行われません。
+`parallelism` と `throttle_ms` は検証されますが、まだ動作には反映されません。初期ロードはシングルスレッドで、スロットリングもしません。
 :::
 
 ## 永続化
@@ -485,10 +583,19 @@ dump:
   restore_max_section_mb: 2048
 ```
 
-`interval_sec` の単位は秒です。デフォルトの `0` は自動ダンプを無効にします。設定例では7200秒（2時間）ごとに有効化しています。`retain` は自動ダンプのローテーション数を指定します。手動の `DUMP SAVE` はパスを指定しない場合 `default_filename` を使い、`DUMP SAVE .` は拒否されます。`restore_memory_budget_mb` はV2復元時に段階的に保持するデータ全体の上限、`restore_max_section_mb` はV2ダンプの1セクションの上限です。`dump.load_on_startup: true` はMySQLのスナップショットより前に既定のダンプを試し、ソース識別子とGTIDを検証します。読み込みに失敗した場合はMySQLへ切り替えます。この設定には `replication.start_from: "snapshot"` が必要です。`DUMP SAVE` は復元上限を超えるドキュメントを拒否するため、読み込めないダンプを保存しません。設定済みの全テーブルで初期ロードが完了するまで、`DUMP SAVE` はエラー6029を返します。MySQL 対応ビルドで binlog reader がある場合は GTID 位置も必要で、取得できていない場合は同じエラーを返します。
+| キー | 動作 |
+|-----|------|
+| `interval_sec` | 自動ダンプの間隔（秒）。デフォルトの `0` は自動ダンプを無効にする。例では 7200 秒（2 時間） |
+| `retain` | 自動ダンプのローテーションを制御する |
+| `default_filename` | パスを指定しない `DUMP SAVE` が使うファイル名。`DUMP SAVE .` は拒否される |
+| `restore_memory_budget_mb` | V2 の復元時に段階的に保持するデータ全体の上限 |
+| `restore_max_section_mb` | V2 ダンプの 1 セクションの上限 |
+| `load_on_startup` | MySQL のスナップショットより前にデフォルトのダンプを試し、ソース識別子と GTID を検証する。読み込めない場合は MySQL に切り替える。`replication.start_from: "snapshot"` が必要 |
+
+`DUMP SAVE` は、復元上限を超えるドキュメントを拒否します。読み込めないダンプは保存されません。設定済みの全テーブルで初期ロードが完了するまで、`DUMP SAVE` はエラー 6029 を返します。MySQL 対応ビルドで binlog リーダーがある場合は GTID 位置も必要で、取得できていないときは同じ 6029 を返します。
 
 ::: warning ダンプ保存先は永続化する
-DockerやKubernetesで運用する場合、`dump.dir` は永続ボリュームに置いてください。コンテナ内の一時的なファイルシステムに保存すると、再作成時にダンプが失われます。
+Docker や Kubernetes で運用する場合は、`dump.dir` を永続ボリュームに置いてください。コンテナ内の一時的なファイルシステムに保存すると、コンテナを再作成したときにダンプが失われます。
 :::
 
 ## ネットワークセキュリティ
@@ -500,14 +607,14 @@ network:
     - "10.0.0.0/8"
 ```
 
-`allow_cidrs` が空または未設定の場合、接続は拒否されます。アクセスが必要なアプリケーションサーバーや運用ネットワークだけを追加してください。MygramDBにはネイティブTLSはないため、必要に応じてリバースプロキシやロードバランサーでTLSを終端してください。管理コマンドは `api.admin_token` で認証します。通常の検索エンドポイントはバインドアドレスとCIDR許可リストで保護します。
+`allow_cidrs` が空または未設定の場合、接続は拒否されます。アクセスが必要なアプリケーションサーバーと運用ネットワークだけを追加してください。MygramDB にはネイティブ TLS がないため、必要に応じてリバースプロキシやロードバランサーで TLS を終端してください。管理コマンドは `api.admin_token` で認証します。通常の検索エンドポイントは、バインドアドレスと CIDR 許可リストで保護されます。
 
-IPv4に対応しない範囲を表すため、プレフィックスが `/96` より短いIPv4-mapped IPv6 CIDRは拒否されます。`/96` から `/128` までは対応するIPv4範囲に変換されます。
+プレフィックスが `/96` より短い IPv4-mapped IPv6 CIDR は、有効な IPv4 範囲に対応しないため拒否されます。`/96` から `/128` までは、対応する IPv4 範囲に変換されます。
 
-`0.0.0.0/0` と `::/0` は、どちらもすべてのIPv4およびIPv6アドレスからの接続を許可します。非ループバックTCPまたは有効なHTTPリスナーと組み合わせると起動時に拒否されます。
+`0.0.0.0/0` と `::/0` は、どちらもすべての IPv4 および IPv6 アドレスからの接続を許可します。非ループバックの TCP リスナー、または有効な HTTP リスナーと組み合わせると、どちらも起動時に拒否されます。
 
 ::: danger 公開ネットワークへ直接出さない
-MygramDBをインターネットへ直接公開しないでください。`allow_cidrs` に `0.0.0.0/0` または `::/0` を指定し、非ループバックのTCPまたは有効なHTTPをバインドする設定は起動時に拒否されます。制限したCIDRリストを使うか、リスナーをループバックに置いてリバースプロキシの背後で公開してください。
+MygramDB をインターネットへ直接公開しないでください。`allow_cidrs` に `0.0.0.0/0` または `::/0` を指定し、非ループバックの TCP または有効な HTTP をバインドする設定は起動時に拒否されます。制限した CIDR リストを使うか、リスナーをループバックに置いてリバースプロキシの背後で公開してください。
 :::
 
 ## ログ
@@ -519,11 +626,11 @@ logging:
   file: ""
 ```
 
-`file: ""` は標準出力へログを出します。Dockerやsystemdではこの設定を推奨します。
+`file: ""` はログを標準出力へ出します。Docker や systemd では、この設定を推奨します。
 
 ## ランタイム変数
 
-TCPプロトコルからMySQL風のコマンドを使います。
+TCP プロトコルで、MySQL 風のコマンドを使います。
 
 ```sql
 SHOW VARIABLES
@@ -533,4 +640,12 @@ SET cache.enabled = false
 SET api.default_limit = 200
 ```
 
-実行時に変更できるのは `SHOW VARIABLES` で mutable として表示される項目だけです。`--schema` を指定して起動した場合、`SET` にもそのスキーマの制約が適用されます。制約に反する値はエラー1004、未知の変数は1008、起動時専用の変数は1009を返します。MySQL接続先、テーブル、`memory.verify_text`、ダンプディレクトリ、ネットワークACL、リスナーのbind設定は再起動が必要です。
+実行時に変更できるのは、`SHOW VARIABLES` で mutable と表示される項目だけです。`--schema` を指定して起動した場合は、`SET` にもそのスキーマの制約が適用されます。`SET` に失敗すると、次のエラーを返します。
+
+| エラー | 原因 |
+|--------|------|
+| 1004 | 値が `--schema` の制約に違反している |
+| 1008 | 未知の変数 |
+| 1009 | 起動時専用の変数 |
+
+MySQL の接続先、テーブル、`memory.verify_text`、ダンプディレクトリ、ネットワーク ACL、リスナーの bind 設定は、再起動が必要です。

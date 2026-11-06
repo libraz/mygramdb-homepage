@@ -1,6 +1,6 @@
 ---
 title: Node.js / Python / Go Client Libraries
-description: Official MygramDB client libraries for Node.js, Python, Go, and the bundled C/C++ SDK. Install, search, raw boolean search, FACET, HIGHLIGHT, SYNC, and multi-database table identities.
+description: "Official MygramDB clients for Node.js, Python, and Go, plus the bundled C/C++ SDK: install, search, boolean queries, FACET, HIGHLIGHT, and SYNC."
 head:
   - - meta
     - name: keywords
@@ -22,7 +22,13 @@ This page covers the application clients for Node.js, Python, and Go, plus where
 | Node.js | `mygramdb-client` | Node.js 22+ | TypeScript types, pure JavaScript implementation, optional native binding |
 | Python | `mygramdb-client` | Python 3.11+ | asyncio, zero external dependencies, dataclass types |
 | Go | `github.com/libraz/go-mygram-client` | Go 1.26+ | standard library only, `context.Context` variants, safe for concurrent use |
-| C / C++ | bundled `libmygramclient` | C11 / C++17 | Installed SDK with C and C++ APIs, `MygramDB::client_static` / `MygramDB::client_shared`, and `mygramclient.pc` |
+| C / C++ | bundled `libmygramclient` | C11 / C++17 | C and C++ APIs, installed SDK |
+
+The C/C++ SDK installs the CMake targets `MygramDB::client_static` and `MygramDB::client_shared` and a `mygramclient.pc` pkg-config file.
+
+::: tip Releases for MygramDB v1.12
+Use `mygramdb-client` 1.7.0 (Node.js), `mygramdb-client` 1.6.0 (Python), or `go-mygram-client` v0.7.0 (Go) or later with v1.11 and v1.12 servers. These releases frame each reply by the command that produced it, so `FACET`, `CONFIG HELP <path>`, `SYNC STATUS`, and a failing `HIGHLIGHT` or `DEBUG` search are read to their real end. They also quote by Unicode `White_Space` like the server, and name the `1008` and `1009` configuration-variable errors.
+:::
 
 ::: warning Load data before querying
 The clients are thin wrappers around MygramDB server commands. If existing rows have not been loaded yet, run `SYNC <table>` first. See [SYNC Command](/docs/sync-command).
@@ -35,38 +41,58 @@ The shared library uses soname 2 (`VERSION 2.0.0`); public search-expression str
 ## Shared Concepts
 
 ::: info What is raw boolean search?
-**Raw boolean search** passes a full search expression — with `AND`, `OR`, `NOT`, and parentheses — straight to the server's query parser. Use it for conditions such as `python OR (ruby AND rails)` that the simple `search()` builder cannot express.
+**Raw boolean search** passes a full search expression, with `AND`, `OR`, `NOT`, and parentheses, straight to the server's query parser. Use it for conditions such as `python OR (ruby AND rails)` that the simple `search()` builder cannot express.
 :::
 
 - Use `articles` on a single-database server, or `app_db.articles` when the instance indexes tables from multiple databases.
-- `search()` / `Search()` is best for simple terms and AND/NOT-style searches.
-- For `OR` and parentheses, convert the expression and pass it to `searchRaw()` / `SearchRaw()` / `search_raw()`.
-- The web-syntax converter recognizes whole-word `or` as `OR`, quotes literal words such as `order` and terms with apostrophes, and turns a minus inside a group into `NOT`. It emits phrases and OR/groups once; pass its output directly to the raw search method.
-- Search responses expose the total number of matches before `limit`/`offset` as well as the current page of results. FACET results are paginated too: each value's `count` is the number of matching documents for that value, while `totalCount` / `total_count` / `TotalCount` is the number of distinct values before pagination. Equal-count values keep a stable order across pages.
+- `search()` / `Search()` suits simple terms and AND/NOT-style searches.
+- For `OR` and parentheses, convert the expression and pass the result to `searchRaw()` / `SearchRaw()` / `search_raw()`.
+- The web-syntax converter treats a whole-word `or` as `OR`, quotes literal words such as `order` and terms with apostrophes, and turns a minus inside a group into `NOT`. Each phrase and OR group is emitted once, so pass the output directly to the raw search method.
+- The converter groups an expression the way the server does. Implicit AND binds tighter than `OR`, so `a OR b c` converts to `(a OR b c)`, the same as its parenthesized form. A negated group excludes the whole group: `x +(a -(b OR c))` converts to `x AND (a NOT (b OR c))`. A word that only begins with `OR`, such as `OR-tools`, stays a term, and `+` or `-` directly beside a top-level `OR` (`+a OR b`) is rejected as a missing operand.
+- A search response carries the current page of results and the total number of matches before `limit`/`offset`.
+- FACET results are paginated as well. Each value's `count` is the number of matching documents for that value, and `totalCount` / `total_count` / `TotalCount` is the number of distinct values before pagination. Values with equal counts keep a stable order across pages.
 - BM25 scoring, highlighting, fuzzy search, and facets depend on the server-side table configuration.
-- Runtime variables and `SYNC` are TCP commands exposed by the client libraries.
+- Runtime variables and `SYNC` are TCP commands that the client libraries expose.
 
 ::: warning Administrative commands require authentication
-`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication only when the server has a non-empty `api.admin_token`. Configure `adminToken` (Node.js), `admin_token` (Python), or `AdminToken` (Go) to have the client send `AUTH` on each new connection, including automatic reconnects. A raw `AUTH` sent with `sendCommand()` or `send_command()` applies only to that connection; use the SDK's configuration option when reconnects must retain admin access. `search`, `count`, `get`, `facet`, and `INFO` remain available without authentication. When `api.admin_token` is set, `INFO` omits its replication section until the connection completes `AUTH`.
+`CONFIG`, `SET` / `SHOW VARIABLES`, `DUMP`, `REPLICATION`, `SYNC`, `OPTIMIZE`, `DEBUG`, and `CACHE` require authentication only when the server has a non-empty `api.admin_token`. `search`, `count`, `get`, `facet`, and `INFO` work without authentication. When `api.admin_token` is set, `INFO` omits its replication section until the connection completes `AUTH`.
+
+To have the client send `AUTH` on each new connection, including automatic reconnects, configure `adminToken` (Node.js), `admin_token` (Python), or `AdminToken` (Go). An `AUTH` sent by hand with `sendCommand()` or `send_command()` applies only to that connection, so use the SDK option when reconnects must keep admin access.
 :::
 
-## Node.js / TypeScript
+## Install
 
-### Install
+Install the package for your language.
 
-```bash
+::: code-group
+
+```bash [Node.js (npm)]
 npm install mygramdb-client
 ```
 
-```bash
+```bash [Node.js (yarn, pnpm, bun)]
 yarn add mygramdb-client
 pnpm add mygramdb-client
 bun add mygramdb-client
 ```
 
-### Basic Search
+```bash [Python]
+pip install mygramdb-client
+```
 
-```ts
+```bash [Go]
+go get github.com/libraz/go-mygram-client
+```
+
+:::
+
+## Basic Search
+
+Connect, run a search sorted by `created_at`, then count matches and fetch one document by primary key.
+
+::: code-group
+
+```ts [Node.js]
 import { createMygramClient } from 'mygramdb-client'
 
 const client = createMygramClient({ host: 'localhost', port: 11016 })
@@ -86,9 +112,65 @@ const doc = await client.get('articles', '12345')
 client.disconnect()
 ```
 
-### Table Identities and Raw Boolean Search
+```python [Python]
+import asyncio
+from mygramdb_client import MygramClient, ClientConfig, SearchOptions
 
-```ts
+async def main():
+    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+        results = await client.search(
+            'articles',
+            'hello',
+            SearchOptions(limit=100, sort_column='created_at', sort_desc=True),
+        )
+        print(f'{results.total_count} results')
+
+        count = await client.count('articles', 'technology')
+        doc = await client.get('articles', '12345')
+
+asyncio.run(main())
+```
+
+```go [Go]
+package main
+
+import (
+	"fmt"
+	"log"
+
+	mygram "github.com/libraz/go-mygram-client"
+)
+
+func main() {
+	client := mygram.NewClient("localhost:11016")
+	defer client.Close()
+
+	if err := client.Connect(); err != nil {
+		log.Fatal(err)
+	}
+
+	resp, err := client.Search("articles", "hello", mygram.SearchOptions{
+		Limit:      100,
+		SortColumn: "created_at",
+		SortDesc:   true,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Found %d results\n", resp.TotalCount)
+}
+```
+
+:::
+
+## Table Identities and Raw Boolean Search
+
+Build and parse a database-qualified table name, convert a web-style expression, and run it as a raw boolean search.
+
+::: code-group
+
+```ts [Node.js]
 import {
   convertSearchExpression,
   qualifyTableIdentity,
@@ -102,7 +184,56 @@ const raw = convertSearchExpression('python OR (ruby AND rails)')
 const res = await client.searchRaw(table, raw, { limit: 50 })
 ```
 
-### BM25 / HIGHLIGHT / FUZZY / FACET
+```python [Python]
+import asyncio
+from mygramdb_client import (
+    ClientConfig,
+    MygramClient,
+    SearchRawOptions,
+    convert_search_expression,
+    parse_table_identity,
+    qualify_table_identity,
+)
+
+async def main():
+    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
+        table = qualify_table_identity('articles', 'app_db')  # app_db.articles
+        print(parse_table_identity(table))                    # ('app_db', 'articles')
+
+        raw = convert_search_expression('python OR (ruby AND rails)')
+        res = await client.search_raw(table, raw, SearchRawOptions(limit=50))
+
+asyncio.run(main())
+```
+
+```go [Go]
+table, _ := mygram.QualifyTableIdentity("articles", "app_db")
+db, name, _ := mygram.ParseTableIdentity(table)
+fmt.Println(db, name) // app_db articles
+
+raw, _ := mygram.ConvertSearchExpression("python OR (ruby AND rails)")
+resp, _ := client.SearchRaw(table, raw, mygram.SearchRawOptions{Limit: 50})
+fmt.Println(resp.TotalCount)
+
+resp, _ = client.SearchRawWithHighlights(
+	table,
+	raw,
+	mygram.SearchRawOptions{Limit: 10},
+)
+fmt.Println(resp.Results)
+```
+
+:::
+
+::: warning Parsed expressions changed shape
+The parsed `SearchExpression` returned by `parseSearchExpression()` / `parse_search_expression()` / `ParseSearchExpression()` no longer has `optionalTerms` / `optional_terms` / `OptionalTerms`; the field was always empty. `requiredIsGroup` and `excludedIsGroup` (`required_is_group`, `excluded_is_group`; `RequiredIsGroup`, `ExcludedIsGroup`) run parallel to the required and excluded terms and mark the entries that are `(...)` groups, so a quoted phrase shaped like a group, such as `"(a OR b)"`, stays a literal phrase. Code that read the removed field must drop it.
+:::
+
+## Advanced Search and Administration
+
+The examples below add BM25 ranking, HIGHLIGHT, FACET, runtime variables, and `SYNC`. The Node.js and Go examples also show FUZZY, and the Python example combines everything in one program.
+
+### Node.js / TypeScript
 
 ```ts
 const ranked = await client.search('articles', 'machine learning', {
@@ -135,8 +266,6 @@ const facets = await client.facet('articles', 'category', {
 })
 ```
 
-### Runtime Variables and SYNC
-
 ```ts
 const adminToken = process.env.MYGRAM_API_ADMIN_TOKEN
 const adminClient = createMygramClient({
@@ -157,60 +286,7 @@ adminClient.disconnect()
 
 Set `MYGRAM_API_ADMIN_TOKEN` when the server has `api.admin_token` configured. The client authenticates during `connect()` and on subsequent reconnects.
 
-## Python
-
-### Install
-
-```bash
-pip install mygramdb-client
-```
-
-### Basic Search
-
-```python
-import asyncio
-from mygramdb_client import MygramClient, ClientConfig, SearchOptions
-
-async def main():
-    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
-        results = await client.search(
-            'articles',
-            'hello',
-            SearchOptions(limit=100, sort_column='created_at', sort_desc=True),
-        )
-        print(f'{results.total_count} results')
-
-        count = await client.count('articles', 'technology')
-        doc = await client.get('articles', '12345')
-
-asyncio.run(main())
-```
-
-### Table Identities and Raw Boolean Search
-
-```python
-import asyncio
-from mygramdb_client import (
-    ClientConfig,
-    MygramClient,
-    SearchRawOptions,
-    convert_search_expression,
-    parse_table_identity,
-    qualify_table_identity,
-)
-
-async def main():
-    async with MygramClient(ClientConfig(host='localhost', port=11016)) as client:
-        table = qualify_table_identity('articles', 'app_db')  # app_db.articles
-        print(parse_table_identity(table))                    # ('app_db', 'articles')
-
-        raw = convert_search_expression('python OR (ruby AND rails)')
-        res = await client.search_raw(table, raw, SearchRawOptions(limit=50))
-
-asyncio.run(main())
-```
-
-### HIGHLIGHT / FACET / SYNC
+### Python
 
 ```python
 import asyncio
@@ -248,67 +324,7 @@ asyncio.run(main())
 
 Set `MYGRAM_API_ADMIN_TOKEN` when the server has `api.admin_token` configured. `ClientConfig` makes the client authenticate when it connects and after a transparent reconnect.
 
-## Go
-
-### Install
-
-```bash
-go get github.com/libraz/go-mygram-client
-```
-
-### Basic Search
-
-```go
-package main
-
-import (
-	"fmt"
-	"log"
-
-	mygram "github.com/libraz/go-mygram-client"
-)
-
-func main() {
-	client := mygram.NewClient("localhost:11016")
-	defer client.Close()
-
-	if err := client.Connect(); err != nil {
-		log.Fatal(err)
-	}
-
-	resp, err := client.Search("articles", "hello", mygram.SearchOptions{
-		Limit:      100,
-		SortColumn: "created_at",
-		SortDesc:   true,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Found %d results\n", resp.TotalCount)
-}
-```
-
-### Table Identities and Raw Boolean Search
-
-```go
-table, _ := mygram.QualifyTableIdentity("articles", "app_db")
-db, name, _ := mygram.ParseTableIdentity(table)
-fmt.Println(db, name) // app_db articles
-
-raw, _ := mygram.ConvertSearchExpression("python OR (ruby AND rails)")
-resp, _ := client.SearchRaw(table, raw, mygram.SearchRawOptions{Limit: 50})
-fmt.Println(resp.TotalCount)
-
-resp, _ = client.SearchRawWithHighlights(
-	table,
-	raw,
-	mygram.SearchRawOptions{Limit: 10},
-)
-fmt.Println(resp.Results)
-```
-
-### BM25 / HIGHLIGHT / FUZZY / FACET
+### Go
 
 ```go
 ranked, _ := client.Search("articles", "machine learning", mygram.SearchOptions{
@@ -346,8 +362,6 @@ facets, _ := client.Facet("articles", "category", mygram.FacetOptions{
 })
 fmt.Println(facets.Results)
 ```
-
-### Runtime Variables and SYNC
 
 ```go
 package main

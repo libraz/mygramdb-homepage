@@ -13,7 +13,7 @@ import { VERIFY_ALL_PER_MILLION_GB } from '../data/memory'
 
 # Performance Guide
 
-This guide provides detailed performance benchmarks, optimization tips, and best practices for MygramDB.
+This guide covers MygramDB's benchmark results, tuning options, and production sizing.
 
 ## Benchmark Results
 
@@ -73,13 +73,12 @@ memory:
 ```
 
 **Recommendations:**
-- Treat `hard_limit_mb` and `soft_target_mb` as reserved compatibility
-  fields; they do not enforce process memory limits today
+- Treat `hard_limit_mb` and `soft_target_mb` as reserved compatibility fields; they do not enforce process memory limits today.
+- Start with the default `roaring_threshold` (0.18). Test changes with `OPTIMIZE` and your own data; the memory effect depends on posting-list density.
 
 ::: warning Enforce memory limits at the OS level
 `hard_limit_mb` is not a hard process memory cap today. When running under Docker, systemd, or Kubernetes, set the container or service memory limit as well, and monitor it.
 :::
-- Start with the default `roaring_threshold` (0.18). Test changes with `OPTIMIZE` and your own data; the memory effect depends on posting-list density.
 
 ### 4. Use Filters for Selective Queries
 
@@ -133,30 +132,31 @@ Deploy multiple MygramDB instances behind a load balancer:
 
 ### 3. Monitoring
 
-Monitor these metrics via `INFO` command:
+Monitor these metrics with the `INFO` command:
 
 ```mygram
 INFO
 ```
 
-Key metrics:
-- `total_documents`: Number of indexed documents
-- `used_memory_index`: Memory used by index (human-readable)
-- `total_requests`: Total queries processed
-- `connected_clients`: Current active connections
-- `uptime_seconds`: Server uptime in seconds
+| Field | Meaning |
+| --- | --- |
+| `total_documents` | Number of indexed documents |
+| `used_memory_index` | Memory used by the index (human-readable) |
+| `total_requests` | Total queries processed |
+| `connected_clients` | Current active connections |
+| `uptime_seconds` | Server uptime in seconds |
 
 ### 4. Backup Strategy
 
-Use `DUMP SAVE` command to create snapshots:
+Use the `DUMP SAVE` command to write a dump file:
 
 ```mygram
 DUMP SAVE snapshot.dmp
 ```
 
-Schedule regular snapshots:
+Schedule regular dumps:
 ```bash
-# Daily snapshot
+# Daily dump
 0 2 * * * dump_date=$(date +\%Y\%m\%d); printf 'AUTH \%s\nDUMP SAVE mygramdb-\%s.dmp\n' "$MYGRAM_API_ADMIN_TOKEN" "$dump_date" | mygram-cli
 ```
 
@@ -175,8 +175,7 @@ These filenames resolve under `dump.dir`; paths outside it are refused. The cron
    ```mygram
    INFO
    ```
-   Look at `used_memory_index` and process RSS; `hard_limit_mb` is reserved and does
-   not enforce a process memory limit today.
+   Look at `used_memory_index` and process RSS; `hard_limit_mb` is reserved and does not enforce a process memory limit today.
 
 3. **Enable debug mode:**
    ```mygram
@@ -235,7 +234,7 @@ These filenames resolve under `dump.dir`; paths outside it are refused. The cron
 The benchmark suite is reproducible. To run the same benchmark on your hardware:
 
 ```bash
-# Run the included benchmark (requires Docker)
+# Run the included benchmark (requires Docker and rye)
 make bench-up    # Start MySQL with Wikipedia dataset
 make bench-run   # Execute benchmark suite
 ```
@@ -246,7 +245,7 @@ To benchmark with your own data, start the server:
 ./mygramdb -c config.yaml
 ```
 
-With automatic snapshots disabled, use the same authenticated CLI connection to start the sync, check its status, enable debugging, and run the test queries:
+With `auto_initial_snapshot` disabled, use the same authenticated CLI connection to start the sync, check its status, enable debugging, and run the test queries:
 
 ```text
 $ mygram-cli

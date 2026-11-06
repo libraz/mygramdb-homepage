@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitepress'
+import { defineConfigWithTheme, type DefaultTheme } from 'vitepress'
 import { generateLlmsTxt, llmsDevPlugin, type LlmsLocale } from './llms'
 import mygramGrammar from './mygram.tmLanguage.mjs'
 import benchmark from '../src/data/benchmark-v1.10.0.json'
@@ -8,7 +8,7 @@ const githubUrl = 'https://github.com/libraz/mygram-db'
 // Newest released version in the core repo's CHANGELOG. scripts/check-facts.mjs
 // compares this against that changelog on every build, so a release cannot
 // leave the site pointing at the previous one.
-const latestVersion = '1.11.1'
+const latestVersion = '1.12.0'
 
 /** Per-locale structured data and social-card copy. Japanese answers mirror /ja/faq. */
 type Locale = 'en' | 'ja'
@@ -66,23 +66,23 @@ const FAQ: Record<Locale, { q: string; a: string }[]> = {
   ],
   ja: [
     {
-      q: 'MySQL FULLTEXTが遅いのはなぜですか？',
+      q: 'MySQL FULLTEXT が遅いのはなぜですか？',
       a: 'MySQL FULLTEXT の応答時間はクエリ、データ、バッファプール、同時実行数によって変わります。MygramDB は別の N-gram 検索インデックスをメモリに保持します。公開ベンチマークでは MySQL のバッファプールが温まった状態で、MygramDB のクエリキャッシュを無効にしています。'
     },
     {
-      q: 'MygramDBはMySQLとどう同期しますか？',
+      q: 'MygramDB は MySQL とどう同期しますか？',
       a: 'GTID ベースの binlog レプリケーションで MySQL の変更に追従します。初期インデックスは SYNC を実行するか auto_initial_snapshot を有効にして構築します。その後は別の ETL ジョブなしで binlog の変更を反映します。'
     },
     {
-      q: 'MygramDBはMySQL FULLTEXTよりどれくらい速いですか？',
-      a: `現行の再現可能なベンチマークは、MygramDBのクエリキャッシュを無効にした状態で、Wikipedia記事${benchmark.run.datasetRows.toLocaleString()}件に対してMySQL FULLTEXTと比較しています。検索・COUNT・日本語検索・結果整合性・並列スループットの結果を公開しています。`
+      q: 'MygramDB は MySQL FULLTEXT よりどれくらい速いですか？',
+      a: `現行の再現可能なベンチマークは、MygramDB のクエリキャッシュを無効にした状態で、Wikipedia 記事 ${benchmark.run.datasetRows.toLocaleString()} 件に対して MySQL FULLTEXT と比較しています。検索・COUNT・日本語検索・結果整合性・並列スループットの結果を公開しています。`
     },
     {
-      q: 'MygramDBは日本語に対応していますか？',
+      q: 'MygramDB は日本語に対応していますか？',
       a: 'ICU による Unicode 正規化と文字 N-gram を使い、辞書なしで日本語・中国語・韓国語を検索します。CJK 統合漢字とそれ以外の文字では N-gram の長さを個別に設定できます。部分文字列の一致を検証する場合は verify_text: all を有効にしてください。'
     },
     {
-      q: 'MygramDBとElasticsearchの違いは何ですか？',
+      q: 'MygramDB と Elasticsearch の違いは何ですか？',
       a: 'MygramDB は単一のサーバーバイナリで提供され、MySQL の binlog と直接同期します。各ノードはインデックスをメモリに保持して独立に動作し、ノード間でインデックスを分散する機能はありません。機能の範囲と構成要件は比較ページを参照してください。'
     }
   ]
@@ -106,8 +106,8 @@ const SEO: Record<Locale, { title: string; description: string; keywords: string
     keywords: 'MySQL FULLTEXT slow, MySQL full-text search slow, MySQL search timeout, MySQL FULLTEXT performance, MySQL search optimization, MySQL N-gram slow, MySQL FULLTEXT concurrent, MySQL FULLTEXT alternative, full-text search engine, in-memory search, MySQL replication, binlog search'
   },
   ja: {
-    title: 'MygramDB - MySQLレプリケーションで同期するインメモリ全文検索',
-    description: `MySQL FULLTEXTが遅い？MygramDBはMySQLレプリケーションで同期するインメモリ全文検索エンジンです。ミリ秒台のクエリで、FULLTEXT比 最大${benchmark.summary.bestSpeedup}倍。`,
+    title: 'MygramDB - MySQL レプリケーションで同期するインメモリ全文検索',
+    description: `MySQL FULLTEXT が遅い？MygramDB は MySQL レプリケーションで同期するインメモリ全文検索エンジンです。ミリ秒台のクエリで、FULLTEXT 比 最大 ${benchmark.summary.bestSpeedup} 倍。`,
     keywords: 'MySQL FULLTEXT 遅い, MySQL 全文検索 遅い, MySQL 検索 タイムアウト, MySQL FULLTEXT 性能, MySQL 検索 高速化, MySQL FULLTEXT 代替, 全文検索エンジン, インメモリ検索, MySQLレプリケーション, binlog 検索, 日本語 全文検索'
   }
 }
@@ -118,6 +118,9 @@ function routeOf(relativePath: string): string {
   return `/${clean}`.replace(/\/{2,}/g, '/')
 }
 
+/** Search-result title: the brand suffix is added only when the page title lacks it. scripts/check-seo.mjs mirrors this. */
+const pageTitle = (title: string): string => title.includes('MygramDB') ? title : `${title} | MygramDB`
+
 const localeOf = (relativePath: string): Locale => relativePath.startsWith('ja/') ? 'ja' : 'en'
 
 /** The same page in the other language, or null when it has no counterpart. */
@@ -125,6 +128,38 @@ function alternateRoute(relativePath: string): string {
   return relativePath.startsWith('ja/')
     ? routeOf(relativePath.slice(3))
     : routeOf(`ja/${relativePath}`)
+}
+
+/** Sidebar shared by the top-level pages outside /docs/, keyed once per page route. */
+const ABOUT_SIDEBAR: Record<Locale, DefaultTheme.SidebarItem[]> = {
+  en: [
+    {
+      text: 'About',
+      items: [
+        { text: 'Why MygramDB', link: '/why' },
+        { text: 'Benchmarks', link: '/benchmarks' },
+        { text: 'Comparison', link: '/comparison' },
+        { text: 'FAQ', link: '/faq' }
+      ]
+    }
+  ],
+  ja: [
+    {
+      text: 'MygramDB について',
+      items: [
+        { text: 'MygramDB とは', link: '/ja/why' },
+        { text: 'ベンチマーク', link: '/ja/benchmarks' },
+        { text: '比較', link: '/ja/comparison' },
+        { text: 'FAQ', link: '/ja/faq' }
+      ]
+    }
+  ]
+}
+
+/** Map every page of a sidebar to that same sidebar. */
+function sidebarForPages(items: DefaultTheme.SidebarItem[]): DefaultTheme.SidebarMulti {
+  const links = items.flatMap((group) => group.items ?? []).map((item) => item.link as string)
+  return Object.fromEntries(links.map((link) => [link, items]))
 }
 
 /** Prose for the per-locale llms.txt indexes; the page lists come from the nav/sidebar. */
@@ -173,7 +208,10 @@ const LLMS_LOCALES: LlmsLocale[] = [
   }
 ]
 
-export default defineConfig({
+/** Default theme config plus the released version the home hero advertises. */
+type ThemeConfig = DefaultTheme.Config & { latestVersion?: string }
+
+export default defineConfigWithTheme<ThemeConfig>({
   srcDir: 'src',
   appearance: true,
   title: 'MygramDB',
@@ -232,6 +270,11 @@ export default defineConfig({
     ['meta', { name: 'twitter:image', content: `${siteUrl}/og-image.png` }],
   ],
 
+  // A title that already names the brand skips the ` | MygramDB` template.
+  transformPageData(pageData) {
+    if (pageData.frontmatter.title?.includes('MygramDB')) pageData.titleTemplate = false
+  },
+
   transformHead({ pageData, description }) {
     const lang = localeOf(pageData.relativePath)
     const seo = SEO[lang]
@@ -239,7 +282,7 @@ export default defineConfig({
     const altLang: Locale = lang === 'ja' ? 'en' : 'ja'
     const altUrl = `${siteUrl}${alternateRoute(pageData.relativePath)}`
     // Page frontmatter wins; the site-level copy is the fallback for pages without one.
-    const title = pageData.frontmatter.title ? `${pageData.frontmatter.title} | MygramDB` : seo.title
+    const title = pageData.frontmatter.title ? pageTitle(pageData.frontmatter.title) : seo.title
     const desc = description || seo.description
 
     return [
@@ -268,10 +311,10 @@ export default defineConfig({
     ja: {
       label: '日本語',
       lang: 'ja',
-      description: 'MySQL FULLTEXTが遅い？MygramDBで桁違いに高速化。インメモリ全文検索エンジン。',
+      description: 'MySQL FULLTEXT が遅い？MygramDB で桁違いに高速化。インメモリ全文検索エンジン。',
       themeConfig: {
         nav: [
-          { text: 'MygramDBとは', link: '/ja/why' },
+          { text: 'MygramDB とは', link: '/ja/why' },
           { text: 'ドキュメント', link: '/ja/docs/getting-started' },
           { text: 'ベンチマーク', link: '/ja/benchmarks' },
           { text: '比較', link: '/ja/comparison' },
@@ -285,12 +328,14 @@ export default defineConfig({
           }
         ],
         sidebar: {
+          ...sidebarForPages(ABOUT_SIDEBAR.ja),
           '/ja/docs/': [
             {
               text: '概要',
               items: [
                 { text: '仕組み', link: '/ja/docs/how-it-works' },
                 { text: 'アーキテクチャ', link: '/ja/docs/architecture' },
+                { text: 'binlog デコード', link: '/ja/docs/binlog-decoding' },
                 { text: '用語集', link: '/ja/docs/glossary' }
               ]
             },
@@ -311,9 +356,9 @@ export default defineConfig({
                 { text: 'レプリケーション管理', link: '/ja/docs/replication-management' },
                 { text: 'スナップショット', link: '/ja/docs/snapshot' },
                 { text: 'パフォーマンス', link: '/ja/docs/performance' },
-                { text: 'Dockerデプロイ', link: '/ja/docs/docker-deployment' },
+                { text: 'Docker デプロイ', link: '/ja/docs/docker-deployment' },
                 { text: '開発', link: '/ja/docs/development' },
-                { text: 'Linuxテスト', link: '/ja/docs/linux-testing' }
+                { text: 'Linux テスト', link: '/ja/docs/linux-testing' }
               ]
             },
             {
@@ -322,7 +367,7 @@ export default defineConfig({
                 { text: 'プロトコル', link: '/ja/docs/protocol' },
                 { text: 'HTTP API', link: '/ja/docs/http-api' },
                 { text: 'クエリ構文', link: '/ja/docs/query-syntax' },
-                { text: 'SYNCコマンド', link: '/ja/docs/sync-command' },
+                { text: 'SYNC コマンド', link: '/ja/docs/sync-command' },
                 { text: '公式クライアント', link: '/ja/docs/client-libraries' },
                 { text: 'C/C++ libmygramclient', link: '/ja/docs/client-library' }
               ]
@@ -330,6 +375,7 @@ export default defineConfig({
             {
               text: 'アップグレード',
               items: [
+                { text: 'v1.12 へのアップグレード', link: '/ja/docs/upgrade-v1.12' },
                 { text: 'v1.11 へのアップグレード', link: '/ja/docs/upgrade-v1.11' },
                 { text: 'v1.10 へのアップグレード', link: '/ja/docs/upgrade-v1.10' },
                 { text: 'v1.9 へのアップグレード', link: '/ja/docs/upgrade-v1.9' },
@@ -344,6 +390,7 @@ export default defineConfig({
   },
 
   themeConfig: {
+    latestVersion,
     nav: [
       { text: 'Why', link: '/why' },
       { text: 'Docs', link: '/docs/getting-started' },
@@ -360,12 +407,14 @@ export default defineConfig({
     ],
 
     sidebar: {
+      ...sidebarForPages(ABOUT_SIDEBAR.en),
       '/docs/': [
         {
           text: 'Overview',
           items: [
             { text: 'How it Works', link: '/docs/how-it-works' },
             { text: 'Architecture', link: '/docs/architecture' },
+            { text: 'Binlog Decoding', link: '/docs/binlog-decoding' },
             { text: 'Glossary', link: '/docs/glossary' }
           ]
         },
@@ -405,6 +454,7 @@ export default defineConfig({
         {
           text: 'Upgrading',
           items: [
+            { text: 'Upgrade to v1.12', link: '/docs/upgrade-v1.12' },
             { text: 'Upgrade to v1.11', link: '/docs/upgrade-v1.11' },
             { text: 'Upgrade to v1.10', link: '/docs/upgrade-v1.10' },
             { text: 'Upgrade to v1.9', link: '/docs/upgrade-v1.9' },
@@ -413,6 +463,44 @@ export default defineConfig({
           ]
         }
       ]
+    },
+
+    // Local search is enabled only from the root themeConfig; the per-locale
+    // strings live under options.locales.
+    search: {
+      provider: 'local',
+      options: {
+        locales: {
+          root: {
+            translations: {
+              button: { buttonText: 'Search', buttonAriaLabel: 'Search docs' },
+              modal: {
+                noResultsText: 'No results for',
+                resetButtonTitle: 'Reset search',
+                footer: {
+                  selectText: 'to select',
+                  navigateText: 'to navigate',
+                  closeText: 'to close'
+                }
+              }
+            }
+          },
+          ja: {
+            translations: {
+              button: { buttonText: '検索', buttonAriaLabel: 'ドキュメント内検索' },
+              modal: {
+                noResultsText: '一致する結果がありません',
+                resetButtonTitle: '検索をリセット',
+                footer: {
+                  selectText: '選択',
+                  navigateText: '移動',
+                  closeText: '閉じる'
+                }
+              }
+            }
+          }
+        }
+      }
     },
 
     socialLinks: [

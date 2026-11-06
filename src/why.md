@@ -19,7 +19,7 @@ MySQL serves FULLTEXT queries through its SQL execution path and InnoDB buffer p
 
 ### Work per query
 
-MySQL FULLTEXT uses an inverted index within InnoDB. Query cost depends on the matching postings, rows fetched, sorting, and whether index pages are already in the buffer pool. MygramDB intersects in-memory posting lists and applies optional text verification before returning results. The benchmark reports the observed latency for each tested query rather than assuming one fixed cost for either engine.
+MySQL FULLTEXT uses an inverted index inside InnoDB. Query cost depends on the number of matching postings, the rows fetched, sorting, and whether the index pages are already in the buffer pool. MygramDB intersects in-memory posting lists and optionally verifies the candidate text before returning results. The benchmark reports the observed latency of each tested query and does not assume a fixed cost for either engine.
 
 ::: info What is a posting list?
 A **posting list** is the list of document IDs that contain a given term. Full-text search finds candidates by combining these lists with AND/OR. See the [Glossary](/docs/glossary#posting-list) for more.
@@ -39,7 +39,7 @@ MygramDB provides a separate execution path for search:
 
 ### In-Memory Index
 
-The search index and stored document data are held in memory. The server does not fetch MySQL FULLTEXT index pages during a search.
+The search index and stored document data are held in memory. A search does not read MySQL's FULLTEXT index pages. MygramDB's query cache can also change latency when enabled; see [Benchmarks](/benchmarks) for measurements with that cache disabled.
 
 ### Compressed Posting Lists
 
@@ -49,21 +49,18 @@ The search index and stored document data are held in memory. The server does no
 
 Roaring bitmap operations can use SIMD instructions where the build and CPU support them.
 
-### Search Index in Memory
-
-The index stays in memory, so a search does not read MySQL's FULLTEXT index. MygramDB's query cache can also change latency when enabled. See [Benchmarks](/benchmarks) for measurements with that cache disabled.
-
 ### Real-time MySQL / MariaDB Sync
 
-GTID-based binlog replication applies changes from MySQL 8.4/9.7/26.x or MariaDB 10.11+/11.x/12.x. A separate search ETL job is unnecessary, but setup still requires MySQL replication configuration, an initial snapshot or `SYNC`, and routing search requests to MygramDB. Lag depends on the source, network, and MygramDB's processing rate.
+GTID-based binlog replication applies changes from MySQL 8.4/9.7/26.x or MariaDB 10.11+/11.x/12.x. A separate search ETL job is unnecessary, but setup still requires MySQL replication configuration, an initial snapshot or `SYNC`, and routing search requests to MygramDB. Replication lag depends on the source, the network, and MygramDB's processing rate.
 
 ::: info What is ETL?
-**ETL** stands for extract, transform, load — the pipeline that copies data from one system into another. MygramDB reads the MySQL binlog directly, so there is no separate sync job to build and operate.
+**ETL** stands for extract, transform, load, the pipeline that copies data from one system into another. MygramDB reads the MySQL binlog directly, so there is no separate sync job to build and operate.
 :::
 
 ## When to Use
 
 Consider MygramDB when:
+
 - The indexed data fits in available RAM with room for process and indexing overhead.
 - Search reads are a meaningful part of the MySQL workload, and the application can send them to MygramDB's API.
 - The measured latency or throughput for your queries on MySQL does not meet your target.

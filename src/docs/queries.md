@@ -1,6 +1,6 @@
 ---
 title: MygramDB Query Guide - Search, Filter, Sort, and Aggregate
-description: Practical guide to querying MygramDB. Basic and boolean search, phrase search, filters, sorting, highlighting, fuzzy search, FACET aggregation, synonyms, and pagination.
+description: "Query MygramDB in practice: boolean and phrase search, filters, sorting, highlighting, fuzzy search, FACET aggregation, synonyms, and pagination."
 head:
   - - meta
     - name: keywords
@@ -9,14 +9,10 @@ head:
 
 # Query Guide
 
-Learn how to search effectively with MygramDB.
-
-::: info What is CIDR?
-**CIDR** is a notation for a range of IP addresses. If you cannot connect, first check that the client IP falls inside `network.allow_cidrs`.
-:::
+Practical examples of the MygramDB query commands. The full grammar, limits, and error messages are in the [Query Syntax Reference](/docs/query-syntax).
 
 ::: warning Allow your source IP
-Before executing queries, ensure your IP is registered in `allow_cidrs` in the configuration. Without CIDR registration, all connections are denied. See [Network Security](/docs/configuration#network-security).
+Before running queries, make sure the client IP falls inside `network.allow_cidrs` in the configuration. **CIDR** is a notation for an IP address range, such as `192.168.1.0/24`. Without a matching entry, every connection is denied. See [Network Security](/docs/configuration#network-security).
 :::
 
 ## Connecting with mygram-cli
@@ -70,6 +66,8 @@ In a single-database configuration, `articles` resolves to that database's table
 
 A quoted keyword is a literal term. The last query requires the word `not`; the quotes keep it from being parsed as the `NOT` operator.
 
+A leading `NOT` is also accepted, but it produces a wide candidate set. Combine it with search terms or filters (see [NOT Search](/docs/query-syntax#not-search)).
+
 ### Combined
 
 ```mygram
@@ -105,7 +103,7 @@ Filter by column values:
 `FILTER` works on columns declared under `tables[*].filters` or `tables[*].required_filters` in the config file. A column that exists in MySQL but is not declared cannot be used as a search-time filter. The same column may be declared in both lists: `required_filters` controls whether a row enters the index, and query-time `FILTER` narrows the indexed rows for each request.
 :::
 
-Query-time temporal filters use numeric values. `date`, `datetime`, and `timestamp` columns use Unix epoch seconds, while `time` uses signed duration seconds, including negative values and values beyond 24 hours. For example, `1704067200` represents 2024-01-01 00:00:00 UTC. The `required_filters` configuration uses its own temporal syntax, including ISO 8601 values; do not copy those strings into a query `FILTER`.
+Temporal values in a query are numbers. `date`, `datetime`, and `timestamp` columns take Unix epoch seconds (`1704067200` is 2024-01-01 00:00:00 UTC). `time` columns take signed seconds, including negative values and values beyond 24 hours. Do not copy `required_filters` values such as ISO 8601 strings into a query `FILTER`.
 
 Multiple filters (AND logic):
 
@@ -115,14 +113,7 @@ Multiple filters (AND logic):
 
 ### Filter Operators
 
-| Operator | Alias | Description |
-|----------|-------|-------------|
-| `=` | `EQ` | Equal |
-| `!=` / `<>` | `NE` | Not equal |
-| `>` | `GT` | Greater than |
-| `>=` | `GTE` | Greater or equal |
-| `<` | `LT` | Less than |
-| `<=` | `LTE` | Less or equal |
+`FILTER` supports `=`, `!=` / `<>`, `>`, `>=`, `<`, and `<=`, each with a word alias (`EQ`, `NE`, `GT`, `GTE`, `LT`, `LTE`). See [Supported Operators](/docs/query-syntax#supported-operators) for the table.
 
 ## Sorting
 
@@ -141,9 +132,7 @@ Sort by column:
 127.0.0.1:11016> SEARCH articles golang SORT _score ASC
 ```
 
-`BY` is optional; both column forms are valid. `SORT ASC` and `SORT DESC` remain shorthand for primary-key ordering.
-
-Numeric filter columns keep their declared type when sorted. A `bigint_unsigned` column orders values above 2^63 by their unsigned numeric value.
+`BY` is optional. `SORT ASC` and `SORT DESC` without a column are shorthand for primary-key ordering.
 
 ### Relevance Sort (BM25)
 
@@ -153,7 +142,7 @@ Sort by BM25 relevance score using the reserved `_score` column:
 127.0.0.1:11016> SEARCH articles "machine learning" SORT _score DESC LIMIT 10
 ```
 
-BM25 computes IDF and TF at query time, with `bm25.k1` (default `1.2`) and `bm25.b` (default `0.75`) as tuning parameters. `SORT _score` requires `bm25.enable: true`; the server retains normalized text for scoring independently of the `memory.verify_text` post-filtering policy.
+BM25 computes term frequency (TF) and inverse document frequency (IDF) at query time. Tune it with `bm25.k1` (default `1.2`) and `bm25.b` (default `0.75`). `SORT _score` requires `bm25.enable: true`. See [BM25 Relevance Scoring](/docs/query-syntax#bm25-relevance-scoring-sort-score).
 
 ## Highlighting
 
@@ -165,13 +154,7 @@ Return text snippets with matched terms wrapped in tags:
 127.0.0.1:11016> SEARCH articles "database" HIGHLIGHT SNIPPET_LEN 200 MAX_FRAGMENTS 5 LIMIT 10
 ```
 
-| Option | Default | Range | Description |
-|--------|---------|-------|-------------|
-| `TAG <open> <close>` | `<em>` / `</em>` | — | Open/close tags |
-| `SNIPPET_LEN <n>` | 100 | 1–10,000 | Max code points per fragment |
-| `MAX_FRAGMENTS <n>` | 3 | 1–100 | Max fragments joined with ellipsis |
-
-HIGHLIGHT uses normalized text retained by the server, including when `memory.verify_text` is `"off"`.
+The tags default to `<em>` and `</em>`. `SNIPPET_LEN` (default 100) is the maximum number of code points per fragment, and `MAX_FRAGMENTS` (default 3) is the maximum number of fragments joined with an ellipsis. See [Highlighting](/docs/query-syntax#highlighting-highlight) for ranges. The snippets are built from normalized text that the server retains, even when `memory.verify_text` is `"off"`.
 
 ## Fuzzy Search
 
@@ -182,7 +165,7 @@ Match terms within a Levenshtein edit distance:
 127.0.0.1:11016> SEARCH articles "databse" FUZZY 2 LIMIT 10
 ```
 
-Distance `1` (default) matches terms within 1 edit (insert/delete/substitute); `2` matches within 2 edits. Candidate filtering by length keeps distance calculations bounded. `FUZZY` includes every document returned by the same query without `FUZZY`, including terms shorter than the configured n-gram size and mixed CJK/ASCII terms, and may add edit-distance matches.
+Distance `1` (default) matches terms within one edit (insertion, deletion, or substitution); `2` allows two edits. `FUZZY` also returns every document that the same query returns without it, and may add edit-distance matches. See [Fuzzy Search](/docs/query-syntax#fuzzy-search-fuzzy).
 
 ## FACET Aggregation
 
@@ -204,13 +187,13 @@ OK FACET <returned_value_count> <total_distinct_values>
 
 The first header count is the number of values returned on this page. The second is the total number of distinct values for the query, including values omitted by `LIMIT` or `OFFSET`. Each value and its document count are separated by a tab, and an empty line terminates the response. Equal-count values keep a stable order, so pages do not reshuffle ties between requests.
 
-FACET supports the same AND/NOT/FILTER/LIMIT clauses as `SEARCH` when scoping aggregation to a query.
+To scope the aggregation to a query, use the same AND/NOT/FILTER/LIMIT clauses as `SEARCH`.
 
 FACET is also exposed over HTTP at `POST /tables/{identity}/facet`. The HTTP body uses `column`, optional `q`, optional `filters`, and optional `limit`.
 
 ## Synonym Expansion
 
-When a synonym dictionary is configured (`tables[*].synonyms.enable: true`, see [Configuration](/docs/configuration#per-table-synonyms)), search terms are transparently expanded to OR-groups of their synonyms at query time. No query-side syntax change is needed — a query for `car` will also match `automobile` and `vehicle` when they are grouped in the TSV dictionary.
+When a synonym dictionary is configured (`tables[*].synonyms.enable: true`, see [Configuration](/docs/configuration#per-table-synonyms)), search terms are transparently expanded to OR-groups of their synonyms at query time. Queries need no new syntax. A query for `car` also matches `automobile` and `vehicle` when the TSV dictionary groups them together.
 
 Synonyms are configured per table under `tables[*].synonyms`. Fuzzy search takes a separate execution path and is not combined with synonym expansion for the same query.
 
@@ -221,9 +204,7 @@ Synonyms are configured per table under `tables[*].synonyms`. Fuzzy search takes
 127.0.0.1:11016> SEARCH articles golang LIMIT 10 OFFSET 20
 ```
 
-The `total_count` in an `OK RESULTS` response is the number of matches before pagination; the returned IDs are the current page. The server derives the total and page from one index read, so they describe the same result set.
-
-Boolean-query cache keys preserve parsed token, quote, and parenthesis structure. Queries whose full-width whitespace, parentheses, or quoting produce different expressions use separate cache entries; equivalent Unicode whitespace that parses identically may share an entry.
+The `total_count` in an `OK RESULTS` response is the number of matches before pagination, and the IDs that follow are the current page. See [Response Format](/docs/query-syntax#response-format). The `LIMIT` range and the cost of deep pages are covered under [Pagination](/docs/query-syntax#pagination-limit-offset).
 
 ## Count Query
 
@@ -286,17 +267,7 @@ With two or more configured databases, use `/tables/app_db.articles/...`. Admin 
 
 ## Operator Precedence
 
-Without parentheses, operators are evaluated in this order:
-
-1. **NOT** (highest)
-2. **AND**
-3. **OR** (lowest)
-
-Example: `a OR b AND c` is parsed as `a OR (b AND c)`
-
-::: tip Pin the intent with parentheses
-Use parentheses to make your intent clear and avoid unexpected results.
-:::
+Without parentheses, `NOT` binds tightest, then `AND`, then `OR`. For example, `a OR b AND c` is parsed as `a OR (b AND c)`. Use parentheses to state your intent. More cases are in [Operator Precedence](/docs/query-syntax#operator-precedence).
 
 ## Performance Tips
 
@@ -304,6 +275,8 @@ Use parentheses to make your intent clear and avoid unexpected results.
 2. **Add specific filters** - Reduces result set early
 3. **Use AND over OR** - AND queries are typically faster
 4. **Index filter columns** - Configure frequently filtered columns in config
+
+See [Performance Tips](/docs/query-syntax#performance-tips) in the reference for details.
 
 ## Next Steps
 

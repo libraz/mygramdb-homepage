@@ -7,7 +7,7 @@ description: "Prepare a MygramDB deployment for the v1.8 line: the ngram_size de
 
 MygramDB v1.8.1 is a correctness and reliability release in the v1.8 line. It has no breaking API changes, but one default changed in v1.8.0: if `ngram_size` is omitted, the default is now `2` instead of `1`.
 
-Most upgrades are straightforward. Check configuration assumptions, HTTP clients that need boolean expressions, and operational automation that starts `SYNC` while another maintenance task is running.
+Most upgrades are straightforward. Check your configuration for assumed defaults, HTTP clients that need boolean expressions, and automation that starts `SYNC` while another maintenance task is running.
 
 ## What Changed
 
@@ -40,7 +40,11 @@ tables:
 
 ### Replication correctness fixes
 
-v1.8.0 fixes several replication edge cases, including filter-only `UPDATE` events that could remove still-qualifying rows from search results, primary-key-changing `UPDATE` events that could leave stale indexed rows, and fail-fast handling for unsafe binlog states.
+v1.8.0 fixes several replication edge cases:
+
+- A filter-only `UPDATE` could remove still-qualifying rows from search results.
+- A primary-key-changing `UPDATE` could leave stale indexed rows.
+- Unsafe binlog states now fail fast.
 
 ### Query and HTTP behavior
 
@@ -58,19 +62,25 @@ This means clients should send intent as structured JSON rather than as a comman
 }
 ```
 
-Boolean queries gained fixes for short terms under bigram indexing, quoted phrases containing `AND`/`OR`/`NOT`, the `<>` not-equal filter operator, and raw boolean query parsing in client libraries.
+Boolean queries gained fixes for:
+
+- short terms under bigram indexing
+- quoted phrases containing `AND`/`OR`/`NOT`
+- the `<>` not-equal filter operator
+- raw boolean query parsing in client libraries
 
 ### v1.8.1 reliability changes
 
-v1.8.1 adds boolean filter columns, bounded V2 dump restore settings, and a size/versioned C client configuration with Unix-socket and asynchronous `DUMP SAVE` timeout settings. It also makes the HTTP allow list fail closed: only `/health/live` and `/health/ready` bypass the CIDR check.
-
-Date/time parsing now accepts date-only strings such as `2024-01-15` and truncates fractional epoch seconds to whole seconds.
-
-`SYNC` is now rejected while `OPTIMIZE`, `DUMP SAVE`, or `DUMP LOAD` is in progress; retry after the operation completes.
-
-CLI `DOC` output now decodes escaped values such as `\n`, `\t`, `\\`, `\"`, and `\xHH` instead of passing them through verbatim.
-
-An incompatible `DROP`, `RENAME`, or semantic change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. Fix the schema or configuration, then run `SYNC` to rebuild the affected table.
+| Area | Change |
+| --- | --- |
+| Filter columns | Boolean filter columns are supported. |
+| Dump restore | V2 dump restore has bounded limits that you can configure. |
+| C client | The client configuration is size- and version-tagged, and adds Unix-socket and asynchronous `DUMP SAVE` timeout settings. |
+| HTTP allowlist | The CIDR check fails closed: only `/health/live` and `/health/ready` bypass it. |
+| Date/time parsing | Date-only strings such as `2024-01-15` are accepted. Fractional epoch seconds are truncated to whole seconds. |
+| `SYNC` | Rejected while `OPTIMIZE`, `DUMP SAVE`, or `DUMP LOAD` is in progress. Retry after the operation completes. |
+| CLI `DOC` output | Escaped values such as `\n`, `\t`, `\\`, `\"`, and `\xHH` are decoded instead of printed verbatim. |
+| Incompatible DDL | A `DROP`, `RENAME`, or semantic change to a configured primary-key, text-source, or filter column stops replication before its GTID advances. Fix the schema or configuration, then run `SYNC` to rebuild the affected table. |
 
 ## Upgrade Checklist
 

@@ -1,6 +1,6 @@
 ---
 title: MygramDB Development Setup - Build, Lint, and Tooling
-description: Set up the MygramDB development environment. Install CMake, LLVM 18, MySQL client, and ICU; configure VS Code linting; Google C++ Style conventions; build, format, and test workflow.
+description: "Set up a MygramDB development environment: CMake, LLVM 18, MySQL client and ICU, editor linting, Google C++ style, and the build, format, and test loop."
 head:
   - - meta
     - name: keywords
@@ -79,13 +79,11 @@ sudo update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-18 100
 
 ```bash
 # Check if tools are installed
-cmake --version        # Should show 3.16+
+cmake --version        # Should show 3.18+
 clang-format --version # Should show 18.x.x
 clang-tidy --version   # Should show 18.x.x
 clangd --version       # Should show 18.x.x (optional, for LSP)
 ```
-
-**Why version 18?** Different versions of clang-format produce different formatting results. We standardize on version 18 to ensure consistency between local development and CI.
 
 ## Build Project
 
@@ -122,7 +120,7 @@ After building the project, enable linting in VS Code:
 
 ### Option A: Using C/C++ Extension (Simpler)
 
-Edit `.vscode/settings.json` and change:
+Edit `.vscode/settings.json` as follows:
 
 ```json
 {
@@ -245,7 +243,7 @@ make test-large-dump
 # Default MySQL 8.4 suite
 make e2e-test
 
-# MySQL 8.4/9.7 and MariaDB 10.11/11.8/12.3 matrix
+# MySQL 8.4, 9.7, and the current Innovation release; MariaDB 10.11/11.4/11.8/12.3
 make e2e-matrix
 ```
 
@@ -254,8 +252,8 @@ for marker selection and the focused MariaDB replication runner.
 
 ### Local sanitizers and fuzzing
 
-Sanitizer builds and the fuzz harness are explicit local checks. They do not add
-CI jobs or make the fuzz harness a CTest target.
+Sanitizer builds are explicit local checks; the repository's sanitizer workflow runs
+only when triggered manually. The fuzz harness is neither a CI gate nor a CTest target.
 
 ```bash
 # Replace ENABLE_ASAN with ENABLE_TSAN or ENABLE_UBSAN as needed.

@@ -1,6 +1,6 @@
 ---
 title: MygramDB インストール - RPM / DEB / Docker / ソースビルド
-description: MygramDBをRPMまたはDEBパッケージ、Docker、ソースビルドで導入する手順。systemdサービスの設定、インストール確認、セキュリティ上の注意も説明します。
+description: MygramDB を RPM または DEB パッケージ、Docker、ソースビルドで導入する手順。systemd サービスの設定、インストール確認、セキュリティ上の注意も説明します。
 head:
   - - meta
     - name: keywords
@@ -10,12 +10,12 @@ head:
 # インストール
 
 ::: info どの方法を選ぶべきか
-RHEL/AlmaLinux/Rocky LinuxではRPM、UbuntuではDEB、動作確認やコンテナ基盤ではDockerを使うのが基本です。ソースビルドは開発や独自ビルドが必要な場合に選んでください。
+RHEL/AlmaLinux/Rocky Linux では RPM、Ubuntu では DEB、動作確認やコンテナ基盤では Docker を使うのが基本です。ソースビルドは開発や独自ビルドが必要な場合に選んでください。
 :::
 
-## RPMパッケージ（推奨）
+## RPM パッケージ（推奨）
 
-RHEL、AlmaLinux、Rocky Linux 9/10向け。[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest)からダウンロード：
+RHEL、AlmaLinux、Rocky Linux 9/10 では、[GitHub Releases](https://github.com/libraz/mygram-db/releases/latest) からパッケージをダウンロードします。
 
 ```bash
 # EL9 (RHEL/AlmaLinux/Rocky Linux 9)
@@ -25,11 +25,12 @@ sudo rpm -i mygramdb-*.el9.x86_64.rpm
 sudo rpm -i mygramdb-*.el10.x86_64.rpm
 ```
 
-インストールされるファイル：
+インストールされるファイルは次のとおりです。
+
 - `/usr/bin/mygramdb` - サーバーバイナリ
-- `/usr/bin/mygram-cli` - CLIクライアント
+- `/usr/bin/mygram-cli` - CLI クライアント
 - `/etc/mygramdb/config.yaml.example` - 設定テンプレート
-- systemdサービスファイル
+- systemd サービスファイル
 
 サービスを開始する前に設定ファイルを作成・編集します。
 
@@ -41,29 +42,34 @@ sudo systemctl enable --now mygramdb
 
 ## Docker
 
+::: warning 設定ファイルを用意してから起動
+Docker で本番運用する場合は、MySQL 接続情報、レプリケーション設定、対象テーブル、`network.allow_cidrs`、`api.admin_token` を含む設定ファイルを用意してマウントしてください。
+
+マウントする設定では、公開ポートからコンテナへ到達できるよう `api.tcp.bind: 0.0.0.0` を設定し、HTTP を有効にする場合は `api.http.bind: 0.0.0.0` も設定します。下のホスト側ポートはループバックに限定したまま、CIDR 許可リストも厳格にしてください。外部に公開する場合は、管理トークンを設定したうえでリバースプロキシ経由にします。
+
+イメージを起動しただけでは、既存データは読み込まれません。読み込みには `SYNC <table>` を実行します。
+:::
+
 ```bash
-docker pull ghcr.io/libraz/mygram-db:1.11.1
+docker pull ghcr.io/libraz/mygram-db:1.12.0
 
 docker run -d \
   -p 127.0.0.1:11016:11016 \
   -p 127.0.0.1:8080:8080 \
   -v /path/to/config.yaml:/etc/mygramdb/config.yaml:ro \
-  ghcr.io/libraz/mygram-db:1.11.1
+  ghcr.io/libraz/mygram-db:1.12.0
 ```
 
-利用可能なタグ：
-- `ghcr.io/libraz/mygram-db:1.11.1`
+利用可能なタグは次のとおりです。
+
+- `ghcr.io/libraz/mygram-db:1.12.0`
 - `ghcr.io/libraz/mygram-db:latest`
 
-`linux/amd64`と`linux/arm64`の両方をサポート。
+`linux/amd64` と `linux/arm64` の両方に対応しています。
 
-::: warning 設定ファイルを用意してから起動
-Dockerで本番運用する場合は、MySQL接続情報、レプリケーション設定、対象テーブル、`network.allow_cidrs`、`api.admin_token` を含む設定ファイルを用意してマウントしてください。公開ポートからコンテナへ到達できるよう、マウントする設定では `api.tcp.bind: 0.0.0.0`、HTTPを有効にする場合は `api.http.bind: 0.0.0.0` を設定します。上のホスト側ポートはループバックに限定したまま、CIDR許可リストも厳格にしてください。外部公開が必要な場合は、管理トークンを設定したうえでリバースプロキシ経由にしてください。単にイメージを起動しただけでは、既存データの初期同期は完了しません。
-:::
+## DEB パッケージ
 
-## DEBパッケージ
-
-Ubuntu 22.04 (Jammy) および 24.04 (Noble) 向け：
+Ubuntu 22.04（Jammy）と 24.04（Noble）では、次のコマンドでインストールします。
 
 ```bash
 # x86_64
@@ -114,6 +120,12 @@ cd mygram-db
 make
 ```
 
+ビルドには CMake 3.18 以降が必要です。binlog デコーダの libmybinlog を含め、バージョン固定された依存ライブラリを GitHub から取得します。オフラインでビルドするときは、`MYBINLOG_SOURCE_DIR` にローカルの libmybinlog のチェックアウトを指定してください。
+
+```bash
+make MYBINLOG_SOURCE_DIR=/path/to/libmybinlog
+```
+
 ### システムへのインストール
 
 ```bash
@@ -122,7 +134,7 @@ sudo make install
 
 ## サービスとして実行
 
-ソースからビルドした場合（RPMにはサービスが含まれています）：
+ソースからビルドした場合の手順です（RPM にはサービスが含まれています）。
 
 ### ユーザー作成
 
@@ -139,9 +151,9 @@ sudo install -m 0640 -o root -g mygramdb examples/config.yaml /etc/mygramdb/conf
 sudo chown -R mygramdb:mygramdb /var/lib/mygramdb /var/log/mygramdb
 ```
 
-サービスを起動する前に `/etc/mygramdb/config.yaml` の接続先、検索対象テーブル、ネットワーク許可リストを編集します。systemdユニットは既定でjournalにログを出力します。`logging.file` を設定する場合は `/var/log/mygramdb` を使えます。
+サービスを起動する前に `/etc/mygramdb/config.yaml` の接続先、検索対象テーブル、ネットワーク許可リストを編集します。systemd ユニットは、デフォルトでログを journal に出力します。`logging.file` を設定する場合は `/var/log/mygramdb` を使えます。
 
-### systemdサービスのインストール
+### systemd サービスのインストール
 
 ```bash
 sudo cp support/systemd/mygramdb.service /etc/systemd/system/
@@ -158,19 +170,19 @@ sudo journalctl -u mygramdb -f
 
 ## インストール確認
 
+::: info インストール後に必要な作業
+パッケージや Docker イメージを入れただけでは、検索対象のデータは読み込まれません。MySQL ソースの要件、対象テーブル、ネットワークの許可範囲を設定したあと、`SYNC <table>` を一度実行して既存の行からインデックスを作成してください。ソース側の設定は [MySQL レプリケーション](/ja/docs/replication)を参照してください。
+:::
+
 ```bash
 mygramdb --help
 mygram-cli --help
 ```
 
-::: info インストール後に必要な作業
-パッケージやDockerイメージを入れただけでは、検索対象のデータは読み込まれません。MySQLソースの要件、対象テーブル、ネットワーク許可範囲を設定したあと、初回は `SYNC <table>` を実行して既存データからインデックスを作成してください。ソース側の設定は[MySQLレプリケーション](/ja/docs/replication)を参照してください。
-:::
-
 ## セキュリティ
 
-::: danger rootでは実行しない
-MygramDBはセキュリティのため**root権限での実行を拒否**します。常に専用の非特権ユーザーで実行してください。
+::: danger root では実行しない
+MygramDB はセキュリティのため **root 権限での実行を拒否**します。常に専用の非特権ユーザーで実行してください。
 :::
 
 ## 次のステップ
@@ -180,6 +192,6 @@ MygramDBはセキュリティのため**root権限での実行を拒否**しま�
 
 ## 詳細ドキュメント
 
-- [Dockerデプロイ](/ja/docs/docker-deployment)
+- [Docker デプロイ](/ja/docs/docker-deployment)
 - [運用ガイド](/ja/docs/operations)
-- [v1.11 へのアップグレード](/ja/docs/upgrade-v1.11)
+- [v1.12 へのアップグレード](/ja/docs/upgrade-v1.12)

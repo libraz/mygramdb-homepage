@@ -1,6 +1,6 @@
 ---
 title: MygramDB MySQL Replication - GTID Binlog Streaming Setup
-description: Configure real-time MySQL replication for MygramDB. GTID mode, ROW binlog format, replication user privileges, start modes, supported DML/DDL operations, and troubleshooting.
+description: "Set up MySQL replication for MygramDB: GTID mode, ROW binlog format, replication user privileges, start modes, supported DML/DDL, and troubleshooting."
 head:
   - - meta
     - name: keywords
@@ -23,12 +23,18 @@ MygramDB reads GTID-based binlog events from MySQL and applies row changes to it
 **ROW format** records which rows changed and how. MygramDB updates its index from the post-change row data, so STATEMENT format is not sufficient.
 :::
 
-MygramDB requires:
-- **Supported database matrix**: MySQL 8.4, 9.7, and 26.x, or MariaDB 10.11, 11.4, 11.8, and 12.3
-- **GTID Mode**: Must be enabled for MySQL; MariaDB uses its native GTID format
-- **Binary Log Format**: ROW format required
-- **Row metadata**: `binlog_row_metadata=FULL` is required so each `TABLE_MAP` event includes column names
-- **Privileges**: Replication user needs specific privileges
+The source server must meet these requirements:
+
+| Setting | Required value | Why |
+| --- | --- | --- |
+| Database | MySQL 8.4, 9.7, or 26.x; MariaDB 10.11 or later (11.x and 12.x included) | Supported versions; the test matrix covers MariaDB 10.11, 11.4, 11.8, and 12.3 |
+| Binary logging | `log_bin=ON` | Without it there is no binlog to stream |
+| GTID | MySQL: `gtid_mode=ON`. MariaDB: native GTID, no setting needed | MygramDB tracks its position as a GTID |
+| Binary log format | `binlog_format=ROW` | Row events carry the changed data |
+| Row image | `binlog_row_image=FULL` | `UPDATE` and `DELETE` events must include every column MygramDB uses |
+| Row metadata | `binlog_row_metadata=FULL` | Each `TABLE_MAP` event then includes column names |
+| Checksum | `binlog_checksum=CRC32` | Every event is integrity-checked before it is applied |
+| Privileges | A replication user with the grants described below | See [Create Replication User](#create-replication-user) |
 
 ### Enable GTID Mode
 
@@ -65,13 +71,15 @@ Ensure binary logging is enabled with ROW format:
 ```sql
 -- Check binary log format
 SHOW VARIABLES LIKE 'binlog_format';
+SHOW VARIABLES LIKE 'binlog_row_image';
 SHOW VARIABLES LIKE 'binlog_row_metadata';
 
 -- Set to ROW format (add to my.cnf and restart)
 SET GLOBAL binlog_format = ROW;
+SET GLOBAL binlog_row_image = FULL;
 ```
 
-`binlog_row_metadata` is dynamic. On MySQL, run `SET PERSIST binlog_row_metadata = FULL`; on MariaDB, run `SET GLOBAL binlog_row_metadata = FULL` and add `binlog_row_metadata = FULL` to the server's `[mysqld]` configuration so it survives restart. Add the same setting to `[mysqld]` in the server configuration file alongside `binlog_format` and `binlog_row_image`.
+`binlog_row_metadata` is dynamic, so changing it needs no restart. Use `SET PERSIST` on MySQL and `SET GLOBAL` on MariaDB. Also add `binlog_row_metadata = FULL` to `[mysqld]` in the server configuration file, next to `binlog_format` and `binlog_row_image`; on MariaDB this is what keeps the setting after a restart.
 
 ::: code-group
 
@@ -99,18 +107,22 @@ MygramDB validates the source before building a snapshot and repeats the checks 
 
 | Requirement | Refusal |
 | --- | --- |
+| `log_bin=ON` | `2008` |
 | MySQL `gtid_mode=ON` | `2006` |
 | `binlog_format=ROW`, `binlog_row_image=FULL`, and `binlog_row_metadata=FULL` | `2008` |
 | `binlog_checksum=CRC32`, no binlog transaction/event compression, and no MySQL `PARTIAL_JSON` row values | `2008` |
 | A source that is itself a replica has `log_replica_updates=ON` on MySQL or `log_slave_updates=ON` on MariaDB | `2008` |
 | MariaDB has `binlog_storage_engine` unset | `2008` |
-| MySQL `gtid_executed` contains no tagged GTID (`UUID:tag:txn`) | `2005` |
 
 When checking a MySQL source for replica status, MygramDB runs `SHOW REPLICA STATUS`; the replication account therefore needs `REPLICATION CLIENT`. MariaDB's check uses `gtid_slave_pos` and does not need that extra query privilege.
 
-Each monitored table's `primary_key` must have an independent single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint. A nullable single-column unique key is refused with `2012`; if uniqueness comes only from a composite `PRIMARY KEY` or `UNIQUE` key, the column is refused with `2011`. A column that also appears in a composite key is accepted when it has its own qualifying single-column constraint. A table that is the child of a foreign key with `ON UPDATE` or `ON DELETE CASCADE`, `SET NULL`, or `SET DEFAULT` is refused with `2012`, because InnoDB does not write row events for those child changes. MySQL 9.0 or later with `innodb_native_foreign_keys=OFF` is exempt because the server writes an event for every child row.
+Each monitored table's `primary_key` must have its own single-column `PRIMARY KEY` or `UNIQUE NOT NULL` constraint.
 
-On MariaDB, any column in the table, including an unconfigured column, using old-format `TIME(n)`, `DATETIME(n)`, or `TIMESTAMP(n)` with `n > 0` is refused with `2012`; TABLE_MAP does not carry its width. The same types with `n = 0` are accepted. A configured `year(2)` column is also refused with `2012`. Changes to a configured column's type, nullability, collation, generated kind, or generated expression are treated as schema changes.
+- A nullable single-column unique key is refused with `2012`.
+- If uniqueness comes only from a composite `PRIMARY KEY` or `UNIQUE` key, the column is refused with `2011`. A column that also appears in a composite key is accepted when it has its own qualifying single-column constraint.
+- A table that is the child of a foreign key with `ON UPDATE` or `ON DELETE CASCADE`, `SET NULL`, or `SET DEFAULT` is refused with `2012`, because InnoDB does not write row events for those child changes. MySQL 9.0 or later with `innodb_native_foreign_keys=OFF` is exempt because the server writes an event for every child row.
+
+On MariaDB, a column using old-format `TIME(n)`, `DATETIME(n)`, or `TIMESTAMP(n)` with `n > 0` is refused with `2012`, even if the column is not configured, because TABLE_MAP does not carry its width. The same types with `n = 0` are accepted. A configured `year(2)` column is also refused with `2012`. A change to a configured column's type, nullability, collation, generated kind, or generated expression is treated as a schema change.
 
 Name matching follows the source's `lower_case_table_names`. With `0`, database and table names in both row events and DDL must match configured names byte-for-byte. With any other value, both paths match ASCII case-insensitively.
 
@@ -139,25 +151,31 @@ GRANT SELECT ON database_name.table_name TO 'repl_user'@'%';
 FLUSH PRIVILEGES;
 ```
 
-**Important Notes:**
+| Privilege | Needed for |
+| --- | --- |
+| `REPLICATION SLAVE` | Reading the binlog |
+| `REPLICATION CLIENT` | Retrieving GTID information (required) |
+| `SELECT` | Reading table data during the initial snapshot and `SYNC` (required) |
 
-1. **REPLICATION CLIENT privilege is required**: Necessary for retrieving GTID information
-2. **SELECT privilege is required**: Necessary for reading table data during initial snapshot creation
-3. **No restart required**: `GRANT` statements are applied online and take effect immediately
-4. **Principle of least privilege**: When synchronizing multiple tables, grant SELECT privilege for each table individually
+`GRANT` statements take effect online, so no restart is needed. When you synchronize several tables, grant `SELECT` on each table individually (least privilege).
 
 ### Security Considerations
 
-- `mysql.ssl_enable` defaults to `false`, which disables TLS even if the MySQL server supports it. Set it to `true` to require an encrypted connection. With `mysql.ssl_verify_server_cert: true`, MygramDB also verifies the CA chain and server hostname; this setting requires `mysql.ssl_ca`. When verification is off, TLS encrypts the connection but does not verify the server identity. Without TLS, the MySQL connection and replication traffic are unencrypted.
-- Snapshots created via `DUMP SAVE` include MySQL source metadata such as host, port, and database; user and password are not recorded. Store dump files on protected storage with restrictive permissions (e.g., `chmod 600`) because they contain indexed content and source endpoint details.
+- `mysql.ssl_enable` defaults to `false`, which disables TLS even if the MySQL server supports it. Set it to `true` to require an encrypted connection. Without TLS, the MySQL connection and replication traffic are unencrypted.
+- With `mysql.ssl_verify_server_cert: true`, MygramDB also verifies the CA chain and the server hostname. This setting requires `mysql.ssl_ca`. When verification is off, TLS encrypts the connection but does not verify the server identity.
+- Dump files written by `DUMP SAVE` include MySQL source metadata such as host, port, and database; user and password are not recorded. They also contain indexed content, so store them on protected storage with restrictive permissions (for example `chmod 600`).
 
 ## Manual Snapshot Synchronization
 
 MygramDB supports **manual snapshot synchronization** to control read load on the MySQL source during startup.
 
+At startup, the initial index comes from one of three places: a dump file restored with `dump.load_on_startup`, an automatic initial snapshot with `auto_initial_snapshot`, or a `SYNC` that you run later. A dump that fails validation falls back to an initial snapshot from MySQL even when `auto_initial_snapshot` is false.
+
+<DocDiagram name="startup-initial-index" alt="At startup MygramDB first checks dump.load_on_startup. If set, it restores the dump file, validates it against the source, and replays the binlog from the saved GTID; an invalid dump falls back to an initial snapshot from MySQL, and a restore that cannot catch up keeps serving restored data as not_ready. Otherwise auto_initial_snapshot decides between an automatic initial snapshot and starting empty until SYNC is run. Both snapshot paths then follow the binlog from the snapshot GTID and serve searches once ready." />
+
 ### Configuration
 
-By default, MygramDB **no longer automatically builds snapshots on startup**:
+By default, MygramDB does not build a snapshot on startup:
 
 ```yaml
 replication:
@@ -169,9 +187,7 @@ replication:
 
 ### Manual SYNC Command
 
-Use the `SYNC` command to manually trigger snapshot synchronization:
-
-The production examples below assume `api.admin_token` is configured. If it is empty, `AUTH` is not required; non-loopback deployments should configure a token.
+Run `SYNC` to load a table manually. The example assumes `api.admin_token` is configured. If it is empty, `AUTH` is not required, but non-loopback deployments should configure a token.
 
 ```text
 $ mygram-cli
@@ -198,11 +214,7 @@ replication:
 
 When automatic startup snapshots are enabled, use `start_from: "snapshot"` for both single-table and multi-table deployments.
 
-**Benefits of manual sync:**
-- Prevents unexpected MySQL load during server startup
-- Allows operators to control when synchronization occurs
-- Enables scheduled sync during off-peak hours
-- Provides progress monitoring and cancellation
+Manual sync avoids unexpected MySQL load at startup. You choose when the read happens, for example during off-peak hours, and can monitor progress or cancel it.
 
 ### Multi-table and Multi-database Snapshot Consistency
 
@@ -230,7 +242,6 @@ The diagram below illustrates the MySQL handoff across the transaction boundary:
 **How it works:**
 - Uses `START TRANSACTION WITH CONSISTENT SNAPSHOT` for data consistency
 - MySQL captures a conservative GTID lower bound before opening the snapshot transaction; MariaDB records the snapshot's exact binlog position
-- MySQL avoids missing commits by allowing commits in the short pre-transaction interval to be applied again idempotently
 
 **When to use:**
 - Initial setup (recommended for most cases)
@@ -254,9 +265,13 @@ replication:
 - When you only need real-time changes
 - When historical data is not important
 
-### `gtid=<position>`
+### `gtid=<position>` {#start-from-gtid}
 
-Starts from a validated GTID set or list. MySQL accepts `UUID:txn[-txn]` intervals, comma-separated by source UUID; transaction numbers must be below `2^63−1`. MariaDB accepts comma-separated `domain-server-seq` entries under its own grammar.
+Starts from a validated GTID set or list. MySQL accepts `UUID[:tag]:txn[-txn]` intervals, comma-separated by source UUID; transaction numbers must be below `2^63−1`. MariaDB accepts comma-separated `domain-server-seq` entries under its own grammar.
+
+::: info What is a tagged GTID?
+MySQL 8.4 and later can label a group of transactions with a tag, written `UUID:tag:txn` (for example `3E11FA47-71CA-11E1-9E33-C80AA9429562:batch:1-50`). Tagged and untagged GTIDs from the same source count separately. MygramDB replicates tagged transactions and records them in its replication position like any other GTID.
+:::
 
 ```yaml
 replication:
@@ -267,7 +282,7 @@ replication:
 - Manual recovery from specific point
 - Testing or debugging
 
-A MySQL position written as `UUID:txn` means through `txn`; MygramDB widens it to `UUID:1-txn` so reconnects do not request earlier transactions. A value accepted by neither server's GTID grammar is rejected before it reaches `SET GTID_NEXT`.
+A MySQL position written as `UUID:txn` or `UUID:tag:txn` means through `txn`; MygramDB widens it to `UUID:1-txn` or `UUID:tag:1-txn` so reconnects do not request earlier transactions. A value accepted by neither server's GTID grammar, including one holding only separators such as `gtid=,`, is rejected during config validation.
 
 ## Supported Operations
 
@@ -353,22 +368,15 @@ continues to clear the table's index and document store as described above.
 
 MygramDB can replicate these MySQL column types:
 
-### Integer Types
-- TINYINT, SMALLINT, INT, MEDIUMINT, BIGINT (signed/unsigned)
-
-### String Types
-- VARCHAR, CHAR, TEXT, ENUM, SET
+| Category | Types |
+| --- | --- |
+| Integer | TINYINT, SMALLINT, INT, MEDIUMINT, BIGINT (signed and unsigned) |
+| String | VARCHAR, CHAR, TEXT, ENUM, SET |
+| Date and time | DATE, TIME, DATETIME, TIMESTAMP (with fractional seconds) |
+| Numeric | DECIMAL, DOUBLE |
+| Special | BIT |
 
 Configured primary-key, text-source, and filter columns cannot use `BINARY`, `VARBINARY`, or `BLOB`. Character columns used by the configuration must have an `utf8mb4`, `utf8`/`utf8mb3`, or `ascii` collation.
-
-### Date/Time Types
-- DATE, TIME, DATETIME, TIMESTAMP (with fractional seconds)
-
-### Numeric Types
-- DECIMAL, DOUBLE
-
-### Special Types
-- BIT
 
 `FLOAT` is decoded from the binlog but is refused for configured primary-key,
 text-source, filter, and required-filter columns because the result-set and
@@ -392,19 +400,11 @@ are rejected.
 
 ### TABLE_MAP metadata
 
-MygramDB consumes each column's `TABLE_MAP` metadata before it decides whether
-the table is configured. An unknown or unsizeable type therefore stops the
-reader with `2017` even for an unconfigured table in the streamed binlog; the
-same event remains at the last applied GTID, so reconnecting alone meets it
-again. Missing or malformed optional metadata stops a monitored table with
-`2017`. Optional metadata for an unconfigured table, or for rows covered by
-its `SYNC` snapshot, is not parsed; base `TABLE_MAP` column-type metadata is
-still decoded for every streamed table so row widths can be determined. The
-source must have `binlog_row_metadata=FULL` when it writes monitored table
-events. The metadata decoder consumes each type's byte order and payload
-length, including `DECIMAL`, `CHAR`, `ENUM`, `SET`, `JSON`, and `GEOMETRY`, for
-the supported MySQL 8.4/9.7 and MariaDB 10.11/11.8/12.3 streams.
-Configured-column acceptance still follows the restrictions above.
+MygramDB reads each column's `TABLE_MAP` type metadata before it decides whether the table is configured, so row widths can be determined for every streamed table. An unknown or unsizeable type therefore stops the reader with `2017`, even for an unconfigured table. The event stays at the last applied GTID, so reconnecting alone meets it again.
+
+Optional metadata is handled differently. Missing or malformed optional metadata stops a monitored table with `2017`, so the source must have `binlog_row_metadata=FULL` when it writes monitored table events. Optional metadata for an unconfigured table, or for rows covered by its `SYNC` snapshot, is not parsed.
+
+The metadata decoder consumes each type's byte order and payload length, including `DECIMAL`, `CHAR`, `ENUM`, `SET`, `JSON`, and `GEOMETRY`, for every supported MySQL and MariaDB series. Configured-column acceptance still follows the restrictions above.
 
 An unrecognized event type is skipped only when its header sets the ignorable
 flag (`LOG_EVENT_IGNORABLE_F`). Without that flag, replication stops with
@@ -417,7 +417,7 @@ flag (`LOG_EVENT_IGNORABLE_F`). Without that flag, replication stops with
 - Snapshot and binlog replication are coordinated via a consistent snapshot transaction
 - MySQL uses a conservative GTID lower bound, so commits in the short pre-transaction interval may be replayed idempotently; MariaDB records the snapshot's exact binlog position
 
-### GTID Position and Recovery
+### GTID Position and Recovery {#gtid-position}
 
 - `start_from: snapshot` uses the MySQL lower bound or MariaDB snapshot position; `latest` and an explicit `gtid=...` use the configured starting position
 - `DUMP SAVE` records its GTID in the dump; `DUMP LOAD` or startup restore sets that GTID as the reader's next position. A manual `DUMP LOAD` leaves a reader that was already stopped in the stopped state.
@@ -562,7 +562,16 @@ replication:
 
 ### Recovering from an undecodable binlog event
 
-If replication stops with error code `2017`, the stream encountered an event this build cannot decode, such as missing or malformed TABLE_MAP metadata for a monitored table, a TABLE_MAP column type this build cannot size, an XA prepare event, a MySQL `TRANSACTION_PAYLOAD_EVENT`, a `PARTIAL_UPDATE_ROWS_EVENT`, or a MariaDB event compressed by `log_bin_compress`. Event-level MariaDB compression remains unsupported. Changing the server setting that produced an already-written event does not remove it, so starting again from the old GTID stops at the same place.
+If replication stops with error code `2017`, the stream reached an event this build cannot decode. Typical causes:
+
+- Missing or malformed TABLE_MAP metadata for a monitored table
+- A TABLE_MAP column type this build cannot size
+- A malformed GTID event, for example a transaction number of 0
+- An XA prepare event
+- A MySQL `TRANSACTION_PAYLOAD_EVENT` or `PARTIAL_UPDATE_ROWS_EVENT`
+- A MariaDB event compressed by `log_bin_compress` (event-level MariaDB compression is unsupported)
+
+Changing the server setting that produced an already-written event does not remove it, so starting again from the old GTID stops at the same place.
 
 This is different from a MariaDB `COMPRESSED` `VARCHAR`/`TEXT` column inside an
 ordinary row event. MygramDB inflates that column before indexing; an invalid,

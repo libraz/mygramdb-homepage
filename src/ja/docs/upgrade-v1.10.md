@@ -17,13 +17,13 @@ v1.10.1 と v1.10.2 のパッチリリースでは、レプリケーションの
 
 TCP または HTTP リスナーをループバック以外へ公開する前に `api.admin_token` を設定します。TCP を Unix socket なしで非ループバックアドレスにバインドする場合、または HTTP を有効にして非ループバックアドレスにバインドする場合はトークンが必須です。Unix socket で除外されるのは TCP リスナーだけです。
 
-本番環境では `MYGRAM_API_ADMIN_TOKEN` を優先してください。設定に `api` ブロックがなくても、この環境変数は適用されます。十分な長さの値を生成し、設定ファイルやシェル履歴に残さないように管理します。
+本番環境では `MYGRAM_API_ADMIN_TOKEN` を優先してください。設定に `api` ブロックがなくても、この環境変数は適用されます。十分な長さの値を生成し、設定ファイルやシェル履歴に残さないでください。
 
 ```bash
 openssl rand -hex 32
 ```
 
-TCP クライアントは、管理コマンドより前に同じ接続で `AUTH <token>` を送信します。HTTP の管理リクエストでは `Authorization: Bearer <token>` を使います。TCP はトークンを暗号化しないため、信頼できるネットワークか暗号化した経路で使ってください。リクエストの形式は、[プロトコルリファレンス](/ja/docs/protocol) と [HTTP API ガイド](/ja/docs/http-api) を参照してください。
+TCP クライアントは、管理コマンドより前に同じ接続で `AUTH <token>` を送信します。HTTP の管理リクエストでは `Authorization: Bearer <token>` を使います。TCP はトークンを暗号化しないため、信頼できるネットワークか暗号化した経路で使ってください。リクエストの形式は、[プロトコルリファレンス](/ja/docs/protocol)と [HTTP API ガイド](/ja/docs/http-api)を参照してください。
 
 ### ネットワークと接続先の設定を検証する
 
@@ -41,18 +41,20 @@ TCP クライアントは、管理コマンドより前に同じ接続で `AUTH 
 mygramdb -t /etc/mygramdb/config.yaml
 ```
 
-MygramDB は MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応します。GTID レプリケーションを使い、`binlog_format=ROW` と `binlog_row_image=FULL` を設定してください。
+MygramDB v1.10.2 は MySQL 8.4/9.7 と MariaDB 10.11+/11.x/12.x に対応します。MySQL 26.x には v1.12 から対応しています。GTID レプリケーションを使い、`binlog_format=ROW` と `binlog_row_image=FULL` を設定してください。
 
 ### 起動を拒否する設定を確認する
 
 再起動前に次の設定を更新します。
 
-- `dump.load_on_startup: true` には `replication.start_from: "snapshot"` が必要です。`latest` と `gtid=...` は、ダンプの GTID から設定済みの位置までの binlog 変更を飛ばす可能性があるため拒否されます。
-- `cache.ttl_seconds`、`cache.eviction_batch_size`、`cache.invalidation.batch_size`、`cache.invalidation.max_delay_ms` は `2147483647` 以下にします。
-- 型が `datetime`、`date`、`timestamp` の `required_filters` の値には、末尾の `Z`、数値オフセット、その他の接尾辞を付けません。エポック秒または `mysql.datetime_timezone` で指定したオフセットの ISO 日時を使います。
-- 型が `time` の `required_filters` の値は `-838:59:59` から `838:59:59` の範囲に収めます。
-- `float` はフィルタ型として使えません。`FLOAT` カラムを主キー、テキストソース、フィルタに指定すると、レプリケーション開始時に拒否されます。
-- `OPTIMIZE` はインデックスのメモリ使用量の約 2.1 倍の空きメモリを必要とし、空きが不足すると開始を拒否します。
+| 設定 | 要件 |
+| --- | --- |
+| `dump.load_on_startup: true` | `replication.start_from: "snapshot"` が必要です。`latest` と `gtid=...` は、ダンプの GTID から設定済みの位置までの binlog 変更を飛ばす可能性があるため拒否されます。 |
+| `cache.ttl_seconds`、`cache.eviction_batch_size`、`cache.invalidation.batch_size`、`cache.invalidation.max_delay_ms` | `2147483647` 以下にします。 |
+| 型が `datetime`、`date`、`timestamp` の `required_filters` の値 | 末尾の `Z`、数値オフセット、その他の接尾辞を付けません。エポック秒、または `mysql.datetime_timezone` で指定したオフセットの ISO 日時を使います。 |
+| 型が `time` の `required_filters` の値 | `-838:59:59` から `838:59:59` の範囲に収めます。 |
+| フィルタ型 `float` | 使えません。`FLOAT` カラムを主キー、テキストソース、フィルタに指定すると、レプリケーション開始時に拒否されます。 |
+| `OPTIMIZE` | インデックスのメモリ使用量の約 2.1 倍の空きメモリが必要で、空きが不足すると開始を拒否します。 |
 
 ### 環境変数の上書きを確認する
 
@@ -64,10 +66,12 @@ MygramDB は MySQL 8.4/9.7/26.x と MariaDB 10.11+/11.x/12.x に対応します�
 
 現在の[環境変数テンプレート](https://github.com/libraz/mygram-db/blob/main/.env.example)から `.env` を作り直し、次の値を確認してください。
 
-- `API_ADMIN_TOKEN` は必須で、プレースホルダー値は拒否されます。
-- `MYSQL_PASSWORD` と `MYSQL_ROOT_PASSWORD` にテンプレートのプレースホルダーを残しません。
-- コンテナ内のリスナーは `API_CONTAINER_BIND` と `API_HTTP_CONTAINER_BIND` で設定します。Compose はその用途に `API_BIND` と `API_HTTP_BIND` を使いません。
-- `NETWORK_ALLOW_CIDRS` には、ホスト側のクライアントが使ったアドレスだけでなく、MygramDB から見える Docker ブリッジのアドレスを含めます。
+| 変数 | 要件 |
+| --- | --- |
+| `API_ADMIN_TOKEN` | 必須です。プレースホルダー値は拒否されます。 |
+| `MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD` | テンプレートのプレースホルダーを残してはいけません。 |
+| `API_CONTAINER_BIND`、`API_HTTP_CONTAINER_BIND` | コンテナ内のリスナーを設定します。Compose はこの用途に `API_BIND` と `API_HTTP_BIND` を使いません。 |
+| `NETWORK_ALLOW_CIDRS` | ホスト側のクライアントが使うアドレスだけでなく、MygramDB から見える Docker ブリッジのアドレスも含めます。 |
 
 リモートアクセスが必要な場合だけ、ホスト側のポートをループバック以外に公開してください。現行の一式は [Docker デプロイガイド](/ja/docs/docker-deployment)を参照してください。
 
@@ -93,9 +97,9 @@ TCP と HTTP はクライアントアドレスごとに 1 つのトークンバ�
 
 ### 既存ダンプの互換性
 
-以前の v1.10.0 の案内では、ソース UUID がない古いダンプを使用できないとしていました。この扱いは v1.10.1 で修正されています。v1.5.4 以降で作成したダンプは復元できます。古いライターが v1.5.3 まで出力していた `header_size` のゼロも読み取ります。v1.3.2 以前で作成したダンプは、投稿リストのバイト順を判別できないため引き続き読み取れません。ソース UUID を記録していないダンプはソース不明として扱い、記録された UUID が実行中のソースと異なる場合は拒否します。
+v1.10.0 の案内では、ソース UUID がない古いダンプは使えないとしていましたが、これは誤りで、v1.10.1 で修正されました。v1.5.4 以降で作成したダンプは復元できます。古い書き出し処理が v1.5.3 まで出力していた `header_size` のゼロも読み取ります。v1.3.2 以前で作成したダンプは、ポスティングリストのバイト順を判別できないため、引き続き読み取れません。ソース UUID を記録していないダンプはソース不明として扱います。記録された UUID が実行中のソースと異なる場合は拒否します。
 
-ダンプの互換性検査では、修飾されたテーブル識別子 `<database>.<table>` を使います。複数の DB に同じテーブル名がある場合は、更新後に実際のインデックスを確認してください。古い復元で別のテーブルが選ばれていた場合は `SYNC` で再構築します。
+ダンプの互換性チェックでは、修飾されたテーブル識別子 `<database>.<table>` を使います。複数の DB に同じテーブル名がある場合は、更新後に実際のインデックスを確認してください。古い復元で別のテーブルが選ばれていた場合は `SYNC` で再構築します。
 
 ### 起動時のダンプ読み込み
 
@@ -107,7 +111,7 @@ TCP と HTTP はクライアントアドレスごとに 1 つのトークンバ�
 
 ## レプリケーション復旧
 
-解析できない binlog イベントがあると、エラーコード `2017` でレプリケーションが停止します。このビルドでサイズを判定できない `TABLE_MAP` のカラム型は、未設定テーブルでも停止の原因になります。テーブルを無視する前に行幅をデコードする必要があるためです。同じイベントは最後に適用したGTID位置に残るため、再接続だけでは先へ進めません。監視対象テーブルのオプションメタデータが欠落または不正な場合も `2017` で停止します。復旧前にソースを `binlog_row_metadata=FULL` に設定してください。優先度の高いテーブルから `SYNC` を実行し、その後、他のすべてのレプリケーション対象テーブルにも1つずつ実行してください。詳しくは[SYNCの復旧手順](/ja/docs/sync-command#%E3%82%A8%E3%83%A9%E3%83%BC-2017-%E3%83%86%E3%82%99%E3%82%B3%E3%83%BC%E3%83%88%E3%82%99%E3%81%A6%E3%82%99%E3%81%8D%E3%81%AA%E3%81%84-binlog-%E3%82%A4%E3%83%98%E3%82%99%E3%83%B3%E3%83%88)を参照してください。
+デコードできない binlog イベントがあると、エラーコード `2017` でレプリケーションが停止します。このビルドでサイズを判定できない `TABLE_MAP` のカラム型は、設定にないテーブルでも停止の原因になります。テーブルを無視する前に、行幅をデコードする必要があるためです。同じイベントは最後に適用した GTID 位置に残るため、再接続だけでは先へ進めません。監視対象テーブルのオプションメタデータが欠落または不正な場合も `2017` で停止します。復旧前にソースを `binlog_row_metadata=FULL` に設定してください。優先度の高いテーブルから `SYNC` を実行し、続けて他のすべてのレプリケーション対象テーブルにも 1つずつ実行してください。詳しくは [SYNC の復旧手順](/ja/docs/sync-command#%E3%82%A8%E3%83%A9%E3%83%BC-2017-%E3%83%86%E3%82%99%E3%82%B3%E3%83%BC%E3%83%88%E3%82%99%E3%81%A6%E3%82%99%E3%81%8D%E3%81%AA%E3%81%84-binlog-%E3%82%A4%E3%83%98%E3%82%99%E3%83%B3%E3%83%88)を参照してください。
 
 `ALTER TABLE ... RENAME TO ...` でテーブルを設定済みの名前へ変更すると、名前変更の診断を出してレプリケーションを停止します。スキーマ変更を解決し、通常の書き込みを再開する前に対象テーブルを再構築してください。
 
@@ -123,4 +127,4 @@ TCP と HTTP はクライアントアドレスごとに 1 つのトークンバ�
 8. TCP と HTTP で共有するレートの上限を計算し直す。
 9. 再起動後に ready になるまで待ち、検索と管理操作のスモークテストを実行し、レプリケーション遅延が更新されることを確認する。
 
-[v1.10.1 リリースノート](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.10.1.md) と [v1.10.2 リリースノート](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.10.2.md) に変更の全体を記載しています。
+変更の全体は、[v1.10.1 リリースノート](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.10.1.md)と [v1.10.2 リリースノート](https://github.com/libraz/mygram-db/blob/main/docs/releases/v1.10.2.md)を参照してください。

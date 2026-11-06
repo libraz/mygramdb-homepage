@@ -1,6 +1,6 @@
 ---
 title: libmygramclient - MygramDB C/C++ クライアントライブラリ
-description: libmygramclientはMygramDBに同梱されるインストール可能なC/C++クライアントSDKです。CMakeとpkg-configの統合、C++17とCのAPI、型付きエラー、検索式ヘルパーを提供します。
+description: libmygramclient は MygramDB に同梱されるインストール可能な C/C++クライアント SDK です。CMake と pkg-config の統合、C++17 と C の API、型付きエラー、検索式ヘルパーを提供します。
 head:
   - - meta
     - name: keywords
@@ -11,34 +11,34 @@ head:
 
 ## 概要
 
-libmygramclientは、MygramDBに同梱されるC/C++クライアントSDKです。TCPプロトコルでMygramDBに接続してクエリを実行します。C++17 APIと、ネイティブ統合や言語バインディング向けのC APIを提供します。MygramDBをインストールすると、ヘッダー、ライブラリ、CMakeパッケージ、pkg-configメタデータも一緒に入ります。
+libmygramclient は、MygramDB に同梱される C/C++クライアント SDK です。TCP プロトコルで MygramDB に接続してクエリを実行します。C++17 API と、ネイティブ統合や言語バインディング向けの C API を提供します。MygramDB をインストールすると、ヘッダー、ライブラリ、CMake パッケージ、pkg-config メタデータも一緒に入ります。
 
 ::: info 読み始める前に
-このライブラリはMygramDBのTCPプロトコルを扱う薄いクライアントです。検索の文法や結果の意味はサーバー側と同じなので、クエリの詳細は[クエリ構文ガイド](/ja/docs/query-syntax)も併せて参照してください。
+このライブラリは MygramDB の TCP プロトコルを扱う薄いクライアントです。検索の文法や結果の意味はサーバー側と同じなので、クエリの詳細は[クエリ構文ガイド](/ja/docs/query-syntax)も併せて参照してください。
 :::
 
 ## 機能
 
-- MygramDBの主要なTCPプロトコルコマンドに対応
-- RAIIと型安全性を備えたC++17 API
-- 他の言語との統合が容易なC API
-- 単一接続を明示的に管理する軽量なクライアント設計
-- 静的ライブラリと共有ライブラリの両方をビルド
-- 4バイトUTF-8文字を含むUnicode文字列に対応
-
-::: info 用語補足
-**RAII** はC++の設計パターンで、オブジェクトの生成時に接続やメモリなどのリソースを確保し、破棄時に自動解放する考え方です。例外や早期returnがあっても後片付けを書き忘れにくくなります。
+::: info RAII とは
+**RAII** は C++の設計パターンで、オブジェクトの生成時に接続やメモリなどのリソースを確保し、破棄時に自動解放する考え方です。例外や早期 return があっても後片付けを書き忘れにくくなります。
 :::
+
+- MygramDB のプロトコルコマンド（検索、件数、取得、ファセット、ダンプ、同期、キャッシュ、レプリケーション、ランタイム変数）を呼び出すメソッド
+- RAII と型安全性を備えた C++17 API
+- 他の言語との統合が容易な C API
+- スレッドセーフな接続管理（1つのクライアントに対するコマンドは mutex で直列化されます）
+- 静的ライブラリと共有ライブラリの両方をビルド
+- 4 バイト UTF-8文字を含む Unicode 文字列に対応
 
 ## ビルド
 
-ライブラリはMygramDBと一緒に自動的にビルドされます：
+ライブラリは MygramDB と一緒に自動的にビルドされます。
 
 ```bash
 make
 ```
 
-これにより `libmygramclient.a` と、プラットフォーム向けの共有ライブラリが作成されます。CMakeでは `MygramDB::client_static` と `MygramDB::client_shared` として公開されます。
+これにより `libmygramclient.a` と、プラットフォーム向けの共有ライブラリが作成されます。CMake では `MygramDB::client_static` と `MygramDB::client_shared` として公開されます。
 
 ## インストール
 
@@ -46,7 +46,7 @@ make
 sudo make install
 ```
 
-ヘッダーは `<prefix>/include/mygramdb` に、ライブラリは `<prefix>/lib`（またはプラットフォームのライブラリディレクトリ）にインストールされます。さらに `MygramDBClient` CMakeパッケージと `mygramclient.pc` も入ります。標準外の場所へインストールした場合は、ビルドツールのprefixまたは `PKG_CONFIG_PATH` を設定してください。
+ヘッダーは `<prefix>/include/mygramdb` に、ライブラリは `<prefix>/lib`（またはプラットフォームのライブラリディレクトリ）にインストールされます。さらに `MygramDBClient` CMake パッケージと `mygramclient.pc` も入ります。標準外の場所へインストールした場合は、ビルドツールの prefix または `PKG_CONFIG_PATH` を設定してください。
 
 ::: warning C/C++ クライアントの再ビルド
 共有ライブラリの soname は 2（`VERSION 2.0.0`）です。公開検索式構造体のレイアウトが変わったため、現在のヘッダーで C/C++ プログラムを再ビルドしてリンクし直してください。
@@ -95,7 +95,11 @@ int main() {
 }
 ```
 
-### インストール済みSDKを使う
+### インストール済み SDK を使う
+
+::: tip リンクに失敗する場合
+`libmygramclient` を標準外のプレフィックスにインストールした場合は、コンパイル時に `-I` と `-L` を、実行時に `LD_LIBRARY_PATH`（Linux）または `DYLD_LIBRARY_PATH`（macOS）を指定する必要があることがあります。
+:::
 
 ```cmake
 cmake_minimum_required(VERSION 3.15)
@@ -115,7 +119,7 @@ cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/mygramdb-prefix
 cmake --build build
 ```
 
-共有ライブラリへリンクする場合は `MygramDB::client_shared` を使います。CまたはC++のビルドシステムでpkg-configを使う場合、`mygramclient` がインクルードディレクトリ、ライブラリ、privateなスレッド依存を設定します。
+共有ライブラリへリンクする場合は `MygramDB::client_shared` を使います。C または C++のビルドシステムで pkg-config を使う場合、`mygramclient` がインクルードディレクトリ、ライブラリ、内部向けのスレッド依存（private）を設定します。
 
 ```bash
 cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
@@ -139,19 +143,33 @@ auto result = client.Search(
     0,                    // オフセット
     and_terms,            // AND条件
     not_terms,            // NOT条件
-    filters,              // フィルター
+    filters,              // フィルタ
     "created_at",         // ソート列
     true                  // 降順
 );
 ```
 
-リテラル検索語、`and_terms`、`not_terms`、フィルター値、ハイライトタグには同じワイヤー引用規則が適用されます。空の値、`AND`、`OR`、`NOT`、`ORDER` などの句キーワード、全角・ノーブレークスペースを含む Unicode 空白、引用符、バックスラッシュ、括弧は、1つの値として届くように引用・エスケープされます。`query_mode = QueryMode::kBoolean` や `SearchRaw` に渡す検索文は式としてそのまま送られるため、Web構文から組み立てる場合は `ConvertSearchExpression()` を使ってください。
+リテラル検索語、`and_terms`、`not_terms`、フィルタ値、ハイライトタグには同じワイヤ引用規則が適用されます。空の値、`AND`、`OR`、`NOT`、`ORDER` などの句キーワード、全角・ノーブレークスペースを含む Unicode 空白、引用符、バックスラッシュ、括弧は、1つの値として届くように引用・エスケープされます。`query_mode = QueryMode::kBoolean` や `SearchRaw` に渡す検索文は式としてそのまま送られるため、Web 構文から組み立てる場合は `ConvertSearchExpression()` を使ってください。
 
 テーブル名、カラム名、フィルタキー、`SetVariable` に渡す名前には Unicode 空白を含められません。クライアントは送信前にこうした識別子を拒否します。
 
 ### 型付き検索オプション
 
-比較フィルタ、ファジー検索、ハイライト、ソート、ページネーションが必要な場合は `SearchOptions` を使います。`SearchRaw` はアプリケーションが意図して組み立てたBoolean式だけに使ってください。
+比較フィルタ、あいまい検索、ハイライト、ソート、ページネーションが必要な場合は `SearchOptions` を使います。`SearchRaw` はアプリケーションが意図して組み立てた Boolean 式だけに使ってください。
+
+::: warning 1 接続あたりの並行性
+`MygramClient` は単一 TCP 接続上の同時コマンドを直列化するため、複数スレッドで共有しても動作は正しくなります。ただし 1 インスタンスが同時に実行できるリクエストは 1 件だけです。スループットが必要な場合は、複数のインスタンスを使ってください。
+:::
+
+::: info 接続の考え方
+短いリクエストごとに接続を作り直すより、ワーカーやスレッドごとにクライアントを保持して再利用する方が効率的です。接続断やタイムアウト時は、新しい `MygramClient` を作り直して再接続してください。
+
+`ClientConfig::host` には IPv4/IPv6 リテラル（例: `"::1"`）と、IPv6 だけに解決されるホスト名を指定できます。`Connect()` は、システムの名前解決が返すアドレスを順に試します。
+
+送信中に相手から接続をリセットされた場合、`SendCommand()` は型付きエラーを返し、ソケットを切断します。再試行する前に、新しいクライアントを作成してください。
+
+レスポンスはプロトコルが完了を示すまで蓄積されます。そのため `recv_buffer_size` が小さくても、ハイライト検索、DEBUG 出力、`SHOW VARIABLES` などの複数行レスポンスは途中で切れません。
+:::
 
 ```cpp
 SearchOptions options;
@@ -170,16 +188,6 @@ if (!result) {
 }
 ```
 
-::: warning 1接続あたりの並行性
-`MygramClient` は単一TCP接続上の同時コマンドを直列化するため、正しさの面では安全に共有できます。ただし1インスタンスでは1件ずつ実行します。スループットが必要な場合は複数インスタンスを使ってください。
-:::
-
-::: info 接続の考え方
-短いリクエストごとに接続を作り直すより、ワーカーやスレッドごとにクライアントを保持して再利用する方が効率的です。接続断やタイムアウト時は、新しい `MygramClient` を作り直して再接続してください。
-
-`ClientConfig::host` には IPv4/IPv6 リテラル（例: `"::1"`）と、IPv6だけに解決されるホスト名を指定できます。`Connect()` はシステムの名前解決が返すアドレスを順に試します。送信中に相手から接続をリセットされた場合、`SendCommand()` は型付きエラーを返してソケットを切断します。新しいクライアントを作成してから再試行してください。レスポンスはプロトコルが完了を示すまで蓄積されるため、`recv_buffer_size` が小さくても、ハイライト検索、DEBUG出力、`SHOW VARIABLES` などの複数行レスポンスが途中で切れません。
-:::
-
 ### COUNT クエリ
 
 ```cpp
@@ -191,9 +199,9 @@ if (result) {
 }
 ```
 
-### FACETのページネーション
+### FACET のページネーション
 
-`Facet` は値の1ページを `facets` に返します。各 facet の `count` はその値を持つドキュメント数、`total_count` は `offset` と `limit` の適用前にある異なる値の総数です。`facets.size()` で返されたページの件数を取り、`total_count` でページネーションを計算できます。
+`Facet` は値の 1 ページを `facets` に返します。各 facet の `count` はその値を持つドキュメント数、`total_count` は `offset` と `limit` の適用前にある異なる値の総数です。`facets.size()` で返されたページの件数を取り、`total_count` でページネーションを計算できます。
 
 ```cpp
 auto response = client.Facet("app_db.articles", "category", "technology", 10,
@@ -231,7 +239,9 @@ if (result) {
 
 ### 管理操作の認証
 
-管理操作の認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。C++ の `ClientConfig` に管理トークンのフィールドはありません。その場合は同じ `MygramClient` で `AUTH` を送り、正確に `OK AUTHENTICATED` が返ったことを確認してから `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` を呼び出してください。rawコマンドの送信成功は、レスポンスを受信したことだけを意味します。手動で送った `AUTH` は現在の接続にだけ適用されるため、再接続後にもう一度認証してください。検索、count、get、facet 操作には認証は不要です。
+管理操作に認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。C++ の `ClientConfig` に管理トークンのフィールドはないため、同じ `MygramClient` で `AUTH` を送って認証します。レスポンスが `OK AUTHENTICATED` と完全に一致することを確認してから、`GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション系のコマンド、`EnableDebug`/`DisableDebug` を呼び出してください。
+
+raw コマンドの送信に成功しても、レスポンスを受信したことしか意味せず、認証に成功したとは限りません。手動で送った `AUTH` は現在の接続にだけ有効なので、再接続後にもう一度認証してください。検索、count、get、facet には認証は不要です。
 
 ```cpp
 #include <cstdlib>
@@ -277,15 +287,15 @@ client.DisableDebug();
 
 ### 検索式パーサー
 
-ライブラリには、Googleライクな検索構文をMygramDBクエリ形式に変換する、Web検索スタイルの検索式パーサーが含まれています。
+ライブラリには、Google ライクな検索構文を MygramDB クエリ形式に変換する、Web 検索スタイルの検索式パーサーが含まれています。
 
 #### 構文
 
-- `term1 term2` - スペース区切りで暗黙的AND（両方とも必ず含まれる）
+- `term1 term2` - スペース区切りで暗黙的 AND（両方とも必ず含まれる）
 - `"phrase"` - ダブルクォートでフレーズ検索（スペースを含む語句）
 - `+term` - 明示的な必須語句（プレフィックスなしと同じ）
 - `-term` - 除外語句（結果に含まれない）
-- `term1 OR term2` - 語句間の論理OR
+- `term1 OR term2` - 語句間の論理 OR
 - `(expr)` - 括弧によるグループ化
 - 全角スペース（`　`）も区切りとしてサポート（日本語テキストに便利）
 
@@ -330,23 +340,23 @@ if (result) {
 
 | 入力 | 出力クエリ | 説明 |
 |-------|-------------|-------------|
-| `golang tutorial` | `golang AND tutorial` | 暗黙的AND - 両方の語句が必須 |
+| `golang tutorial` | `golang AND tutorial` | 暗黙的 AND - 両方の語句が必須 |
 | `"機械学習"` | `"機械学習"` | フレーズ検索 |
 | `golang -old` | `golang AND NOT old` | 「golang」を含み、「old」を含まない |
 | `python OR ruby` | `(python OR ruby)` | 「python」または「ruby」のいずれか |
 | `order` | `"order"` | リテラル語。予約された句キーワードは引用されます |
 | `go or rust` | `(go OR rust)` | 単独の `OR` は大文字小文字を区別せず認識されます |
-| `owner's draft` | `"owner's draft"` | アポストロフィを含む値は1つの引用されたワイヤートークンになります |
+| `owner's draft` | `"owner's" AND draft` | アポストロフィを含む語は、引用符で囲まれた 1つのトークンとして送られます |
 | `"深層学習" チュートリアル` | `"深層学習" AND チュートリアル` | フレーズと語句 |
 | `golang +(tutorial OR guide)` | `golang AND (tutorial OR guide)` | 「golang」AND（「tutorial」OR「guide」） |
-| `(tutorial -video)` | `(tutorial NOT video)` | グループ内のマイナスは `NOT` になります |
+| `(tutorial -video)` | `((tutorial NOT video))` | グループ内のマイナスは `NOT` になり、グループは括弧で二重に囲まれます |
 | `AI machine -learning` | `AI AND machine AND NOT learning` | 「AI」と「machine」を含み、「learning」を除外 |
-| `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | 全角スペース区切り。SDKから出力する値は必要に応じて引用されます |
-| `😀 tutorial -😢` | `😀 AND tutorial AND NOT 😢` | 絵文字検索（4バイトUTF-8） |
+| `機械学習　チュートリアル` | `機械学習 AND チュートリアル` | 全角スペース区切り。SDK から出力する値は必要に応じて引用されます |
+| `😀 tutorial -😢` | `😀 AND tutorial AND NOT 😢` | 絵文字検索（4 バイト UTF-8） |
 
-#### 簡易API（後方互換性）
+#### 簡易 API（後方互換性）
 
-OR/グループ化を使わない単純なユースケース向け：
+OR やグループ化を使わない単純な用途向けです。
 
 ```cpp
 auto simplified = SimplifySearchExpression("+golang +tutorial -old");
@@ -357,7 +367,7 @@ if (simplified) {
 }
 ```
 
-`SimplifySearchExpression()` は `OR` または括弧によるグループ化を含む式に対して、型付きの `kClientExpressionParseError` エラーを返します。構造化フィールドではこれらの形式を表現できないためです。単純な語句と引用フレーズはプレーンな値として保持され、構造化検索メソッドがコマンド作成時に1回だけ引用します。フレーズ、ORグループ、グループ化を意味どおりに扱う場合は、`ConvertSearchExpression()` の結果を `SearchRaw()` に渡してください。
+`SimplifySearchExpression()` は `OR` または括弧によるグループ化を含む式に対して、型付きの `kClientExpressionParseError` エラーを返します。構造化フィールドではこれらの形式を表現できないためです。単純な語句と引用フレーズはプレーンな値として保持され、構造化検索メソッドがコマンド作成時に 1回だけ引用します。フレーズ、OR グループ、グループ化を意味どおりに扱う場合は、`ConvertSearchExpression()` の結果を `SearchRaw()` に渡してください。
 
 ## C API
 
@@ -419,7 +429,7 @@ int main() {
 }
 ```
 
-### Cプログラムのコンパイル
+### C プログラムのコンパイル
 
 ```bash
 cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
@@ -427,9 +437,11 @@ cc -std=c11 myapp.c $(pkg-config --cflags --libs mygramclient) -o myapp
 
 ### 管理操作の認証
 
-管理操作の認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。`MygramClientConfig_C` と `MygramClientConfigV2_C` に管理トークンのフィールドはありません。その場合は管理操作の前に、接続済みの同じ `MygramClient_C` で `mygramclient_send_command` を使って `AUTH` を送り、正確に `OK AUTHENTICATED` が返ったことを確認してください。`0` の戻り値はrawレスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は戻り値が0以外の場合にだけ使用してください。手動で送った `AUTH` は現在の接続にだけ適用されるため、再接続後にもう一度認証してください。これは `GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション、`EnableDebug`/`DisableDebug` に対応するC APIに適用され、検索、count、get、facet 操作には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
+管理操作に認証が必要なのは、サーバーの `api.admin_token` が空でない場合だけです。`MygramClientConfig_C` と `MygramClientConfigV2_C` に管理トークンのフィールドはないため、管理系の関数を呼ぶ前に、接続済みの同じ `MygramClient_C` で `mygramclient_send_command` を使って `AUTH` を送ります。レスポンスが `OK AUTHENTICATED` と完全に一致することを確認してください。
 
-C APIのリテラル検索語、AND/NOT条件、フィルター値、ハイライトタグにも同じ引用規則が適用されます。接続リセット後の送信失敗は0以外のステータスを返すため、`mygramclient_get_last_error` を確認して再接続してから再試行してください。
+戻り値 `0` は raw レスポンスを受信したことだけを意味し、最後のエラーもクリアします。`mygramclient_get_last_error` は、戻り値が 0 以外のときにだけ呼び出してください。手動で送った `AUTH` は現在の接続にだけ有効なので、再接続後にもう一度送ります。認証が必要なのは、`GetConfig`/`CONFIG`、`SetVariable`、`ShowVariables`、`Cache*`、`Optimize`、`Sync*`、`Dump*`、`Save`、`Load`、レプリケーション系のコマンド、`EnableDebug`/`DisableDebug` に対応する C API です。検索、count、get、facet には不要です。レスポンスは `mygramclient_free_string` で解放し、トークンやコマンドをログに出力しないでください。
+
+C API のリテラル検索語、AND/NOT 条件、フィルタ値、ハイライトタグにも同じ引用規則が適用されます。接続リセット後の送信失敗は 0 以外のステータスを返すため、`mygramclient_get_last_error` を確認して再接続してから再試行してください。
 
 ```c
 #include <stdio.h>
@@ -463,13 +475,21 @@ if (!authenticated) {
 
 ### 高度な検索（C API）
 
-新しいコードでは `MygramSearchOptions_C` と `mygramclient_search_with_options` を使ってください。構造体はゼロ初期化し、`struct_size` を設定します。型付きフィルタは `=`、`!=`、`>`、`>=`、`<`、`<=`、`fuzzy_distance` は `1` または `2` を使えます。Boolean式をリテラル検索ではなくそのまま送るには、`query_mode` を `MYGRAM_QUERY_BOOLEAN` にします。
+新しいコードでは `MygramSearchOptions_C` と `mygramclient_search_with_options` を使ってください。構造体はゼロ初期化し、`struct_size` を設定します。型付きフィルタは `=`、`!=`、`>`、`>=`、`<`、`<=`、`fuzzy_distance` は `1` または `2` を使えます。Boolean 式をリテラル検索ではなくそのまま送るには、`query_mode` を `MYGRAM_QUERY_BOOLEAN` にします。
 
-`MygramSearchOptions_C` の `sort_desc` は、0以上なら降順、負数なら昇順です。そのため、型付き構造体をゼロ初期化すると既定の降順になります。旧 `mygramclient_search_advanced()` 関数の `sort_desc` 引数は別の規則で、0が昇順、0以外が降順です。
+`MygramSearchOptions_C` の `sort_desc` は、0 以上なら降順、負数なら昇順です。そのため、型付き構造体をゼロ初期化するとデフォルトの降順になります。旧 `mygramclient_search_advanced()` 関数の `sort_desc` 引数は別の規則で、`0` が昇順、`0` 以外が降順です。
 
-新しいCプログラムでは `MygramClientConfigV2_C` を使います。`timeout_ms` は通常操作の期限です。`connect_timeout_ms` は接続の期限で、0なら `timeout_ms` を使います。`max_response_bytes` はレスポンスフレームの上限で、0なら64 MiBが既定です。`dump_*_timeout_ms` と `optimize_timeout_ms` は操作別の期限で、0または古い構造体にない場合はクライアントの既定値を使います。`unix_socket_path` を設定するとUnixソケットを使い、TCPのhost/portより優先されます。
+新しい C プログラムでは `MygramClientConfigV2_C` を使います。タイムアウトと上限に関するフィールドは次のとおりです。
 
-`MygramClientConfigV2_C` と `MygramSearchOptions_C` は同じ共有ライブラリ ABI メジャー内で末尾追加できるサイズ認識構造体です。呼び出し側が把握しているサイズを `struct_size` に設定してください。ライブラリは後ろのフィールドを無視し、既定値を使います。V2設定では `version` に `MYGRAMCLIENT_CONFIG_V2_VERSION` も設定します。従来の `MygramClientConfig_C` と `mygramclient_create()` は旧APIとして引き続き利用できます。
+| フィールド | 動作 |
+|-------|----------|
+| `timeout_ms` | 通常操作の期限 |
+| `connect_timeout_ms` | 接続の期限。`0` なら `timeout_ms` を使う |
+| `max_response_bytes` | レスポンスフレーム 1 つの上限。`0` なら 64 MiB |
+| `dump_*_timeout_ms`、`optimize_timeout_ms` | 操作別の期限。`0` または古い構造体にない場合は、クライアントのデフォルトを使う |
+| `unix_socket_path` | 設定すると Unix ソケットで接続する。TCP の host/port より優先される |
+
+`MygramClientConfigV2_C` と `MygramSearchOptions_C` は、同じ共有ライブラリ ABI メジャーの範囲で末尾にフィールドを追加できる、サイズ認識の構造体です。呼び出し側が把握しているサイズを `struct_size` に設定してください。ライブラリは後ろのフィールドを無視し、デフォルト値を使います。V2 設定では `version` にも `MYGRAMCLIENT_CONFIG_V2_VERSION` を設定します。従来の `MygramClientConfig_C` と `mygramclient_create()` も引き続き使えます。
 
 ```c
 MygramFilter_C filters[] = {
@@ -490,11 +510,11 @@ if (mygramclient_search_with_options(client, "app_db.articles",
 }
 ```
 
-FACETのページには `mygramclient_facet_paged(client, table, column, query, limit, offset, &result)` を使います。`result->total_count` はページネーション前の異なる値の総数です。結果は `mygramclient_free_facet_result` で解放してください。
+FACET のページには `mygramclient_facet_paged(client, table, column, query, limit, offset, &result)` を使います。`result->total_count` はページネーション前の異なる値の総数です。結果は `mygramclient_free_facet_result` で解放してください。
 
-### Cの解析済み検索式のフィールド
+### C の解析済み検索式のフィールド
 
-`MygramParsedExpression_C` は `main_term`、`and_count` 個の `and_terms`、`not_count` 個の `not_terms` を持ちます。削除された `optional_terms` と `optional_count` のフィールドはありません。OR やグループ化を含む式には変換 API を使ってください。
+`MygramParsedExpression_C` は `main_term`、`and_terms`（個数は `and_count`）、`not_terms`（個数は `not_count`）を持ちます。optional 系のフィールドはありません。OR やグループ化を含む式には変換 API を使ってください。
 
 ```c
 typedef struct {
@@ -506,9 +526,9 @@ typedef struct {
 } MygramParsedExpression_C;
 ```
 
-### Cの検索式診断
+### C の検索式診断
 
-Cのパーサーと変換関数には、利用者へエラーを表示したい場合の `_ex` 版があります。出力ポインターは最初に `NULL` へ初期化されます。失敗時は可能な場合に `diagnostic` へ確保済みのメッセージが入ります。返された文字列はすべて `mygramclient_free_string` で解放してください。
+C のパーサーと変換関数には、利用者へエラーを表示したい場合の `_ex` 版があります。出力ポインターは最初に `NULL` へ初期化されます。失敗時は可能な場合に `diagnostic` へ確保済みのメッセージが入ります。返された文字列はすべて `mygramclient_free_string` で解放してください。
 
 ```c
 MygramParsedExpression_C* parsed = NULL;
@@ -529,9 +549,9 @@ mygramclient_free_string(raw_query);
 mygramclient_free_string(diagnostic);
 ```
 
-## Node.jsバインディングの例
+## Node.js バインディングの例
 
-node-gypでC APIを使用：
+node-gyp から C API を使う例です。
 
 ```javascript
 // binding.gyp
@@ -611,53 +631,55 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 NODE_API_MODULE(mygramdb, Init)
 ```
 
-## APIリファレンス
+## API リファレンス
 
-### C++ APIクラス
+### C++ API クラス
 
 #### ClientConfig
 
-- `host` - サーバーホスト名（デフォルト: "127.0.0.1"）
-- `port` - サーバーポート（デフォルト: 11016）
-- `timeout_ms` - 通常操作のタイムアウト（デフォルト: 5000）
-- `connect_timeout_ms` - 接続タイムアウト。`0`なら `timeout_ms` を使用
-- `recv_buffer_size` - 受信バッファサイズ（デフォルト: 65536）
-- `max_response_bytes` - 最大レスポンスフレーム。`0`なら64 MiBを使用
-- `unix_socket_path` - Unixソケットのパス。設定時はTCPより優先
-- `dump_save_timeout_ms`、`dump_load_timeout_ms`、`dump_verify_timeout_ms`、`optimize_timeout_ms` - 操作別の期限。`0`なら `timeout_ms` を使用
+| フィールド | デフォルト | 説明 |
+|-------|---------|-------------|
+| `host` | `"127.0.0.1"` | サーバーホスト名 |
+| `port` | `11016` | サーバーポート |
+| `timeout_ms` | `5000` | 通常操作のタイムアウト |
+| `connect_timeout_ms` | — | 接続タイムアウト。`0` なら `timeout_ms` を使用 |
+| `recv_buffer_size` | `65536` | 受信バッファサイズ |
+| `max_response_bytes` | — | 最大レスポンスフレーム。`0` なら 64 MiB を使用 |
+| `unix_socket_path` | — | Unix ソケットのパス。設定時は TCP より優先 |
+| `dump_save_timeout_ms`、`dump_load_timeout_ms`、`dump_verify_timeout_ms`、`optimize_timeout_ms` | — | 操作別の期限。`0` なら `timeout_ms` を使用 |
 
 #### SearchResponse
 
-- `results` - 現在の `LIMIT`/`OFFSET` ページに含まれるSearchResultのベクター
-- `total_count` - ページング前のマッチしたドキュメント総数。サーバーはページと同じ1回のインデックス読み取りから求めます
+- `results` - 現在の `LIMIT`/`OFFSET` ページに含まれる SearchResult のベクター
+- `total_count` - ページング前のマッチしたドキュメント総数。サーバーはページと同じ 1回のインデックス読み取りから求めます
 - `debug` - オプションのデバッグ情報
 
 #### Error
 
-- `code()` - 型付きの `mygram::utils::ErrorCode`。クライアントエラーは7000番台
+- `code()` - 型付きの `mygram::utils::ErrorCode`。クライアントエラーは 7000番台
 - `message()` と `context()` - エラーテキストと任意のコンテキスト
 - `to_string()` - 数値コードを含む整形済みエラーテキスト
 
 サーバーが `ERROR <code> ...` を返した場合、数値コードを解析できれば型付きエラーに保持します。数値トークンがない応答は `kClientServerError` として扱います。
 
-### C API関数
+### C API 関数
 
 関数一覧と引数の詳細は `mygramclient_c.h` を参照してください。
 
-主な関数：
+主な関数は次のとおりです。
 
-- `mygramclient_create_v2()` - size/version付き設定でクライアントを作成
+- `mygramclient_create_v2()` - size/version 付き設定でクライアントを作成
 - `mygramclient_connect()` - サーバーに接続
 - `mygramclient_search()` - シンプル検索
-- `mygramclient_search_advanced()` - フィルター付き高度な検索
-- `mygramclient_search_with_options()` - 型付きフィルタ、ファジー、ハイライト、ソート、ページネーション検索
+- `mygramclient_search_advanced()` - フィルタ付き高度な検索
+- `mygramclient_search_with_options()` - 型付きフィルタ、あいまい検索、ハイライト、ソート、ページネーション検索
 - `mygramclient_count()` - マッチ数カウント
 - `mygramclient_get()` - キーでドキュメント取得
 - `mygramclient_free_*()` - 結果構造体の解放
 
 ## スレッド安全性
 
-`MygramClient` の接続操作とコマンドは同じmutexで直列化されます。`Disconnect()` は実行中のコマンドが終わるまで待ち、コマンドをキャンセルしません。メンバー関数の実行中にオブジェクトを破棄またはムーブしてはいけません。C API も接続操作とコマンドを直列化しますが、`mygramclient_destroy()` を同じハンドルへの別の呼び出しと並行させてはいけません。
+`MygramClient` の接続操作とコマンドは同じ mutex で直列化されます。`Disconnect()` は実行中のコマンドが終わるまで待ち、コマンドをキャンセルしません。メンバー関数の実行中にオブジェクトを破棄またはムーブしてはいけません。C API も接続操作とコマンドを直列化しますが、`mygramclient_destroy()` を同じハンドルへの別の呼び出しと並行させてはいけません。
 
 ## エラー処理
 
@@ -681,14 +703,14 @@ if (!result) {
 
 ### C API
 
-関数は成功時に `0`、エラー時に `-1` を返します。メッセージは `mygramclient_get_last_error()`、数値のMygramDBエラーコードは `mygramclient_get_last_error_code()` で取得します。成功した操作は最後のエラー状態をクリアします。
+関数は成功時に `0`、エラー時に `-1` を返します。メッセージは `mygramclient_get_last_error()`、数値の MygramDB エラーコードは `mygramclient_get_last_error_code()` で取得します。成功した操作は最後のエラー状態をクリアします。
 
 ## ライセンス
 
-MITライセンス（[LICENSE](https://github.com/libraz/mygram-db/blob/main/LICENSE)ファイル参照）
+MIT ライセンス（[LICENSE](https://github.com/libraz/mygram-db/blob/main/LICENSE) ファイル参照）
 
 ## 関連項目
 
-- [プロトコルリファレンス](/ja/docs/protocol) - TCPコマンドリファレンス
+- [プロトコルリファレンス](/ja/docs/protocol) - TCP コマンドリファレンス
 - [クエリ構文ガイド](/ja/docs/query-syntax) - 検索クエリ文法
-- [HTTP APIガイド](/ja/docs/http-api) - RESTful JSON API
+- [HTTP API ガイド](/ja/docs/http-api) - RESTful JSON API

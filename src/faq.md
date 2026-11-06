@@ -10,7 +10,7 @@ import { VERIFY_ALL_PER_MILLION_GB, PLANNING_10M_ALL_GB } from './data/memory'
 # Frequently Asked Questions
 
 ::: info Unfamiliar with a term?
-GTID, binlog, N-gram, BM25, and Roaring Bitmap are all defined in the [Glossary](/docs/glossary). Keep it open alongside this page on a first read.
+GTID, binlog, n-gram, BM25, and Roaring bitmap are all defined in the [Glossary](/docs/glossary). Keep it open alongside this page on a first read.
 :::
 
 ## MySQL FULLTEXT Problems
@@ -59,7 +59,7 @@ MygramDB is an in-memory engine. If the dataset outgrows available RAM, the OS o
 
 ### Does MygramDB handle multibyte / non-ASCII text?
 
-Yes. MygramDB is fully Unicode-aware: text goes through ICU-based NFKC normalization and is then tokenized by a language-agnostic N-gram tokenizer. 3-byte UTF-8 (most ideographic scripts, e.g. Chinese, Japanese, Korean) and 4-byte UTF-8 (emoji, supplementary planes) are handled out of the box with no language-specific plugins, dictionaries, or morphological analyzers to configure.
+Yes. MygramDB is fully Unicode-aware: text goes through ICU-based NFKC normalization and is then tokenized by a language-agnostic n-gram tokenizer. 3-byte UTF-8 (most ideographic scripts, e.g. Chinese, Japanese, Korean) and 4-byte UTF-8 (emoji, supplementary planes) are handled out of the box with no language-specific plugins, dictionaries, or morphological analyzers to configure.
 
 ### Does MygramDB support fuzzy search or typo tolerance?
 
@@ -107,14 +107,16 @@ MygramDB uses bigrams (size 2) by default for ASCII/alphanumeric text and CJK id
 
 Posting lists use delta encoding or Roaring bitmaps. `OPTIMIZE` chooses a representation based on density, and inserts can trigger a conversion based on list size:
 
-- **Sparse postings** (typically below 18% density after `OPTIMIZE`): Delta-encoded arrays. DocIDs are stored as fixed-width deltas from the previous value.
-- **Dense postings** (typically at least 18% after `OPTIMIZE`, or over 4,096 entries after inserts): Roaring bitmaps via CRoaring. Roaring automatically selects a container type (array, bitmap, or run-length) per 65,536-ID chunk.
+| Postings | Condition | Representation |
+| --- | --- | --- |
+| Sparse | Typically below 18% density after `OPTIMIZE` | Delta-encoded arrays. DocIDs are stored as fixed-width deltas from the previous value. |
+| Dense | Typically at least 18% density after `OPTIMIZE`, or over 4,096 entries after inserts | Roaring bitmaps via CRoaring, which selects a container type (array, bitmap, or run-length) per 65,536-ID chunk. |
 
 The density threshold is configurable (`roaring_threshold`, 18% by default), with a 0.5x hysteresis factor for `OPTIMIZE`. Inserts convert a delta list to Roaring when it grows beyond 4,096 entries, regardless of density. A Roaring list converts back only when it has at most 4,096 entries and its density is below half the threshold (9% by default).
 
 ### What does "SIMD-accelerated" mean in practice?
 
-MygramDB links against [CRoaring](https://github.com/RoaringBitmap/CRoaring), which uses SIMD instructions internally for bitmap operations (AND, OR, cardinality). On x86-64, CRoaring uses AVX2 when available; on ARM, it uses NEON. MygramDB does not contain custom SIMD code — the acceleration comes from the bitmap library.
+MygramDB links against [CRoaring](https://github.com/RoaringBitmap/CRoaring), which uses SIMD instructions internally for bitmap operations (AND, OR, cardinality). On x86-64, CRoaring uses AVX2 when available; on ARM, it uses NEON. MygramDB does not contain custom SIMD code. The acceleration comes from the bitmap library.
 
 ### How are posting lists encoded?
 
@@ -127,13 +129,13 @@ There is no fixed compression ratio across datasets. Measure index memory with y
 
 ## Replication and Data Sync
 
-### Is the MySQL binlog parser self-implemented?
+### Who decodes the binlog?
 
-Yes. MygramDB includes a custom C++ binlog parser that uses the MySQL C API (`mysql_binlog_open()`) directly. It parses ROW-format events (WRITE_ROWS, UPDATE_ROWS, DELETE_ROWS) and DDL events (TRUNCATE, ALTER TABLE). The parser is separate from [mysql-event-stream](https://github.com/libraz/mysql-event-stream), which was extracted later as a standalone CDC library with Node.js and Python bindings.
+MygramDB receives the raw binlog stream through the MySQL C API (`mysql_binlog_open()`) and decodes it with [libmybinlog](https://github.com/libraz/libmybinlog), a separate C++17 library that carries the MySQL and MariaDB wire-format rules: framing, checksums, `TABLE_MAP`, GTIDs, `QUERY` events, and row events. MygramDB applies the decoded row events to its index and handles the DDL it cares about, such as `TRUNCATE` and `ALTER TABLE`. [mysql-event-stream](https://github.com/libraz/mysql-event-stream), a standalone CDC library with Node.js and Python bindings, decodes through libmybinlog as well. See [Binlog Decoding](/docs/binlog-decoding) for the full path.
 
 ### How fast is replication? INSERT to searchable?
 
-Lag depends on source transactions, network conditions, event queueing, and index updates. Monitor `mygramdb_replication_last_applied_unixtime` and `mygramdb_replication_seconds_since_last_applied` at [`/metrics`](/docs/http-api#get-metrics), alongside MySQL write activity. When `api.admin_token` is configured, Prometheus must send a valid Bearer token to receive these metrics. An idle source can have an old last-applied time without being behind.
+Replication lag depends on source transactions, network conditions, event queueing, and index updates. Monitor `mygramdb_replication_last_applied_unixtime` and `mygramdb_replication_seconds_since_last_applied` at [`/metrics`](/docs/http-api#get-metrics), alongside MySQL write activity. When `api.admin_token` is configured, Prometheus must send a valid Bearer token to receive these metrics. An idle source can have an old last-applied time without being behind.
 
 ### What happens during MySQL failover?
 
@@ -151,7 +153,7 @@ MygramDB validates relevant DDL events from the binlog, including `CREATE INDEX`
 
 ### How are deletes handled in the index?
 
-Immediate removal. When a DELETE event arrives via binlog, the document's N-grams are removed from posting lists and the document is removed from the document store. No tombstones, no lazy deletion. Cache entries referencing the deleted document are invalidated.
+Immediate removal. When a DELETE event arrives via binlog, the document's n-grams are removed from posting lists and the document is removed from the document store. No tombstones, no lazy deletion. Cache entries referencing the deleted document are invalidated.
 
 ## Crash Recovery and Persistence
 
@@ -166,9 +168,12 @@ If that startup dump is missing or invalid, MygramDB falls back to a MySQL initi
 
 If the dump restores but MygramDB cannot catch up to the current MySQL position, it keeps serving the restored index with replication stopped and reports `not_ready`. Check the replication error and source GTID/binlog availability, then follow [Snapshot and Dump Recovery](/docs/snapshot) to recover or rebuild the index.
 
-Dump configuration:
-- `dump.interval_sec`: Auto-save interval (0 = disabled, recommended: 7200 for production)
-- `dump.retain`: Number of dumps to keep (default: 3)
+Dump settings:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `dump.interval_sec` | `0` (disabled) | Auto-save interval in seconds. 7200 is recommended for production. |
+| `dump.retain` | `3` | Number of dumps to keep. |
 
 ### What happens when memory reaches the hard limit?
 
@@ -181,34 +186,38 @@ MygramDB monitors memory usage via health check endpoints but does not enforce t
 A custom text-based protocol over TCP (default port 11016), similar to Memcached. A separate REST/JSON HTTP API is also available on its own port (default 8080, disabled by default).
 
 TCP example:
+
 ```mygram
 SEARCH articles golang SORT created_at DESC LIMIT 10\r\n
 ```
 
 HTTP example:
+
 ```bash
 curl -X POST http://localhost:8080/tables/articles/search \
   -H "Content-Type: application/json" \
   -d '{"q": "golang", "sort": {"column": "created_at", "order": "DESC"}, "limit": 10}'
 ```
 
-In multi-database deployments, qualify the route as `/tables/app_db.articles/search`. It is not SQL. The protocol is intentionally minimal — search, count, facet, get by ID, and admin commands.
+In multi-database deployments, qualify the route as `/tables/app_db.articles/search`. It is not SQL. The protocol is intentionally minimal: search, count, facet, get by ID, and admin commands.
 
 ### Is there TLS or authentication?
 
 MygramDB has no native TLS; terminate TLS at a reverse proxy or load balancer when needed. The MySQL replication connection supports SSL/TLS for secure binlog transfer.
 
-Administrative TCP commands require `AUTH <token>` on each connection when `api.admin_token` is set. HTTP `GET /config`, `GET /replication/status`, and `POST /optimize` require `Authorization: Bearer <token>` on each request. Search endpoints are controlled by the listener bind address and `NETWORK_ALLOW_CIDRS`; keep the service on a private network or behind a reverse proxy or firewall.
+Administrative TCP commands require `AUTH <token>` on each connection when `api.admin_token` is set. HTTP `GET /config`, `GET /replication/status`, and `POST /optimize` require `Authorization: Bearer <token>` on each request. Without authentication, TCP `INFO` omits its `# Replication` section and `/metrics` omits the `mygramdb_replication_` metrics. Search endpoints are controlled by the listener bind address and `NETWORK_ALLOW_CIDRS`; keep the service on a private network or behind a reverse proxy or firewall.
 
 ## Deployment and Monitoring
 
 ### Can MygramDB run on Kubernetes?
 
-MygramDB exposes health checks and metrics that can be used by a Kubernetes deployment. You still need to configure storage for dumps, memory limits, probes, and network access to MySQL for your cluster:
+MygramDB exposes health checks and metrics that can be used by a Kubernetes deployment. You still need to configure storage for dumps, memory limits, probes, and network access to MySQL for your cluster.
 
-- `GET /health/live` — Liveness probe (200 if process is running)
-- `GET /health/ready` — Readiness probe (503 during dump load, table sync, replication unavailability, or a failed startup catch-up after dump restore; 200 when ready)
-- `GET /health/detail` — Detailed status with uptime, index stats, and memory; replication details require a bearer token when `api.admin_token` is set
+| Endpoint | Use | Response |
+| --- | --- | --- |
+| `GET /health/live` | Liveness probe | 200 if the process is running. |
+| `GET /health/ready` | Readiness probe | 503 during dump load, table sync, replication unavailability, or a failed startup catch-up after dump restore. 200 when ready. |
+| `GET /health/detail` | Detailed status | Uptime, index stats, and memory. Replication details require a bearer token when `api.admin_token` is set. |
 
 Prometheus metrics are available at `GET /metrics`. The Docker image runs as a non-root user (UID 1000).
 

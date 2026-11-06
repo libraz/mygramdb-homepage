@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 960 396" role="img">
+  <title>Binlog decode path</title>
+  <defs>
+    <marker id="bd-a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="bd-b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="bd-w" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="warnt" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <style>
+      .dg text{font-family:'IBM Plex Sans','Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:10.5px;fill:var(--dg-ink,#1f2328)}
+      .dg .h{font-size:12.5px;font-weight:500}
+      .dg .lbl{font-size:11px;fill:var(--dg-muted,#6e7781);letter-spacing:.06em}
+      .dg .s{font-size:10.5px;fill:var(--dg-muted,#6e7781)}
+      .dg .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;fill:var(--dg-accent,#8a6a1f)}
+      .dg .grp{fill:var(--dg-group,#edeae4)}
+      .dg .chip{fill:var(--dg-chip,#fff);stroke:var(--dg-chip-br,#d7d4cd)}
+      .dg .card{fill:var(--dg-chip,#fff);stroke:var(--dg-accent,#8a6a1f)}
+      .dg .alt{fill:var(--dg-chip,#fff);stroke:var(--dg-accent-2,#3f6b8a)}
+      .dg .seam{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-dasharray:6 5}
+      .dg .rule{fill:none;stroke:var(--dg-seam,#b8b4ac);stroke-width:1}
+      .dg .ln{fill:none;stroke:var(--dg-accent,#8a6a1f);stroke-width:1.4}
+      .dg .ln2{fill:none;stroke:var(--dg-accent-2,#3f6b8a);stroke-width:1.4}
+      .dg .dash{stroke-dasharray:5 4}
+      .dg .ah{fill:var(--dg-accent,#8a6a1f)}
+      .dg .ah2{fill:var(--dg-accent-2,#3f6b8a)}
+      .dg .fill1{fill:var(--dg-accent,#8a6a1f);opacity:.16}
+      .dg .fill2{fill:var(--dg-accent-2,#3f6b8a);opacity:.16}
+      .dg .warn{fill:none;stroke:var(--dg-warn,#a3401f);stroke-width:1.6}
+      .dg .warnt{fill:var(--dg-warn,#a3401f)}
+      .dg [data-i18n]{display:none}
+      .dg [data-i18n="en"]{display:inline}
+    </style>
+  </defs>
+
+  <!-- shapes -->
+  <rect class="alt" x="24" y="40" width="136" height="232" rx="8"/>
+
+  <rect class="card" x="200" y="40" width="200" height="232" rx="8"/>
+  <rect class="chip" x="216" y="82" width="168" height="56" rx="5"/>
+  <rect class="chip" x="216" y="148" width="168" height="56" rx="5"/>
+
+  <rect class="card" x="440" y="40" width="250" height="232" rx="8"/>
+  <rect class="chip" x="456" y="78" width="218" height="28" rx="5"/>
+  <rect class="chip" x="456" y="114" width="218" height="28" rx="5"/>
+  <rect class="chip" x="456" y="150" width="218" height="28" rx="5"/>
+  <rect class="chip" x="456" y="186" width="218" height="28" rx="5"/>
+
+  <rect class="card" x="730" y="40" width="206" height="232" rx="8"/>
+  <rect class="chip" x="746" y="78" width="174" height="28" rx="5"/>
+  <rect class="chip" x="746" y="114" width="174" height="28" rx="5"/>
+  <rect class="chip" x="746" y="150" width="174" height="64" rx="5"/>
+
+  <rect class="warn" x="440" y="312" width="250" height="64" rx="8"/>
+
+  <!-- edges -->
+  <path class="ln2" d="M 160 156 H 198" marker-end="url(#bd-b)"/>
+  <path class="ln" d="M 400 156 H 438" marker-end="url(#bd-a)"/>
+  <path class="ln" d="M 690 156 H 728" marker-end="url(#bd-a)"/>
+  <path class="warn" d="M 565 272 V 310" marker-end="url(#bd-w)"/>
+
+  <!-- language-neutral text -->
+  <text class="h" x="40" y="66">MySQL / MariaDB</text>
+  <text class="mono" x="40" y="104">binlog</text>
+  <text class="mono" x="40" y="156">GTID</text>
+
+    <text class="mono" x="232" y="106">COM_BINLOG_DUMP_GTID</text>
+  <text class="s" x="232" y="124">MySQL</text>
+  <text class="mono" x="232" y="172">COM_BINLOG_DUMP</text>
+  <text class="s" x="232" y="190">MariaDB</text>
+
+  <text class="h" x="456" y="66">libmybinlog</text>
+  <text class="h" x="746" y="66">MygramDB</text>
+
+  <!-- text: en -->
+  <g data-i18n="en">
+    <text class="h" x="216" y="66">Replica connection</text>
+    <text class="s" x="40" y="130">ROW format</text>
+
+    <text class="s" x="216" y="232">raw event bytes</text>
+    <text class="s" x="216" y="250">CRC32 requested</text>
+
+    <text x="472" y="96">Framing + CRC32 check</text>
+    <text x="472" y="132"><tspan class="mono">TABLE_MAP</tspan> column types</text>
+    <text x="472" y="168">GTID (incl. tagged)</text>
+    <text x="472" y="204">ROWS events to row values</text>
+    <text class="h" x="456" y="238">Event disposition</text>
+    <text class="s" x="456" y="258">decode, skip, or stop</text>
+
+    <text x="762" y="96">Select configured tables</text>
+    <text x="762" y="132">Update Index + DocStore</text>
+    <text x="762" y="172">Record GTID position</text>
+    <text class="s" x="762" y="190">when the transaction</text>
+    <text class="s" x="762" y="205">commits</text>
+
+    <text class="s warnt" x="577" y="296">stop</text>
+    <text class="h" x="456" y="338">Undecodable event</text>
+    <text class="s" x="456" y="358">replication stops with error 2017</text>
+  </g>
+
+  <!-- text: ja -->
+  <g data-i18n="ja">
+    <text class="h" x="216" y="66">レプリカ接続</text>
+    <text class="s" x="40" y="130">ROW 形式</text>
+
+    <text class="s" x="216" y="232">生のイベントバイト列</text>
+    <text class="s" x="216" y="250">CRC32 を要求</text>
+
+    <text x="472" y="96">フレーミングと CRC32 検証</text>
+    <text x="472" y="132"><tspan class="mono">TABLE_MAP</tspan> のカラム型</text>
+    <text x="472" y="168">GTID（タグ付きを含む）</text>
+    <text x="472" y="204">ROWS イベントを行の値へ</text>
+    <text class="h" x="456" y="238">イベント区分</text>
+    <text class="s" x="456" y="258">デコード・スキップ・停止</text>
+
+    <text x="762" y="96">設定したテーブルを選ぶ</text>
+    <text x="762" y="132">Index と DocStore を更新</text>
+    <text x="762" y="172">GTID 位置を記録</text>
+    <text class="s" x="762" y="190">トランザクションの</text>
+    <text class="s" x="762" y="205">コミット時</text>
+
+    <text class="s warnt" x="577" y="296">停止</text>
+    <text class="h" x="456" y="338">デコードできないイベント</text>
+    <text class="s" x="456" y="358">エラー 2017 でレプリケーションが停止</text>
+  </g>
+</svg>
